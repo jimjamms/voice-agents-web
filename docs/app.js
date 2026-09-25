@@ -14,45 +14,99 @@
   const realtimeEngine = document.querySelector('#realtime-engine');
   const pipelineEngine = document.querySelector('#pipeline-engine');
   const engineDescription = document.querySelector('#engine-description');
+  const speakerControls = document.querySelector('#speaker-controls');
+  const speakerName = document.querySelector('#speaker-name');
+  const speakerList = document.querySelector('#speaker-list');
+  const enrollSpeaker = document.querySelector('#enroll-speaker');
+  const forgetSpeakers = document.querySelector('#forget-speakers');
   let agent = 'sage', engine = 'realtime', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   let pipeline;
+  let enrolling = false;
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
   let manualStartedAt = 0, connectionId = 0;
   const setStatus = (message, detail) => { status.textContent = message; if (detail) hint.textContent = detail; };
-  const addMessage = (role, content) => {
+  const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
     messages.querySelector('.empty-state')?.remove();
     const item = document.createElement('div'); item.className = `message ${role}`;
-    const label = document.createElement('span'); label.className = 'sender'; label.textContent = role === 'user' ? 'You' : agent === 'sage' ? 'Sage' : 'Astra';
+    const label = document.createElement('span'); label.className = 'sender';
+    label.textContent = role === 'user' ? (speaker?.name && speaker.name !== 'Unknown' ? speaker.name : 'You') : agent === 'sage' ? 'Sage' : 'Astra';
     const body = document.createElement('span'); body.textContent = text;
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
-    history.push({ role, content: text, at: new Date().toISOString() });
+    history.push({ role, content: text, at: new Date().toISOString(),
+      ...(speaker && { speaker: speaker.name, speaker_score: Math.round(speaker.score * 1000) / 1000 }) });
   };
   pipeline = window.createPipelineTransport({
     agent: () => agent, isSelected: () => engine === 'pipeline', isHandsFree: () => handsFree,
     history: () => history, code: () => codeInput.value.trim(),
     focusCode: () => codeInput.focus(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
-    playback, onStatus: setStatus, getStatus: () => status.textContent,
+    playback, speakers: window.VoiceSpeakers, onStatus: setStatus, getStatus: () => status.textContent,
     onMessage: addMessage, onState: () => syncControls(),
   });
   function syncControls() {
-    const locked = engine === 'pipeline' ? pipeline.isLocked() : connecting || connected;
+    const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
     cards.forEach(card => { card.disabled = locked; });
     if (engine === 'pipeline') {
       tapMode.disabled = handsfreeMode.disabled = locked;
       disconnectButton.hidden = true;
       record.disabled = pipeline.connecting || (pipeline.busy && !pipeline.active);
+      if (enrolling) record.disabled = true;
       record.classList.toggle('recording', pipeline.recording || pipeline.active);
       recordLabel.textContent = pipeline.connecting ? 'Opening microphone…' :
         handsFree ? (pipeline.active ? 'Stop hands-free' : 'Start hands-free') :
         pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
     }
+    enrollSpeaker.disabled = forgetSpeakers.disabled = enrolling || pipeline.isLocked();
   }
+  function refreshSpeakers() {
+    const names = window.VoiceSpeakers?.names() || [];
+    speakerList.textContent = names.length
+      ? `Enrolled here: ${names.join(', ')}. Matching is approximate, not secure identification.`
+      : 'No voices enrolled. Saved only in this browser; voice matching is approximate.';
+  }
+  refreshSpeakers();
+  enrollSpeaker.addEventListener('click', async () => {
+    if (pipeline.isLocked() || enrolling || engine !== 'pipeline') return;
+    const name = speakerName.value.trim();
+    if (!name || name.toLowerCase() === 'unknown') { setStatus('Enter a speaker name first.'); speakerName.focus(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !pipeline.format()) {
+      setStatus('This browser needs a compatible microphone and recording format over HTTPS.'); return;
+    }
+    enrolling = true; syncControls();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      const recorder = new MediaRecorder(stream, { mimeType: pipeline.format() });
+      const chunks = [];
+      const recording = new Promise((resolve, reject) => {
+        recorder.addEventListener('dataavailable', event => { if (event.data.size) chunks.push(event.data); });
+        recorder.addEventListener('error', event => reject(event.error || new Error('Voice recording failed.')));
+        recorder.addEventListener('stop', () => resolve(new Blob(chunks, { type: recorder.mimeType })), { once: true });
+      });
+      recorder.start();
+      setStatus(`Recording ${name}…`, 'Speak continuously for four seconds.');
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      if (recorder.state === 'recording') recorder.stop();
+      const saved = await window.VoiceSpeakers.enroll(name, await recording);
+      refreshSpeakers();
+      setStatus(`${saved} enrolled`, 'Only the voice fingerprint was saved in this browser.');
+    } catch (error) {
+      setStatus(error.name === 'NotAllowedError' ? 'Allow microphone access to enroll.' : error.message || 'Could not enroll this voice.');
+    } finally {
+      stream?.getTracks().forEach(track => track.stop());
+      enrolling = false; syncControls();
+    }
+  });
+  forgetSpeakers.addEventListener('click', () => {
+    if (pipeline.isLocked() || enrolling) return;
+    window.VoiceSpeakers.forget(); refreshSpeakers(); setStatus('Enrolled voices forgotten from this browser.');
+  });
   function chooseEngine(next) {
-    if (connected || connecting || pipeline.isLocked() || engine === next) return;
+    if (connected || connecting || pipeline.isLocked() || enrolling || engine === next) return;
     reset(); engine = next;
+    speakerControls.hidden = next !== 'pipeline';
     if (next === 'realtime') recordLabel.textContent = 'Connect';
     realtimeEngine.classList.toggle('selected', next === 'realtime');
     pipelineEngine.classList.toggle('selected', next === 'pipeline');
@@ -60,7 +114,7 @@
     pipelineEngine.setAttribute('aria-pressed', String(next === 'pipeline'));
     engineDescription.textContent = next === 'realtime' ?
       'Live conversation with natural interruptions.' :
-      'Recorded turns with transcription, written replies, and OpenAI speech.';
+      'Recorded turns with written replies and OpenAI speech. Hands-free supports interruptions.';
     setStatus('Ready when you are', next === 'pipeline' ?
       (handsFree ? 'Start hands-free, then just speak and pause.' : 'Tap Start talking to record a turn.') :
       'Choose a mode, then connect to start.');
@@ -93,7 +147,7 @@
     messages.append(empty);
   }
   function chooseMode(enabled) {
-    if (connecting || connected || pipeline.isLocked()) return;
+    if (connecting || connected || pipeline.isLocked() || enrolling) return;
     handsFree = enabled;
     tapMode.classList.toggle('selected', !enabled); handsfreeMode.classList.toggle('selected', enabled);
     tapMode.setAttribute('aria-pressed', String(!enabled)); handsfreeMode.setAttribute('aria-pressed', String(enabled));
@@ -105,7 +159,7 @@
   tapMode.addEventListener('click', () => chooseMode(false));
   handsfreeMode.addEventListener('click', () => chooseMode(true));
   cards.forEach(card => card.addEventListener('click', () => {
-    if (connected || connecting || pipeline.isLocked()) return;
+    if (connected || connecting || pipeline.isLocked() || enrolling) return;
     if (agent !== card.dataset.agent) { agent = card.dataset.agent; reset(); }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;

@@ -1,6 +1,10 @@
 /* Browser recording for the original transcription → chat → TTS flow. */
 (() => {
   const formats = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg;codecs=opus'];
+  // Browser microphone levels are normalized (unlike the desktop's int16 RMS).
+  const INTERRUPT_BASELINE = .045;
+  const INTERRUPT_MULTIPLIER = 2.5;
+  const INTERRUPT_TRIGGER_MS = 500;
   class PipelineTransport {
     constructor(options) {
       this.options = options;
@@ -8,10 +12,25 @@
       this.stream = null; this.recorder = null; this.context = null; this.analyser = null;
       this.chunks = []; this.timer = null; this.interval = null; this.audioUrl = null;
       this.request = null; this.generation = 0;
+      this.playing = false; this.interruptStartedAt = null;
       this.options.playback.addEventListener('ended', () => {
         if (!this.options.isSelected()) return;
+        this.playing = false;
+        if (this.interruptStartedAt !== null && this.recording) {
+          this.interruptStartedAt = null;
+          this.voicedMs = Math.max(this.voicedMs, INTERRUPT_TRIGGER_MS);
+          this.lastSpeech = performance.now();
+          this.status('I hear you…', 'Pause when you finish.');
+          return;
+        }
         if (this.active) this.resume();
         else this.status('Your turn', 'Tap Start talking for another turn.');
+      });
+      this.options.playback.addEventListener('play', () => {
+        if (!this.active || !this.options.isSelected()) return;
+        this.playing = true;
+        this.stream?.getAudioTracks().forEach(track => { track.enabled = true; });
+        this.status('Playing reply…', 'You can interrupt by speaking. Headphones help prevent echo.');
       });
     }
     isLocked() { return this.active || this.busy || this.recording || this.connecting; }
@@ -19,6 +38,7 @@
     status(message, detail) { this.options.onStatus(message, detail); }
     format() { return formats.find(type => MediaRecorder.isTypeSupported(type)); }
     stopPlayback() {
+      this.playing = false; this.interruptStartedAt = null;
       const audio = this.options.playback;
       audio.pause(); audio.removeAttribute('src'); audio.hidden = true;
       if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
@@ -65,8 +85,11 @@
       this.chunks = [];
       const recorder = new MediaRecorder(this.stream, { mimeType: this.format() });
       this.recorder = recorder;
-      recorder.addEventListener('dataavailable', event => { if (event.data.size) this.chunks.push(event.data); });
+      recorder.addEventListener('dataavailable', event => {
+        if (this.recorder === recorder && event.data.size) this.chunks.push(event.data);
+      });
       recorder.addEventListener('stop', async () => {
+        if (this.recorder !== recorder) return; // A discarded interruption candidate.
         const blob = new Blob(this.chunks, { type: recorder.mimeType }); this.chunks = [];
         if (generation !== this.generation) return;
         if (!this.active) { this.stream?.getTracks().forEach(track => track.stop()); this.stream = null; }
@@ -119,12 +142,36 @@
       this.waitingAt = performance.now(); this.ambient = .004; this.voicedMs = 0;
       this.status('Listening… just start talking', 'Pause for 1.2 seconds to send your turn.');
     }
+    discardCandidate() {
+      this.interruptStartedAt = null;
+      if (this.recorder?.state === 'recording') {
+        const recorder = this.recorder;
+        this.recorder = null; this.recording = false;
+        recorder.stop(); this.notify();
+      }
+      this.chunks = [];
+    }
     measure(generation) {
       if (generation !== this.generation || !this.active || this.busy || !this.analyser) return;
       this.analyser.getFloatTimeDomainData(this.samples);
       let power = 0;
       for (let i = 0; i < this.samples.length; i++) power += this.samples[i] ** 2;
       const rms = Math.sqrt(power / this.samples.length); const now = performance.now();
+      if (this.playing) {
+        const threshold = Math.max(INTERRUPT_BASELINE, this.ambient * 3 * INTERRUPT_MULTIPLIER);
+        if (rms > threshold) {
+          if (this.interruptStartedAt === null) {
+            this.interruptStartedAt = now;
+            this.beginRecording(generation); // Keep the first half-second of speech.
+          } else if (now - this.interruptStartedAt >= INTERRUPT_TRIGGER_MS) {
+            this.voicedMs = now - this.interruptStartedAt;
+            this.lastSpeech = now;
+            this.stopPlayback();
+            this.status('Reply interrupted — I hear you…', 'Pause when you finish.');
+          }
+        } else if (this.interruptStartedAt !== null) this.discardCandidate();
+        return;
+      }
       if (!this.recording && now - this.waitingAt < 500) { this.ambient = Math.max(.002, this.ambient * .9 + rms * .1); return; }
       const speech = rms > Math.max(.018, this.ambient * 3);
       if (speech) {
@@ -145,6 +192,7 @@
     async submit(blob, generation) {
       this.busy = true; this.notify();
       this.request = new AbortController();
+      const speakerPromise = this.options.speakers?.match(blob);
       const form = new FormData();
       form.set('agent', this.options.agent());
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
@@ -161,14 +209,20 @@
         const result = await response.json();
         if (generation !== this.generation) return;
         if (!response.ok) throw new Error(result.error || `Could not complete turn (HTTP ${response.status}).`);
-        this.options.onMessage('user', result.transcript);
+        const speaker = await speakerPromise || { name: 'Unknown', score: 0 };
+        if (generation !== this.generation) return;
+        this.options.onMessage('user', result.transcript, speaker);
         this.options.onMessage('assistant', result.reply);
         const bytes = Uint8Array.from(atob(result.audio), char => char.charCodeAt(0));
         this.audioUrl = URL.createObjectURL(new Blob([bytes], { type: result.mimeType || 'audio/mpeg' }));
         this.options.playback.src = this.audioUrl;
-        this.status('Playing reply…', this.active ? 'Listening resumes after the reply.' : 'Tap Start talking for another turn.');
+        this.status('Playing reply…', this.active ? 'Speak to interrupt; headphones help prevent echo.' : 'Tap Start talking for another turn.');
         try { await this.options.playback.play(); }
-        catch { this.options.playback.hidden = false; this.status('Tap play to hear the reply.', 'Your browser paused automatic playback.'); }
+        catch {
+          this.options.playback.hidden = false;
+          if (this.active) this.resume();
+          this.status('Tap play to hear the reply.', 'Your browser paused automatic playback.');
+        }
       } catch (error) {
         if (generation !== this.generation) return;
         this.status(error.name === 'TypeError' ? 'Cannot reach the Worker. Check its URL and PUBLIC_ORIGIN.' : error.message || 'Voice request failed.', 'Check your connection and try again.');
