@@ -1,16 +1,7 @@
-"""
-Astra -- the second of the two named personality voice agents.
+"""Astra's personality and voice settings for the Realtime voice agent.
 
-This file only defines Astra's identity: name, Big Five traits, and default
-voice. All the actual mechanics (recording, transcription, GPT, TTS, speaker
-ID, logging) live in agent_base.py's PersonalityVoiceAgent -- Astra just
-inherits all of it.
-
-Run with:
+Put this file alongside agent_base.py, name it astra.py, then run:
     python astra.py
-
-Personality: mellow, relaxed, chill, serious -- deliberately contrasts with
-Sage's bubbly/cheerful/empathetic energy.
 """
 
 import sys
@@ -21,7 +12,6 @@ from agent_base import PersonalityVoiceAgent, RECORDING_MODE
 class AstraAgent(PersonalityVoiceAgent):
     NAME = "Astra"
 
-    # Astra: mellow, relaxed, chill, serious.
     TRAITS = {
         "openness": 3,
         "conscientiousness": 4,
@@ -30,18 +20,16 @@ class AstraAgent(PersonalityVoiceAgent):
         "neuroticism": 1,
     }
 
-    AZURE_VOICE_NAME = "en-US-AriaNeural"
-    TTS_PROVIDER = "openai"
-    OPENAI_VOICE = "cedar"
-    OPENAI_TTS_INSTRUCTIONS = (
+    # Keep Astra's previous OpenAI voice, distinct from Sage's "marin".
+    REALTIME_VOICE = "cedar"
+
+    # The Realtime base sends this speaking style in its session instructions.
+    SPEAKING_STYLE = (
         "Speak with a calm, grounded, mellow voice. Keep your tone relaxed, "
         "thoughtful, and quietly serious, with a slightly lower pitch and "
         "a measured, unhurried pace. Be warm without sounding bubbly or "
         "overly enthusiastic."
     )
-
-    # Used only when TTS_PROVIDER=azure; OpenAI controls delivery via instructions.
-    PITCH_OVERRIDE_ST = -2
 
 
 if __name__ == "__main__":
@@ -51,5 +39,4 @@ if __name__ == "__main__":
         if trait not in (1, 2, 3, 4, 5):
             sys.exit("All trait values in AstraAgent.TRAITS must be integers from 1 to 5.")
 
-    agent = AstraAgent()
-    agent.run()
+    AstraAgent().run()

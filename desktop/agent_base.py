@@ -1,81 +1,92 @@
 """
-Big Five Personality Voice Agent -- shared base class
-=========================================================
+Realtime Personality Voice Agent -- shared base class (OpenAI Realtime API)
+=============================================================================
 
-This file (agent_base.py) is NOT run directly. It defines the shared
-PersonalityVoiceAgent class -- everything common to every agent: recording,
-local Whisper transcription, GPT chat, Azure TTS with emotional styling,
-speaker ID, and research logging.
+This is the "Option A" rewrite of the original agent_base.py. Instead of a
+chained pipeline (local Whisper -> GPT chat -> Azure TTS), this connects
+directly to OpenAI's Realtime API (model: gpt-realtime-2.1) -- one
+audio-native model that listens and speaks over a single WebSocket
+connection. Turn-taking and hands-free VAD are handled server-side;
+the local echo gate keeps voice interruption available during playback.
+There's no local silence-threshold calibration or
+interrupt-monitor thread to maintain.
 
-Each actual agent is a small subclass in its own file (e.g. sage.py,
-astra.py) that overrides three class attributes:
+WHAT'S GONE vs. the old pipeline (and why):
+    - Local Whisper transcription    -> the Realtime model consumes your
+      mic audio directly; there's no separate STT step for generating a
+      reply. (Whisper-based speaker ID below is unaffected -- see next
+      section -- that's a separate, local-only use of raw audio.)
+    - Azure Speech + SSML rate/pitch math (prosody_from_traits,
+      PITCH_OVERRIDE_ST) -> Realtime uses a named voice with no numeric
+      rate/pitch parameter. You can choose a voice at startup and describe
+      delivery in *words* inside the instructions text (see delivery_style_from_traits
+      below) -- the model follows this fairly well but it is not an
+      exact, reproducible dial the way the old semitone math was.
+    - Custom VAD_* constants / calibrate_ambient_noise / the barge-in
+      RMS-monitor thread -> replaced by the API's built-in server_vad
+      turn detection, which also handles interruption
+      (interrupt_response: true) on its own.
 
-    class SageAgent(PersonalityVoiceAgent):
-        NAME = "Sage"
-        TRAITS = {"openness": 4, "conscientiousness": 3, "extraversion": 5,
-                  "agreeableness": 4, "neuroticism": 2}
-        AZURE_VOICE_NAME = "en-US-AriaNeural"
+SPEAKER ID + RESEARCH LOGGING -- REINSTATED:
+    These are independent of the Realtime model itself: the API responds
+    to whoever is speaking but has no notion of who that is, so speaker
+    identification has to keep being your own local code, running on the
+    same raw mic audio you're also streaming out. Concretely:
+      - Every mic frame captured during an utterance (push-to-talk: while
+        you're "recording"; hands-free: between the server's
+        input_audio_buffer.speech_started/.speech_stopped events) is
+        buffered separately from what's sent to the API.
+      - When the utterance ends, that buffer is fingerprinted with the
+        same lightweight MFCC + cosine-similarity approach as before
+        (extract_voice_features / identify_speaker) and compared against
+        voiceprints.json.
+      - Each full conversational turn (once the model's spoken reply
+        finishes, or is interrupted) is appended as one JSON line to
+        conversation_log.jsonl, same shape as before, with a "barge_in"
+        flag set when the user talked over the agent.
+    One fidelity note: the user's transcript now comes from the Realtime
+    API's own input-audio transcription rather than local Whisper, and its
+    arrival isn't strictly ordered relative to other events, so on rare
+    turns user_text may still be empty when a line is logged.
 
-    if __name__ == "__main__":
-        SageAgent().run()
+WHAT'S STILL YOURS TO CONTROL:
+    - The Big Five personality text -- same idea as before, still fully
+      in charge of word choice, tone, how warm/blunt/anxious it acts.
+    - Which named voice an agent uses (REALTIME_VOICE or the startup prompt)
+      -- this is how two agents can sound like different people.
 
-Run an actual agent with, e.g.:
+Each actual agent (e.g. sage.py) is a small subclass overriding:
+    NAME, TRAITS, REALTIME_VOICE
+
+Run with:
     python sage.py
-    python astra.py
-
-Recording modes:
-    "push_to_talk" -- press Enter to start talking, Enter again to stop.
-    "vad"           -- fully hands-free and CONTINUOUS. The agent listens
-                        all the time and automatically detects when you
-                        start and stop speaking (voice activity
-                        detection). There is no button to press, and no
-                        Enter key needed between turns -- as soon as it
-                        finishes replying it starts listening again.
-    "vad" mode also supports BARGE-IN: if you start talking while the
-    agent is still speaking, it immediately stops itself and starts
-    listening to you, just like a real conversation. (Best with
-    headphones/earbuds -- see the ENABLE_BARGE_IN note below.)
-
-Pipeline:
-    Mic audio -> local Whisper transcription -> OpenAI GPT-6 Astra (chat, with a
-    personality system prompt) -> selected text-to-speech provider -> speaker playback.
 
 Setup
 -----
-1. Install dependencies:
-       pip install sounddevice numpy librosa faster-whisper openai
-       pip install azure-cognitiveservices-speech  # for Azure voice
+    pip install sounddevice numpy librosa websockets
+    export OPENAI_API_KEY="your-key"
 
-   You also need ffmpeg installed on your system (faster-whisper relies on
-   it to decode audio):
-       macOS:   brew install ffmpeg
-       Ubuntu:  sudo apt-get install ffmpeg
-       Windows: download from ffmpeg.org and add it to PATH
-
-2. Auth:
-   - OpenAI: set OPENAI_API_KEY in your environment.
-     For OpenAI speech, set TTS_PROVIDER="openai" (Sage uses this by default).
-     Optionally set OPENAI_VOICE="coral" (or another supported voice).
-     Optionally set OPENAI_TTS_INSTRUCTIONS to describe tone and delivery,
-     e.g. "Speak gently with a slightly higher pitch and a relaxed pace."
-   - Azure Speech: create a "Speech" resource in the Azure portal, then set:
-         export AZURE_SPEECH_KEY="your-key"
-         export AZURE_SPEECH_REGION="your-region"   (e.g. "eastus")
-     To try an HD voice, also set TTS_PROVIDER="azure" and, for example,
-     AZURE_VOICE_NAME="en-us-Ava:DragonHDLatestNeural". Your Azure region
-     must support that voice. HD voices use simplified SSML without prosody.
-     On Windows PowerShell use $env:NAME="value" instead of export NAME="value".
-     Azure remains the base-class default; Sage defaults to OpenAI speech.
-
-   Whisper needs no key at all -- it runs entirely on your machine. The
-   first run will download the model weights (a few hundred MB) once.
+Azure is no longer used anywhere in this file.
 
 Controls:
-    - push_to_talk mode: press Enter to start talking, Enter again to stop.
-      Type "mode" at that prompt to switch to hands-free on the fly.
-    - vad mode: fully continuous -- just start talking whenever you're
-      ready. No Enter key needed at all, before or between turns. Say
-      "quit" (or press Ctrl+C) to exit.
+    - At startup, type a voice name or press Enter for the agent's default.
+      OpenAI's API will report an error if it does not support that name.
+    - push_to_talk mode: press Enter to start talking, Enter again to
+      stop. Type "mode" to switch to hands-free, "enroll" to add a voice,
+      or "quit" to exit.
+    - vad mode (hands-free): server-side VAD. Just start talking, including
+      while Sage speaks. Press Ctrl+C to exit (there's no reliable local
+      quit-phrase detection in this version -- see NOTE below).
+
+NOTE on session.update field names: the Realtime API's session/audio
+config shape has moved around during its beta -> GA migration. The
+`audio.input.transcription` block below (used both for the console's
+"You said: ..." output and for the user_text logged per turn) is a
+best-effort guess at the current field name. If you see an `error` event
+printed mentioning an unknown field, check the current Realtime sessions
+reference and adjust that one block -- everything else (session.update's
+instructions/voice, input_audio_buffer.append, response.output_audio.delta,
+server_vad) is the stable core of the API and shouldn't need changes.
 """
 
 import os
@@ -84,40 +95,21 @@ import json
 import time
 import uuid
 import wave
-import queue
-import random
+import base64
+import asyncio
 import tempfile
 import threading
-import subprocess
-from collections import deque
 from datetime import datetime, timezone
-from xml.sax.saxutils import escape as xml_escape
+from collections import deque
 
 import numpy as np
 import librosa
 import sounddevice as sd
-from faster_whisper import WhisperModel
-from openai import OpenAI
+import websockets
 
 # ---------------------------------------------------------------------------
 # 1. PERSONALITY CONFIGURATION
 # ---------------------------------------------------------------------------
-# NOTE: there's no fixed TRAITS/AGENT_NAME here anymore -- each agent (Sage,
-# Astra, ...) is its own subclass in its own file, overriding NAME, TRAITS,
-# and AZURE_VOICE_NAME below. This module only holds the shared mechanics.
-
-def generate_random_traits() -> dict:
-    """Roll a random Big Five personality profile: each trait gets an
-    independent random integer from 1 to 5. Handy for quick testing, or
-    for a subclass that wants a randomized rather than fixed personality."""
-    return {
-        "openness": random.randint(1, 5),
-        "conscientiousness": random.randint(1, 5),
-        "extraversion": random.randint(1, 5),
-        "agreeableness": random.randint(1, 5),
-        "neuroticism": random.randint(1, 5),
-    }
-
 
 TRAIT_DESCRIPTIONS = {
     "openness": {
@@ -158,142 +150,166 @@ TRAIT_DESCRIPTIONS = {
 }
 
 
-def build_system_prompt(name: str, traits: dict) -> str:
+def delivery_style_from_traits(traits: dict) -> str:
+    """Qualitative (word-based) delivery guidance -- the closest available
+    replacement for the old prosody_from_traits() SSML rate/pitch numbers.
+    Realtime voices have no rate/pitch parameter to set directly, so this
+    gets folded into the instructions text as plain-English direction
+    instead. It's steerable, not exact."""
+    extraversion = traits["extraversion"]
+    neuroticism = traits["neuroticism"]
+    conscientiousness = traits["conscientiousness"]
+
+    if extraversion >= 4:
+        pace = "Speak at a noticeably brisk, energetic pace."
+    elif extraversion <= 2:
+        pace = "Speak slowly and measuredly, with unhurried pauses."
+    else:
+        pace = "Speak at a natural, moderate pace."
+
+    if neuroticism >= 4:
+        tone = "Let a little nervous energy or hesitation show in your delivery."
+    elif neuroticism <= 2:
+        tone = "Keep your delivery calm, even, and steady, no matter the topic."
+    else:
+        tone = "Keep your delivery generally even, with occasional light emotion."
+
+    if conscientiousness >= 4:
+        precision = "Speak clearly and deliberately, like someone who chooses words with care."
+    else:
+        precision = "Feel free to speak a little loosely and spontaneously."
+
+    return " ".join([pace, tone, precision])
+
+
+def build_instructions(name: str, traits: dict) -> str:
     lines = [f"{trait.capitalize()}: {TRAIT_DESCRIPTIONS[trait][level]}"
              for trait, level in traits.items()]
     trait_block = "\n".join(f"- {line}" for line in lines)
+    delivery = delivery_style_from_traits(traits)
     return f"""You are {name}, a voice assistant with a distinct personality defined by
 the following Big Five personality traits:
 
 {trait_block}
 
+Delivery: {delivery}
+
 Let this personality consistently shape your word choice, tone, sentence
 length, energy, and how you react emotionally -- not just what you say, but
 how you say it.
 
-You are speaking out loud in a voice conversation, so:
+You are speaking out loud in a live voice conversation, so:
 - Keep responses conversational and reasonably concise.
 - Never use markdown, bullet points, numbered lists, or asterisks.
 - Stay in character at all times."""
 
 
 # ---------------------------------------------------------------------------
-# 2. PERSONALITY -> AZURE VOICE STYLE MAPPING
+# 2. REALTIME / AUDIO CONFIGURATION
 # ---------------------------------------------------------------------------
 
-def voice_style_from_traits(traits: dict):
-    """Choose an Azure emotional style + intensity from the trait values."""
-    extraversion = traits["extraversion"]
-    agreeableness = traits["agreeableness"]
-    neuroticism = traits["neuroticism"]
+REALTIME_MODEL = "gpt-realtime-2.1"
 
-    outgoing = extraversion >= 4
-    reserved = extraversion <= 2
-    warm = agreeableness >= 4
-    blunt = agreeableness <= 2
-
-    if outgoing and warm:
-        style = "cheerful"
-    elif outgoing and blunt:
-        style = "excited"
-    elif reserved and warm:
-        style = "friendly"
-    elif reserved and blunt:
-        style = "unfriendly"
-    else:
-        style = "chat"
-
-    style_degree = round(0.6 + (neuroticism - 1) * 0.35, 2)  # 0.6 - 2.0
-    return style, style_degree
-
-
-def prosody_from_traits(traits: dict):
-    """Return (rate_percent_str, pitch_semitone_str) for SSML <prosody>."""
-    extraversion = traits["extraversion"]
-    conscientiousness = traits["conscientiousness"]
-    neuroticism = traits["neuroticism"]
-
-    rate_pct = (extraversion - 3) * 8 - (conscientiousness - 3) * 4
-    rate_pct = max(-25, min(25, rate_pct))
-
-    pitch_st = (neuroticism - 3) * 1.2 + (extraversion - 3) * 0.8
-    pitch_st = max(-6, min(6, pitch_st))
-
-    rate_str = f"{'+' if rate_pct >= 0 else ''}{rate_pct}%"
-    pitch_str = f"{'+' if pitch_st >= 0 else ''}{pitch_st}st"
-    return rate_str, pitch_str
-
-
-DEFAULT_AZURE_VOICE_NAME = "en-US-AriaNeural"  # used if a subclass doesn't set its own
-
-# ---------------------------------------------------------------------------
-# 3. AUDIO / RECORDING CONFIGURATION
-# ---------------------------------------------------------------------------
-
-RATE = 16000
+SAMPLE_RATE = 24000   # Realtime API's default PCM16 rate for input+output
 CHANNELS = 1
 
-# If recording fails, run your device-listing diagnostic script and set this
-# to the index of a working input device. None uses whatever the system has
-# set as its default recording device. NOTE: device indices are specific to
-# each machine -- re-check this on every new laptop (w/ audio.py)
-INPUT_DEVICE_INDEX = 9
+# "push_to_talk": press Enter to start/stop each turn (manual commit).
+# "vad": fully hands-free -- server-side turn detection (server_vad).
+RECORDING_MODE = "vad"
 
-# "push_to_talk": press Enter to start/stop each turn.
-# "vad": fully hands-free and continuous -- no Enter key at all.
-RECORDING_MODE = "push_to_talk"
+INPUT_DEVICE_INDEX = None   # None = system default input device
+OUTPUT_DEVICE_INDEX = None  # None = system default output device
 
-# Words that end the conversation when spoken in "vad" mode (since there's
-# no keyboard prompt to type "quit" into anymore).
+# Playback is written to the speaker in pieces this many milliseconds
+# long, rather than one big blocking write per received audio chunk, so
+# a barge-in can cut playback off within roughly this long instead of
+# waiting for whatever chunk was already in flight to finish.
+PLAYBACK_PIECE_MS = 20
+
+# Allow hands-free microphone input while Sage speaks so you can interrupt her.
+ALLOW_VOICE_BARGE_IN = True
+
+# The console transcript (response.output_audio_transcript.delta) arrives
+# over the network well ahead of when the corresponding audio actually
+# plays -- text can dump onto the screen seconds before you hear it. This
+# throttles printing to a steady, typewriter-style pace instead, so the
+# words show up roughly as fast as she's actually saying them. There's no
+# official word-level timing from the API, so this is a fixed rate, not a
+# true sync -- raise it if the text visibly lags behind her voice, lower
+# it if it visibly gets ahead.
+TRANSCRIPT_REVEAL_CHARS_PER_SECOND = 15.0
+TRANSCRIPT_REVEAL_TICK_SECONDS = 0.05
+
 VOICE_QUIT_PHRASES = {"quit", "exit", "stop listening", "goodbye", "good bye"}
 
-# -- VAD tuning (only used in "vad" mode) ------------------------------------
-VAD_CHUNK_SECONDS = 0.1        # how often we check the audio level
-VAD_CALIBRATION_SECONDS = 1.0  # how long to measure ambient noise at startup
-VAD_ENERGY_MULTIPLIER = 3.0    # speech threshold = ambient noise * this
-VAD_MIN_THRESHOLD = 80.0       # floor, in case a room is dead silent
-VAD_SILENCE_SECONDS = 1.2      # trailing silence required to end a turn
-VAD_PRE_ROLL_SECONDS = 0.3     # audio kept from just before speech is detected
-VAD_MAX_RECORD_SECONDS = 30    # safety cap so a stuck stream can't run forever
+SERVER_VAD_CONFIG = {
+    "type": "server_vad",
+    "threshold": 0.8,
+    "prefix_padding_ms": 300,
+    "silence_duration_ms": 600,
+    "create_response": True,
+    "interrupt_response": True,
+}
 
-# -- Barge-in / interruption tuning (only used in "vad" mode) ---------------
-# Lets you cut the agent off mid-reply just by talking, instead of waiting
-# for it to finish. NOTE: without an echo-cancelling mic/headset, the mic
-# can pick up the agent's own voice from the speakers and "hear itself" as
-# an interruption. Using headphones/earbuds makes this far more reliable.
-ENABLE_BARGE_IN = True
+# -- Echo gate (local, client-side) -----------------------------------------
+# Compare microphone input with recent speaker audio at possible delays.
+# Also require enough volume and several consecutive frames before sending
+# an interruption. This helps with echo but headphones are still the most
+# reliable way to prevent speaker audio reaching the mic.
+ENABLE_ECHO_GATE = True
 
-# The actual interrupt threshold is:
-#     max(INTERRUPT_BASELINE, ambient_noise * INTERRUPT_ENERGY_MULTIPLIER)
-#
-# INTERRUPT_BASELINE is a hard floor in raw RMS units -- nothing quieter than
-# this can EVER register as an interruption, no matter how quiet the room's
-# ambient calibration came out. This is what stops small/random noises from
-# triggering it. If you're still getting false interruptions, raise this
-# number first (try doubling it); if real speech isn't being detected,
-# lower it.
-INTERRUPT_BASELINE = 600.0
+# Required mic RMS, as a fraction of recent output peak RMS,
+# before a chunk counts as real speech rather than bleed-through. Raise
+# this if the agent is still hearing itself; lower it if genuine barge-in
+# attempts are getting swallowed while the agent talks.
+ECHO_GATE_RMS_MULTIPLIER = 2.0
 
-INTERRUPT_ENERGY_MULTIPLIER = 2.5   # extra margin above the normal speech
-                                     # threshold, to resist speaker bleed-through
-INTERRUPT_TRIGGER_SECONDS = 0.5     # how much continuous "speech" is needed
-                                     # before we treat it as a real interruption
-                                     # (filters out clicks/pops/coughs)
+# Minimum microphone RMS during playback; rejects quiet room noise.
+ECHO_GATE_MIN_FLOOR = 300.0
+ECHO_MATCH_THRESHOLD = 0.42  # normalized playback/mic waveform match
+BARGE_IN_CONFIRM_FRAMES = 3   # typically about 60 ms of mic input
+
+# How long after the last output chunk was written we keep treating echo
+# as a possibility -- covers room reverb and audio-driver buffering lag
+# after the agent's speech has technically "ended".
+ECHO_GATE_DECAY_SECONDS = 0.65
+
+# Prints every gate decision (mic_rms vs. the required threshold) to the
+# console. Turn this on to see real numbers for your hardware instead of
+# guessing at ECHO_GATE_RMS_MULTIPLIER blind -- then turn it back off.
+DEBUG_ECHO_GATE = False
+
+# -- Echo calibration ---------------------------------------------------
+# Comparing the agent's raw digital output volume against your mic's raw
+# input volume (ECHO_GATE_RMS_MULTIPLIER) is a guess -- those are two
+# unrelated measurement domains, and there's no reason a fixed constant
+# picked ahead of time is anywhere near correct for your specific
+# speaker volume, mic gain, and distance. Calibration measures the
+# ACTUAL ratio on your hardware once at startup: she says a short test
+# phrase, nothing is forwarded to the API while she does, and we record
+# how loud the mic hears her vs. how loud she's being told to play,
+# frame by frame. ECHO_GATE_RMS_MULTIPLIER is only the fallback if this
+# is disabled or fails to collect enough signal.
+ECHO_CALIBRATION_ENABLED = ALLOW_VOICE_BARGE_IN
+ECHO_CALIBRATION_PHRASE = ("Please say exactly the following and nothing else: "
+                            "testing one two three, testing one two three.")
+ECHO_CALIBRATION_SAFETY_MARGIN = 1.4  # headroom above the measured ratio
+ECHO_CALIBRATION_TIMEOUT_SECONDS = 15
 
 # ---------------------------------------------------------------------------
 # SPEAKER IDENTIFICATION + RESEARCH LOGGING
 # ---------------------------------------------------------------------------
-# This is a lightweight, heuristic voice fingerprint (MFCC statistics +
-# cosine similarity) -- NOT deep-learning-grade speaker recognition. It's
-# meant to distinguish a small number of known participants' voices, not
-# to be robust against a large or adversarial set of speakers.
+# Same lightweight, heuristic voice fingerprint as the original pipeline
+# (MFCC statistics + cosine similarity) -- NOT deep-learning-grade speaker
+# recognition. Meant to distinguish a small number of known participants,
+# not to be robust against a large or adversarial set of speakers.
 
 ENABLE_SPEAKER_ID = True
 VOICEPRINTS_PATH = "voiceprints.json"
 N_MFCC = 20                    # number of MFCC coefficients extracted
 MFCC_SR = 16000                # audio is resampled to this rate before
-                                # extracting features, so voiceprints compare
-                                # fairly regardless of the mic's native rate
+                                # extracting features, independent of
+                                # SAMPLE_RATE above
 MIN_AUDIO_SECONDS_FOR_ID = 0.4 # utterances shorter than this aren't reliable
                                 # enough to fingerprint -- treated as Unknown
 SPEAKER_MATCH_THRESHOLD = 0.90 # cosine similarity needed to count as a match.
@@ -306,149 +322,305 @@ ENROLL_DURATION_SECONDS = 4.0  # length of the voice sample recorded when
 ENABLE_LOGGING = True
 LOG_PATH = "conversation_log.jsonl"  # one JSON object per line, per turn --
                                        # ready to load into pandas/Excel/etc.
-                                       # for your coherence research.
 
 
 # ---------------------------------------------------------------------------
-# 4. THE AGENT
+# 3. THE AGENT
 # ---------------------------------------------------------------------------
 
 class PersonalityVoiceAgent:
-    """Shared base class for all personality voice agents: recording,
-    Whisper transcription, GPT chat, Azure TTS with emotional styling,
-    speaker ID, and research logging all live here.
-
-    A specific agent (Sage, Astra, ...) is a subclass that overrides these
-    three class attributes -- everything else is inherited unchanged:
-
-        class SageAgent(PersonalityVoiceAgent):
-            NAME = "Sage"
-            TRAITS = {"openness": 4, "conscientiousness": 3, ...}
-            AZURE_VOICE_NAME = "en-US-AriaNeural"
-
-    Optionally also set PITCH_OVERRIDE_ST (a small number of semitones, e.g.
-    2 or -2) to force a specific, modest pitch nudge instead of letting the
-    Big Five trait formula pick one -- useful when you want two agents on
-    the SAME base voice to sound like two people (a gentle pitch offset)
-    without the trait math swinging pitch aggressively in either direction.
-    """
+    """Shared base class. A subclass can override NAME, TRAITS,
+    REALTIME_VOICE, and SPEAKING_STYLE. Older subclasses can instead use
+    OPENAI_VOICE and OPENAI_TTS_INSTRUCTIONS."""
 
     NAME = "Agent"
     TRAITS = {
         "openness": 3, "conscientiousness": 3, "extraversion": 3,
         "agreeableness": 3, "neuroticism": 3,
     }
-    AZURE_VOICE_NAME = DEFAULT_AZURE_VOICE_NAME
-    TTS_PROVIDER = "azure"
-    OPENAI_VOICE = "coral"
+    REALTIME_VOICE = "alloy"
+    # Compatibility with Sage classes from the previous OpenAI TTS pipeline.
+    # Realtime uses session instructions instead of a separate TTS request.
+    OPENAI_VOICE = None
     OPENAI_TTS_INSTRUCTIONS = "Speak warmly, naturally, and conversationally."
-    PITCH_OVERRIDE_ST = None  # e.g. 2 or -2; None = use trait-derived pitch
+    SPEAKING_STYLE = None  # None uses OPENAI_TTS_INSTRUCTIONS for older agents
 
-    def __init__(self, name: str = None, traits: dict = None,
-                 model: str = "gpt-6-astra", whisper_model_size: str = "base"):
+    def __init__(self, name: str = None, traits: dict = None, voice: str = None):
         self.name = name or self.NAME
         self.traits = traits or self.TRAITS
-        self.model = model
+        self.voice = (voice or os.getenv("OPENAI_VOICE") or self.OPENAI_VOICE
+                      or self.REALTIME_VOICE)
+        self.instructions = build_instructions(self.name, self.traits)
+        style = (self.SPEAKING_STYLE if self.SPEAKING_STYLE is not None
+                 else self.OPENAI_TTS_INSTRUCTIONS)
+        self.speaking_style = os.getenv("OPENAI_TTS_INSTRUCTIONS", style).strip()
+        if self.speaking_style:
+            self.instructions += "\n\nSpeaking style: " + self.speaking_style
         self.mode = RECORDING_MODE
+        self.api_key = os.environ["OPENAI_API_KEY"]
 
-        self.system_prompt = build_system_prompt(self.name, self.traits)
-        self.voice_style, self.style_degree = voice_style_from_traits(self.traits)
-        self.rate_str, computed_pitch_str = prosody_from_traits(self.traits)
-        if self.PITCH_OVERRIDE_ST is not None:
-            p = self.PITCH_OVERRIDE_ST
-            self.pitch_str = f"{'+' if p >= 0 else ''}{p}st"
-        else:
-            self.pitch_str = computed_pitch_str
-        self.azure_voice_name = os.getenv("AZURE_VOICE_NAME", self.AZURE_VOICE_NAME)
-        self.tts_provider = os.getenv("TTS_PROVIDER", self.TTS_PROVIDER).lower()
-        if self.tts_provider not in ("azure", "openai"):
-            raise ValueError("TTS_PROVIDER must be 'azure' or 'openai'")
-        self.openai_voice = os.getenv("OPENAI_VOICE", self.OPENAI_VOICE)
-        self.openai_tts_instructions = os.getenv(
-            "OPENAI_TTS_INSTRUCTIONS", self.OPENAI_TTS_INSTRUCTIONS
-        )
+        self._ws = None
+        self._mic_queue: asyncio.Queue = None
+        self._play_queue: asyncio.Queue = None
+        self._loop = None
+        self._recording = False   # only meaningful in push_to_talk mode
+        self._response_active = False
+        self._stop_flag = False
 
-        self.openai_client = OpenAI()  # reads OPENAI_API_KEY from env
-
-        print(f"Loading Whisper model ({whisper_model_size})...")
-        self.whisper_model = WhisperModel(whisper_model_size, device="cpu",
-                                           compute_type="int8")
-
-        if self.tts_provider == "azure":
-            import azure.cognitiveservices.speech as speechsdk
-            self.speech_config = speechsdk.SpeechConfig(
-                subscription=os.environ["AZURE_SPEECH_KEY"],
-                region=os.environ["AZURE_SPEECH_REGION"],
-            )
-            self.speech_config.speech_synthesis_voice_name = self.azure_voice_name
-
-        self.extra_settings = None
-        self.force_default_blocksize = False
-        self.record_rate = RATE
-        self.record_channels = CHANNELS
-        if INPUT_DEVICE_INDEX is not None:
-            device_info = sd.query_devices(INPUT_DEVICE_INDEX)
-            host_api_name = sd.query_hostapis(device_info["hostapi"])["name"]
-
-            if "WASAPI" in host_api_name:
-                # WASAPI shared mode can reject a mismatched format outright
-                # -- auto-convert tells Windows to handle that internally.
-                self.extra_settings = sd.WasapiSettings(auto_convert=True)
-                print("WASAPI device detected -- auto-convert enabled.")
-            elif "WDM-KS" in host_api_name:
-                # WDM-KS (kernel streaming) is the opposite problem: it
-                # rejects anything that ISN'T an exact match to the
-                # hardware's native format, with zero conversion at all.
-                # So instead of auto-convert, just match its native format.
-                self.record_rate = int(round(device_info["default_samplerate"]))
-                self.record_channels = device_info["max_input_channels"]
-                self.force_default_blocksize = True
-                print(f"WDM-KS device detected -- matching its native format "
-                      f"({self.record_rate} Hz, {self.record_channels} channel(s)) "
-                      f"instead of forcing {RATE} Hz / {CHANNELS} channel(s). "
-                      f"Also letting it use its own internal buffer size, "
-                      f"since WDM-KS often rejects a custom blocksize too.")
-
-        print(f"Recording at {self.record_rate} Hz, {self.record_channels} channel(s), "
-              f"on device index {INPUT_DEVICE_INDEX}")
-
-        self.silence_threshold = None  # set by calibrate_ambient_noise()
-        self._interrupt_threshold_logged = False
-        self.history = [{"role": "system", "content": self.system_prompt}]
-
+        # -- speaker ID + logging state --
         self.session_id = uuid.uuid4().hex[:8]
         self.speaker_id_enabled = ENABLE_SPEAKER_ID
         self.voiceprints = self._load_voiceprints() if self.speaker_id_enabled else {}
+        self._utterance_lock = threading.Lock()
+        self._utterance_chunks = []      # list of int16 ndarrays, current utterance
+        self._turn_start_time = None
+        self._current_user_text = ""
+        self._current_reply_text = ""
+        self._current_speaker_name = "Unknown"
+        self._current_speaker_score = 0.0
 
-    # -- Shared stream setup --------------------------------------------
+        # -- echo gate state --
+        self._output_rms = 0.0
+        self._output_rms_last_time = 0.0
+        self._playback_active = False
+        self._recent_output_levels = deque(maxlen=50)
+        self._recent_output_audio = deque(maxlen=50)
+        self._barge_in_frames = []
+        self._echo_ratio = None   # set by _calibrate_echo(); falls back to
+                                   # ECHO_GATE_RMS_MULTIPLIER if calibration
+                                   # is disabled or fails
+        self._calibrating = False
+        self._calibration_samples = []
+        self._calibration_done_event = None
+        self._calibration_item_ids = []
 
-    def _stream_kwargs(self, callback, blocksize=None):
-        kwargs = dict(samplerate=self.record_rate, channels=self.record_channels,
-                      dtype="int16", callback=callback)
-        if blocksize is not None and not self.force_default_blocksize:
-            kwargs["blocksize"] = blocksize
-        if INPUT_DEVICE_INDEX is not None:
-            kwargs["device"] = INPUT_DEVICE_INDEX
-        if self.extra_settings is not None:
-            kwargs["extra_settings"] = self.extra_settings
-        return kwargs
+        # -- immediate-stop-on-interrupt state --
+        self._interrupt_flag = threading.Event()
+
+        # -- typewriter-paced transcript state --
+        self._transcript_buffer = ""  # received but not yet printed text
+
+    # -- session setup -------------------------------------------------
+
+    async def _connect(self):
+        url = f"wss://api.openai.com/v1/realtime?model={REALTIME_MODEL}"
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        self._ws = await websockets.connect(url, additional_headers=headers, max_size=None)
+        await self._apply_turn_detection(initial=True)
+
+    async def _apply_turn_detection(self, initial: bool = False):
+        turn_detection = SERVER_VAD_CONFIG if self.mode == "vad" else None
+        session = {
+            "type": "realtime",
+            "audio": {
+                "input": {
+                    "format": {"type": "audio/pcm", "rate": SAMPLE_RATE},
+                    "turn_detection": turn_detection,
+                    # Best-effort: enables "You said: ..." console output
+                    # and the user_text field in the JSONL log. See the
+                    # NOTE at the top of this file if this errors.
+                    "transcription": {"model": "whisper-1"},
+                },
+                "output": {
+                    "format": {"type": "audio/pcm", "rate": SAMPLE_RATE},
+                    "voice": self.voice,
+                },
+            },
+        }
+        if initial:
+            session["instructions"] = self.instructions
+        await self._send({"type": "session.update", "session": session})
+
+    async def _send(self, event: dict):
+        await self._ws.send(json.dumps(event))
+
+    # -- mic capture -> server, and -> speaker-ID buffer -----------------
 
     @staticmethod
-    def _rms(chunk: np.ndarray) -> float:
-        if chunk.size == 0:
+    def _rms(samples: np.ndarray) -> float:
+        if samples.size == 0:
             return 0.0
-        return float(np.sqrt(np.mean(chunk.astype(np.float64) ** 2)))
+        return float(np.sqrt(np.mean(samples.astype(np.float64) ** 2)))
 
-    def _write_wav(self, path: str, audio_chunks: list):
-        audio_data = (np.concatenate(audio_chunks, axis=0) if audio_chunks
-                      else np.zeros((0, self.record_channels), dtype="int16"))
-        with wave.open(path, "wb") as wf:
-            wf.setnchannels(self.record_channels)
-            wf.setsampwidth(2)  # int16 = 2 bytes
-            wf.setframerate(self.record_rate)
-            wf.writeframes(audio_data.tobytes())
+    def _recent_output_peak(self) -> float:
+        """Account for speaker-to-mic delay and quiet pieces between words."""
+        cutoff = time.monotonic() - ECHO_GATE_DECAY_SECONDS
+        return max((level for moment, level in tuple(self._recent_output_levels)
+                    if moment >= cutoff), default=0.0)
 
-    # -- Speaker identification (lightweight MFCC + cosine similarity) -----
+    def _playback_similarity(self, indata: np.ndarray) -> float:
+        """Find Sage's waveform at any recent speaker-to-microphone delay."""
+        cutoff = time.monotonic() - ECHO_GATE_DECAY_SECONDS
+        pieces = [samples for moment, samples in tuple(self._recent_output_audio)
+                  if moment >= cutoff]
+        mic = indata.reshape(-1).astype(np.float64)
+        if not pieces or len(mic) < 2:
+            return 0.0
+        reference = np.concatenate(pieces).astype(np.float64)
+        if reference.size < mic.size:
+            return 0.0
+        mic -= mic.mean()
+        mic_energy = np.dot(mic, mic)
+        if mic_energy < 1.0:
+            return 0.0
+        # FFT correlation tests every possible delay without a Python loop.
+        size = 1 << (len(reference) + len(mic) - 2).bit_length()
+        products = np.fft.rfft(reference, size) * np.fft.rfft(mic[::-1], size)
+        matches = np.fft.irfft(products, size)[len(mic)-1:len(reference)]
+        squares = np.concatenate(([0.0], np.cumsum(reference * reference)))
+        energies = squares[len(mic):] - squares[:-len(mic)]
+        return float(np.max(np.abs(matches) /
+                            np.sqrt(np.maximum(energies * mic_energy, 1.0))))
+
+    def _forward_mic(self, chunk: np.ndarray):
+        self._loop.call_soon_threadsafe(self._mic_queue.put_nowait, bytes(chunk))
+        if self.speaker_id_enabled:
+            with self._utterance_lock:
+                self._utterance_chunks.append(chunk.copy())
+
+    def _mic_callback(self, indata, frames, time_info, status):
+        if self._stop_flag or self._loop is None:
+            return
+
+        if self._calibrating:
+            # Measure the real mic/output relationship; never forward
+            # this to the server -- it's not part of the conversation.
+            mic_rms = self._rms(indata)
+            output_peak = self._recent_output_peak()
+            if output_peak > 0:
+                self._calibration_samples.append((mic_rms, output_peak))
+            return
+
+        should_capture = self.mode == "vad" or self._recording
+        if not should_capture:
+            return
+
+        if ENABLE_ECHO_GATE and ALLOW_VOICE_BARGE_IN and self.mode == "vad":
+            output_peak = self._recent_output_peak()
+            during_playback = (self._response_active or self._playback_active or
+                               not self._play_queue.empty() or output_peak > 0)
+            if during_playback:
+                mic_rms = self._rms(indata)
+                multiplier = (self._echo_ratio if self._echo_ratio is not None
+                              else ECHO_GATE_RMS_MULTIPLIER)
+                required = max(ECHO_GATE_MIN_FLOOR, output_peak * multiplier)
+                similarity = (self._playback_similarity(indata)
+                              if mic_rms >= ECHO_GATE_MIN_FLOOR else 0.0)
+                # With no playback reference yet, wait for audio before
+                # accepting a barge-in. A single loud echo frame should
+                # never reach server VAD and cancel Sage's response.
+                blocked = (output_peak == 0 or mic_rms < required or
+                           similarity >= ECHO_MATCH_THRESHOLD)
+                if DEBUG_ECHO_GATE:
+                    print(f"[echo-gate] mic={mic_rms:.0f} "
+                          f"speaker_peak={output_peak:.0f} "
+                          f"required={required:.0f} match={similarity:.2f} "
+                          f"-> {'BLOCKED' if blocked else 'passed'}")
+                if blocked:
+                    self._barge_in_frames.clear()
+                    return
+                if len(self._barge_in_frames) < BARGE_IN_CONFIRM_FRAMES - 1:
+                    self._barge_in_frames.append(indata.copy())
+                    return
+                for held in self._barge_in_frames:
+                    self._forward_mic(held)
+                self._barge_in_frames.clear()
+                self._forward_mic(indata)
+                return
+        self._barge_in_frames.clear()
+        self._forward_mic(indata)
+
+    async def _mic_sender(self):
+        while not self._stop_flag:
+            chunk = await self._mic_queue.get()
+            try:
+                await self._send({
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(chunk).decode("ascii"),
+                })
+            except websockets.exceptions.ConnectionClosed:
+                break
+
+    # -- server audio -> speaker -------------------------------------------------
+
+    async def _player(self):
+        loop = asyncio.get_running_loop()
+        stream = sd.RawOutputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
+                                     dtype="int16", device=OUTPUT_DEVICE_INDEX)
+        stream.start()
+        # Write in small pieces rather than handing over a whole
+        # response.output_audio.delta chunk (which can be several hundred
+        # ms) in one blocking call. Without this, a barge-in only drops
+        # audio still sitting in the queue -- whatever had already been
+        # passed to stream.write() keeps playing to the end, since there
+        # was no chance to check for an interrupt partway through a single
+        # write. Checking between ~20ms pieces makes a "stop talking"
+        # actually near-immediate instead of "finish this chunk first".
+        bytes_per_frame = 2 * CHANNELS  # int16 = 2 bytes/sample
+        piece_bytes = int(SAMPLE_RATE * PLAYBACK_PIECE_MS / 1000) * bytes_per_frame
+        try:
+            while not self._stop_flag:
+                chunk = await self._play_queue.get()
+                if chunk is None:
+                    continue  # sentinel, nothing to play
+                self._playback_active = True
+                offset = 0
+                try:
+                    while offset < len(chunk):
+                        if self._interrupt_flag.is_set():
+                            self._interrupt_flag.clear()
+                            break
+                        piece = chunk[offset:offset + piece_bytes]
+                        self._output_rms = self._rms(np.frombuffer(piece, dtype=np.int16))
+                        self._recent_output_levels.append((time.monotonic(), self._output_rms))
+                        self._recent_output_audio.append((time.monotonic(),
+                                                          np.frombuffer(piece, dtype=np.int16).copy()))
+                        await loop.run_in_executor(None, stream.write, piece)
+                        self._output_rms_last_time = time.monotonic()
+                        offset += piece_bytes
+                finally:
+                    self._playback_active = False
+                    self._interrupt_flag.clear()
+        finally:
+            stream.stop()
+            stream.close()
+
+    def _clear_playback(self):
+        """Barge-in cutoff: stop the audio currently mid-playback (not
+        just what's still queued) as close to immediately as possible.
+        The server already cancelled its own response
+        (interrupt_response: true); this makes local playback actually
+        stop instead of finishing out whatever chunk was already handed
+        to the sound device."""
+        # Only signal the player if a chunk is actually being written.
+        # A stale flag would otherwise cut off the first chunk of the next reply.
+        if self._playback_active:
+            self._interrupt_flag.set()
+        else:
+            self._interrupt_flag.clear()
+        try:
+            while True:
+                self._play_queue.get_nowait()
+        except asyncio.QueueEmpty:
+            pass
+        self._output_rms = 0.0
+        self._output_rms_last_time = time.monotonic()
+
+    async def _transcript_printer(self):
+        """Reveals self._transcript_buffer at a steady pace instead of
+        printing it the instant it arrives -- the transcript event and
+        the corresponding audio don't arrive in lockstep, so printing
+        immediately makes text show up well before you hear it."""
+        chars_per_tick = max(1, round(TRANSCRIPT_REVEAL_CHARS_PER_SECOND
+                                       * TRANSCRIPT_REVEAL_TICK_SECONDS))
+        while not self._stop_flag:
+            if self._transcript_buffer:
+                piece = self._transcript_buffer[:chars_per_tick]
+                self._transcript_buffer = self._transcript_buffer[chars_per_tick:]
+                print(piece, end="", flush=True)
+            await asyncio.sleep(TRANSCRIPT_REVEAL_TICK_SECONDS)
+
+    # -- speaker identification (lightweight MFCC + cosine similarity) -----
 
     @staticmethod
     def _load_voiceprints() -> dict:
@@ -462,6 +634,16 @@ class PersonalityVoiceAgent:
         raw = {name: vec.tolist() for name, vec in self.voiceprints.items()}
         with open(VOICEPRINTS_PATH, "w", encoding="utf-8") as f:
             json.dump(raw, f, indent=2)
+
+    @staticmethod
+    def _write_wav(path: str, audio_chunks: list):
+        audio_data = (np.concatenate(audio_chunks, axis=0) if audio_chunks
+                      else np.zeros((0, CHANNELS), dtype="int16"))
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(CHANNELS)
+            wf.setsampwidth(2)  # int16 = 2 bytes
+            wf.setframerate(SAMPLE_RATE)
+            wf.writeframes(audio_data.tobytes())
 
     @staticmethod
     def extract_voice_features(wav_path: str):
@@ -494,6 +676,20 @@ class PersonalityVoiceAgent:
             return best_name, best_score
         return "Unknown", best_score
 
+    def _identify_from_chunks(self, chunks: list):
+        """Blocking: writes chunks to a temp WAV and runs the MFCC
+        pipeline. Call via asyncio.to_thread from the event loop."""
+        if not chunks:
+            return "Unknown", 0.0
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+            wav_path = tmp.name
+        try:
+            self._write_wav(wav_path, chunks)
+            features = self.extract_voice_features(wav_path)
+        finally:
+            os.remove(wav_path)
+        return self.identify_speaker(features)
+
     def record_fixed_duration(self, path: str, duration: float):
         """Records exactly `duration` seconds, no VAD/Enter-key involved --
         used for voice enrollment."""
@@ -502,13 +698,16 @@ class PersonalityVoiceAgent:
         def callback(indata, frames_count, time_info, status):
             recorded_chunks.append(indata.copy())
 
-        with sd.InputStream(**self._stream_kwargs(callback)):
+        with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
+                             device=INPUT_DEVICE_INDEX, callback=callback):
             sd.sleep(int(duration * 1000))
 
         self._write_wav(path, recorded_chunks)
 
     def enroll_speaker_interactive(self, name: str = None):
-        """Records a short sample and saves it as a named voiceprint."""
+        """Records a short sample and saves it as a named voiceprint.
+        Blocking (uses input() and a synchronous mic recording) -- call
+        via asyncio.to_thread if invoked mid-session."""
         if name is None:
             name = input("Enter a name for this voice (blank to cancel): ").strip()
         if not name:
@@ -535,7 +734,8 @@ class PersonalityVoiceAgent:
 
     def maybe_enroll_speakers(self):
         """Lets you enroll any number of voices before a session starts.
-        Safe to skip entirely by just pressing Enter."""
+        Safe to skip entirely by just pressing Enter. Synchronous -- call
+        before asyncio.run(), same as the original pipeline did."""
         if not self.speaker_id_enabled:
             return
         existing = list(self.voiceprints.keys())
@@ -548,7 +748,26 @@ class PersonalityVoiceAgent:
                 break
             self.enroll_speaker_interactive(name)
 
-    # -- Research logging --------------------------------------------------
+    # -- per-utterance speaker ID lifecycle ---------------------------------
+
+    def _start_utterance(self):
+        with self._utterance_lock:
+            self._utterance_chunks = []
+        self._turn_start_time = time.time()
+        self._current_user_text = ""
+        self._current_reply_text = ""
+        self._current_speaker_name, self._current_speaker_score = "Unknown", 0.0
+
+    async def _finish_utterance_and_identify(self):
+        if not self.speaker_id_enabled:
+            return
+        with self._utterance_lock:
+            chunks = list(self._utterance_chunks)
+        name, score = await asyncio.to_thread(self._identify_from_chunks, chunks)
+        self._current_speaker_name, self._current_speaker_score = name, score
+        print(f"(Speaker: {name}, {score:.2f})")
+
+    # -- research logging --------------------------------------------------
 
     def log_turn(self, speaker: str, speaker_score: float, user_text: str,
                  reply: str, extra: dict = None):
@@ -570,444 +789,263 @@ class PersonalityVoiceAgent:
         with open(LOG_PATH, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 
-    # -- Recording: push-to-talk -----------------------------------------
-
-    def record_push_to_talk(self, path: str):
-        """Press Enter to start talking, Enter again to stop."""
-        print("Listening... press Enter again to stop.")
-        recorded_chunks = []
-        stop_flag = threading.Event()
-
-        def callback(indata, frames, time_info, status):
-            if status:
-                print(f"(Audio status: {status})")
-            recorded_chunks.append(indata.copy())
-
-        def wait_for_stop():
-            input()
-            stop_flag.set()
-
-        threading.Thread(target=wait_for_stop, daemon=True).start()
-
-        with sd.InputStream(**self._stream_kwargs(callback)):
-            while not stop_flag.is_set():
-                sd.sleep(100)
-
-        self._write_wav(path, recorded_chunks)
-
-    # -- Recording: automatic voice activity detection ---------------------
-
-    def calibrate_ambient_noise(self):
-        """Measures the room's background noise level once at startup so
-        the VAD threshold adapts to wherever you actually are."""
-        print(f"Calibrating microphone for background noise "
-              f"({VAD_CALIBRATION_SECONDS:.0f}s, please stay quiet)...")
-        frames = []
-
-        def callback(indata, frames_count, time_info, status):
-            frames.append(indata.copy())
-
-        blocksize = int(self.record_rate * VAD_CHUNK_SECONDS)
-        with sd.InputStream(**self._stream_kwargs(callback, blocksize=blocksize)):
-            sd.sleep(int(VAD_CALIBRATION_SECONDS * 1000))
-
-        ambient_rms = self._rms(np.concatenate(frames, axis=0)) if frames else VAD_MIN_THRESHOLD
-        self.silence_threshold = max(ambient_rms * VAD_ENERGY_MULTIPLIER, VAD_MIN_THRESHOLD)
-        print(f"Ambient noise level: {ambient_rms:.1f} -> "
-              f"speech threshold set to {self.silence_threshold:.1f}")
-
-    def record_vad(self, path: str):
-        """Hands-free recording: starts automatically when speech is
-        detected, stops automatically after a beat of silence."""
-        if self.silence_threshold is None:
-            self.calibrate_ambient_noise()
-
-        print("Listening... just start talking (stops automatically when you pause).")
-
-        blocksize = int(self.record_rate * VAD_CHUNK_SECONDS)
-        chunk_queue = queue.Queue()
-
-        def callback(indata, frames_count, time_info, status):
-            if status:
-                print(f"(Audio status: {status})")
-            chunk_queue.put(indata.copy())
-
-        # Pre-roll/silence/max-duration are tracked in actual seconds of
-        # audio received, not a count of chunks -- chunk size can vary
-        # (e.g. WDM-KS devices ignore our requested blocksize and choose
-        # their own), so counting chunks would silently give the wrong
-        # timing on those devices.
-        pre_buffer = deque()
-        pre_buffer_seconds = 0.0
-        speech_chunks = []
-        state = "waiting"  # "waiting" -> "recording" -> done
-        silence_seconds = 0.0
-        total_seconds = 0.0
-
-        with sd.InputStream(**self._stream_kwargs(callback, blocksize=blocksize)):
-            while True:
-                chunk = chunk_queue.get()
-                chunk_seconds = chunk.shape[0] / self.record_rate
-                total_seconds += chunk_seconds
-                is_speech = self._rms(chunk) > self.silence_threshold
-
-                if state == "waiting":
-                    pre_buffer.append(chunk)
-                    pre_buffer_seconds += chunk_seconds
-                    while pre_buffer_seconds > VAD_PRE_ROLL_SECONDS and len(pre_buffer) > 1:
-                        dropped = pre_buffer.popleft()
-                        pre_buffer_seconds -= dropped.shape[0] / self.record_rate
-                    if is_speech:
-                        state = "recording"
-                        speech_chunks.extend(pre_buffer)
-                        speech_chunks.append(chunk)
-                        silence_seconds = 0.0
-                else:  # state == "recording"
-                    speech_chunks.append(chunk)
-                    if is_speech:
-                        silence_seconds = 0.0
-                    else:
-                        silence_seconds += chunk_seconds
-                        if silence_seconds >= VAD_SILENCE_SECONDS:
-                            break
-
-                if total_seconds >= VAD_MAX_RECORD_SECONDS:
-                    break
-
-        self._write_wav(path, speech_chunks)
-
-    def record_audio_to_wav(self, path: str):
-        if self.mode == "vad":
-            self.record_vad(path)
-        else:
-            self.record_push_to_talk(path)
-
-    # -- Speech-to-text (local Whisper) ------------------------------------
-
-    def transcribe(self, wav_path: str) -> str:
-        segments, _info = self.whisper_model.transcribe(wav_path, language="en")
-        return " ".join(segment.text for segment in segments).strip()
-
-    # -- LLM response -----------------------------------------------------
-
-    def get_response(self, user_text: str) -> str:
-        self.history.append({"role": "user", "content": user_text})
-        # Note: gpt-6-astra (like other reasoning models) only supports the
-        # default temperature of 1 -- passing any other value is rejected
-        # with a 400 error, so we don't set it here.
-        completion = self.openai_client.chat.completions.create(
-            model=self.model,
-            messages=self.history,
-        )
-        reply = completion.choices[0].message.content.strip()
-        self.history.append({"role": "assistant", "content": reply})
-        return reply
-
-    # -- Text-to-speech (Azure, with emotional style) ----------------------
-
-    def build_ssml(self, text: str) -> str:
-        voice_name = xml_escape(self.azure_voice_name, {'"': '&quot;'})
-        # Model-qualified HD names do not accept the legacy prosody element.
-        # Plain text inside <voice> also works across HD voice families.
-        if ":" in self.azure_voice_name:
-            return (f'<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
-                    f'xml:lang="en-US"><voice name="{voice_name}">'
-                    f'{xml_escape(text)}</voice></speak>')
-        return f"""<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"
-    xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="en-US">
-  <voice name="{voice_name}">
-    <mstts:express-as style="{self.voice_style}" styledegree="{self.style_degree}">
-      <prosody rate="{self.rate_str}" pitch="{self.pitch_str}">
-        {xml_escape(text)}
-      </prosody>
-    </mstts:express-as>
-  </voice>
-</speak>"""
-
-    def speak(self, text: str) -> bool:
-        """Speak text aloud. Returns True if it played to completion, or
-        False if it was cut off early because the user started talking
-        (barge-in -- only possible in "vad" mode with ENABLE_BARGE_IN)."""
-        if self.tts_provider == "openai":
-            return self._speak_openai(text)
-        import azure.cognitiveservices.speech as speechsdk
-        if self.mode == "vad" and ENABLE_BARGE_IN:
-            return self._speak_interruptible(text)
-
-        audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
-        synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=self.speech_config, audio_config=audio_config
-        )
-        ssml = self.build_ssml(text)
-        result = synthesizer.speak_ssml_async(ssml).get()
-
-        if result.reason == speechsdk.ResultReason.Canceled:
-            details = result.cancellation_details
-            print(f"(Speech synthesis failed: {details.reason} -- {details.error_details})")
-        return True
-
-    def _speak_interruptible(self, text: str) -> bool:
-        """Play back TTS audio while a second mic stream watches for the
-        user starting to talk. If sustained speech is detected, playback
-        is stopped immediately and this returns False."""
-        import azure.cognitiveservices.speech as speechsdk
-        audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
-        synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=self.speech_config, audio_config=audio_config
-        )
-        ssml = self.build_ssml(text)
-
-        interrupted = threading.Event()
-        stop_monitor = threading.Event()
-        playback_done = threading.Event()
-
-        threshold = max(
-            INTERRUPT_BASELINE,
-            (self.silence_threshold or VAD_MIN_THRESHOLD) * INTERRUPT_ENERGY_MULTIPLIER,
-        )
-        if not self._interrupt_threshold_logged:
-            print(f"(Barge-in threshold: {threshold:.1f} "
-                  f"[baseline={INTERRUPT_BASELINE:.1f}, "
-                  f"ambient*mult={((self.silence_threshold or VAD_MIN_THRESHOLD) * INTERRUPT_ENERGY_MULTIPLIER):.1f}])")
-            self._interrupt_threshold_logged = True
-        blocksize = int(self.record_rate * VAD_CHUNK_SECONDS)
-
-        def monitor():
-            consecutive_speech_seconds = 0.0
-
-            def callback(indata, frames_count, time_info, status):
-                nonlocal consecutive_speech_seconds
-                if stop_monitor.is_set():
-                    return
-                chunk_seconds = indata.shape[0] / self.record_rate
-                if self._rms(indata) > threshold:
-                    consecutive_speech_seconds += chunk_seconds
-                    if consecutive_speech_seconds >= INTERRUPT_TRIGGER_SECONDS:
-                        interrupted.set()
-                        stop_monitor.set()
-                else:
-                    consecutive_speech_seconds = 0.0
-
-            try:
-                with sd.InputStream(**self._stream_kwargs(callback, blocksize=blocksize)):
-                    while not stop_monitor.is_set():
-                        sd.sleep(30)
-            except Exception as e:
-                print(f"(Interrupt monitor error: {e})")
-
-        def playback():
-            result = synthesizer.speak_ssml_async(ssml).get()
-            if (not interrupted.is_set()
-                    and result.reason == speechsdk.ResultReason.Canceled):
-                details = result.cancellation_details
-                print(f"(Speech synthesis failed: {details.reason} -- {details.error_details})")
-            playback_done.set()
-
-        monitor_thread = threading.Thread(target=monitor, daemon=True)
-        playback_thread = threading.Thread(target=playback, daemon=True)
-        monitor_thread.start()
-        playback_thread.start()
-
-        while not playback_done.is_set() and not interrupted.is_set():
-            time.sleep(0.03)
-
-        if interrupted.is_set() and not playback_done.is_set():
-            print("(Heard you -- stopping to listen...)")
-            synthesizer.stop_speaking_async().get()
-
-        stop_monitor.set()
-        monitor_thread.join(timeout=2)
-        playback_thread.join(timeout=2)
-
-        return not interrupted.is_set()
-
-    def _speak_openai(self, text: str) -> bool:
-        """Generate speech with the existing OpenAI client and play it."""
-        with self.openai_client.audio.speech.with_streaming_response.create(
-            model="gpt-4o-mini-tts", voice=self.openai_voice,
-            input=text, instructions=self.openai_tts_instructions,
-            response_format="mp3",
-        ) as response:
-            return self._play_mp3(response.read())
-
-    def _play_mp3(self, mp3: bytes) -> bool:
-        """Decode MP3 and play it, with optional interruption in VAD mode."""
-        try:
-            decoded = subprocess.run(
-                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
-                 "-f", "s16le", "-ac", "1", "-ar", "22050", "pipe:1"],
-                input=mp3, capture_output=True, check=True,
-            ).stdout
-            samples = np.frombuffer(decoded, dtype="<i2")
-        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
-            print(f"(Speech synthesis failed: {exc})")
-            return True
-
-        interrupted = threading.Event()
-        stop_monitor = threading.Event()
-        barge_in = self.mode == "vad" and ENABLE_BARGE_IN
-        if barge_in:
-            threshold = max(INTERRUPT_BASELINE,
-                            (self.silence_threshold or VAD_MIN_THRESHOLD)
-                            * INTERRUPT_ENERGY_MULTIPLIER)
-
-            def monitor():
-                consecutive = 0.0
-
-                def callback(indata, frames_count, time_info, status):
-                    nonlocal consecutive
-                    if self._rms(indata) > threshold:
-                        consecutive += len(indata) / self.record_rate
-                        if consecutive >= INTERRUPT_TRIGGER_SECONDS:
-                            interrupted.set()
-                    else:
-                        consecutive = 0.0
-
-                try:
-                    with sd.InputStream(**self._stream_kwargs(
-                            callback, blocksize=int(self.record_rate * VAD_CHUNK_SECONDS))):
-                        stop_monitor.wait()
-                except Exception as exc:
-                    print(f"(Interrupt monitor error: {exc})")
-
-            monitor_thread = threading.Thread(target=monitor, daemon=True)
-            monitor_thread.start()
-        try:
-            with sd.OutputStream(samplerate=22050, channels=1, dtype="int16") as output:
-                for offset in range(0, len(samples), 2205):
-                    if interrupted.is_set():
-                        print("(Heard you -- stopping to listen...)")
-                        break
-                    output.write(samples[offset:offset + 2205])
-        finally:
-            stop_monitor.set()
-            if barge_in:
-                monitor_thread.join(timeout=2)
-        return not interrupted.is_set()
-
-    # -- One conversational turn (shared by both modes) ---------------------
-
-    def process_one_turn(self) -> bool:
-        """Record, transcribe, get a reply, and speak it.
-
-        Returns False if the user asked to end the conversation (only
-        relevant in "vad" mode, where there's no keyboard prompt to type
-        "quit" into -- you just say it instead). Returns True otherwise,
-        including on a turn where nothing understandable was heard, so the
-        caller can just keep looping.
-        """
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            wav_path = tmp.name
-        try:
-            turn_start = time.time()
-            self.record_audio_to_wav(wav_path)
-
-            speaker_name, speaker_score = "Unknown", 0.0
-            if self.speaker_id_enabled:
-                features = self.extract_voice_features(wav_path)
-                speaker_name, speaker_score = self.identify_speaker(features)
-
-            user_text = self.transcribe(wav_path)
-        finally:
-            os.remove(wav_path)
-
-        if not user_text:
-            print("(Didn't catch that -- try again.)")
-            return True
-
-        if self.speaker_id_enabled:
-            print(f"You said [{speaker_name}, {speaker_score:.2f}]: {user_text}")
-        else:
-            print(f"You said: {user_text}")
-
-        normalized = user_text.strip().lower().strip(".!?")
-        if self.mode == "vad" and normalized in VOICE_QUIT_PHRASES:
-            return False
-
-        reply = self.get_response(user_text)
-        print(f"{self.name}: {reply}")
-
-        # In push_to_talk mode the mic isn't reopened until we loop back
-        # around, so there's no risk of hearing/transcribing itself. In
-        # "vad" mode with ENABLE_BARGE_IN, speak() runs its own monitoring
-        # stream and returns False early if you start talking over it --
-        # in that case we just fall straight back into listening below.
-        finished = self.speak(reply)
-        if not finished:
-            print("(Go ahead, I'm listening.)")
-
+    def _log_current_turn(self, interrupted: bool):
+        turn_seconds = (round(time.time() - self._turn_start_time, 3)
+                         if self._turn_start_time else None)
         self.log_turn(
-            speaker_name, speaker_score, user_text, reply,
+            self._current_speaker_name, self._current_speaker_score,
+            self._current_user_text, self._current_reply_text,
             extra={
                 "recording_mode": self.mode,
-                "turn_seconds": round(time.time() - turn_start, 3),
-                "barge_in": not finished,
+                "turn_seconds": turn_seconds,
+                "barge_in": interrupted,
             },
         )
-        return True
 
-    # -- Main loop --------------------------------------------------------
+    # -- events from the server -------------------------------------------------
+
+    async def _receiver(self):
+        async for raw in self._ws:
+            event = json.loads(raw)
+            etype = event.get("type")
+
+            if etype == "response.output_audio.delta":
+                await self._play_queue.put(base64.b64decode(event["delta"]))
+
+            elif etype == "response.output_audio_transcript.delta":
+                delta = event.get("delta", "")
+                self._current_reply_text += delta
+                # Buffered, not printed immediately -- see
+                # _transcript_printer for the actual pacing.
+                self._transcript_buffer += delta
+
+            elif etype == "response.created":
+                self._response_active = True
+                self._current_reply_text = ""
+                self._transcript_buffer = ""
+                print(f"\n{self.name}: ", end="", flush=True)
+
+            elif etype == "response.done":
+                # Flush whatever hasn't been typed out yet -- the audio's
+                # already finished, so there's no reason to keep trickling
+                # text out after she's stopped talking.
+                if self._transcript_buffer:
+                    print(self._transcript_buffer, end="", flush=True)
+                    self._transcript_buffer = ""
+                print()
+                if self._calibrating:
+                    resp = event.get("response", {})
+                    for item in resp.get("output", []):
+                        item_id = item.get("id")
+                        if item_id:
+                            self._calibration_item_ids.append(item_id)
+                    if self._calibration_done_event is not None:
+                        self._calibration_done_event.set()
+                elif self._response_active:
+                    # Normal completion -- if it had been interrupted, this
+                    # turn was already logged from speech_started below,
+                    # and _response_active would already be False.
+                    self._log_current_turn(interrupted=False)
+                self._response_active = False
+
+            elif etype == "conversation.item.created":
+                if self._calibrating:
+                    item = event.get("item", {})
+                    if item.get("id"):
+                        self._calibration_item_ids.append(item["id"])
+
+            elif etype == "input_audio_buffer.speech_started":
+                # The server can finish a response before its queued audio
+                # has finished playing locally. Stop the speaker in either case.
+                if (self._response_active or self._playback_active or
+                        not self._play_queue.empty()):
+                    print("\n(Heard you -- stopping to listen...)")
+                    self._clear_playback()
+                    self._transcript_buffer = ""
+                    if self._response_active:
+                        self._log_current_turn(interrupted=True)
+                    self._response_active = False
+                if self.mode == "vad":
+                    self._start_utterance()
+
+            elif etype == "input_audio_buffer.speech_stopped":
+                if self.mode == "vad":
+                    await self._finish_utterance_and_identify()
+
+            elif etype == "conversation.item.input_audio_transcription.completed":
+                transcript = event.get("transcript", "")
+                self._current_user_text = transcript
+                if self.speaker_id_enabled:
+                    print(f"You said [{self._current_speaker_name}, "
+                          f"{self._current_speaker_score:.2f}]: {transcript}")
+                else:
+                    print(f"You said: {transcript}")
+
+            elif etype == "error":
+                print(f"\n(Realtime API error: {event.get('error')})")
+
+    # -- push-to-talk turn -------------------------------------------------
+
+    # -- echo calibration ---------------------------------------------------
+
+    async def _calibrate_echo(self):
+        """Measures the real mic/output volume relationship on this
+        hardware once at startup, so the echo gate's threshold is based
+        on an actual measurement instead of a guessed constant. Nothing
+        recorded here is forwarded to the API or logged as a real turn;
+        the calibration exchange is deleted from conversation history
+        afterward so it doesn't pollute the model's context or the
+        research log."""
+        if not ECHO_CALIBRATION_ENABLED:
+            return
+
+        print("\nCalibrating echo gate -- she'll say a short test phrase, "
+              "please stay quiet for a moment...")
+        self._calibration_samples = []
+        self._calibration_item_ids = []
+        self._calibrating = True
+        self._calibration_done_event = asyncio.Event()
+
+        await self._send({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": ECHO_CALIBRATION_PHRASE}],
+            },
+        })
+        await self._send({"type": "response.create"})
+
+        try:
+            await asyncio.wait_for(self._calibration_done_event.wait(),
+                                    timeout=ECHO_CALIBRATION_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            print("(Echo calibration timed out -- using the default multiplier.)")
+
+        self._calibrating = False
+        self._output_rms = 0.0
+        self._output_rms_last_time = 0.0
+
+        # Clean up: remove the calibration exchange from conversation
+        # history so it doesn't show up as a fake turn later.
+        for item_id in self._calibration_item_ids:
+            await self._send({"type": "conversation.item.delete", "item_id": item_id})
+
+        # Only trust pairs where she was actually audible, to avoid
+        # near-silence samples skewing the ratio.
+        usable = [(m, o) for m, o in self._calibration_samples
+                  if o >= ECHO_GATE_MIN_FLOOR and m > 0]
+        if len(usable) < 5:
+            print("(Not enough signal to calibrate the echo gate -- "
+                  f"using the default multiplier ({ECHO_GATE_RMS_MULTIPLIER}).)")
+            self._echo_ratio = None
+            return
+
+        ratios = sorted(m / o for m, o in usable)
+        measured_ratio = ratios[int(0.9 * (len(ratios) - 1))]
+        self._echo_ratio = measured_ratio * ECHO_CALIBRATION_SAFETY_MARGIN
+        print(f"Echo calibration done -- measured ratio {measured_ratio:.3f} "
+              f"({len(usable)} samples), using {self._echo_ratio:.3f} "
+              f"with safety margin.\n")
+
+    async def _do_ptt_turn(self):
+        await asyncio.to_thread(input, "\n[Enter] to start talking...")
+        self._recording = True
+        self._start_utterance()
+        await asyncio.to_thread(input, "Recording -- [Enter] again to stop...")
+        self._recording = False
+        await self._finish_utterance_and_identify()
+        await self._send({"type": "input_audio_buffer.commit"})
+        await self._send({"type": "response.create"})
+
+    # -- main loop -------------------------------------------------
+
+    async def _run_async(self):
+        self._loop = asyncio.get_running_loop()
+        self._mic_queue = asyncio.Queue()
+        self._play_queue = asyncio.Queue()
+
+        await self._connect()
+
+        mode_desc = "hands-free (server VAD)" if self.mode == "vad" else "push-to-talk"
+        print(f"\n{self.name} is ready. Voice: {self.voice}. Mode: {mode_desc}")
+        print(f"Personality:\n{self.instructions}\n")
+
+        with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype="int16",
+                             device=INPUT_DEVICE_INDEX, callback=self._mic_callback):
+            receiver_task = asyncio.create_task(self._receiver())
+            sender_task = asyncio.create_task(self._mic_sender())
+            player_task = asyncio.create_task(self._player())
+            printer_task = asyncio.create_task(self._transcript_printer())
+
+            await self._calibrate_echo()
+
+            try:
+                if self.mode == "vad":
+                    print("Hands-free -- just start talking whenever you're ready.")
+                    print("Press Ctrl+C to exit.\n")
+                    while True:
+                        await asyncio.sleep(0.5)
+                else:
+                    print("(Type 'mode' + Enter to switch to hands-free, "
+                          "'enroll' to add a voice, or 'quit' to exit.)")
+                    while True:
+                        choice = await asyncio.to_thread(
+                            input, "\n['Enter' to talk, 'mode', 'enroll', or 'quit']: "
+                        )
+                        choice = choice.strip().lower()
+                        if choice == "quit":
+                            break
+                        if choice == "enroll":
+                            await asyncio.to_thread(self.enroll_speaker_interactive)
+                            continue
+                        if choice == "mode":
+                            self.mode = "vad"
+                            await self._apply_turn_detection()
+                            print("Switched to hands-free (vad). Ctrl+C to exit.")
+                            while True:
+                                await asyncio.sleep(0.5)
+                        await self._do_ptt_turn()
+            except KeyboardInterrupt:
+                print()
+            finally:
+                self._stop_flag = True
+                for t in (receiver_task, sender_task, player_task, printer_task):
+                    t.cancel()
+                await self._ws.close()
+
+        print("Goodbye!")
 
     def run(self):
-        print(f"\n{self.name} is ready. Personality: {self.traits}")
-        print(f"Voice: {self.tts_provider}"
-              + (f" ({self.openai_voice})" if self.tts_provider == "openai"
-                 else (f"; style: {self.voice_style} (intensity {self.style_degree})"
-                       if self.tts_provider == "azure" else "")))
-        print(f"Recording mode: {self.mode}")
+        for trait in self.traits.values():
+            if trait not in (1, 2, 3, 4, 5):
+                sys.exit("All TRAITS values must be integers from 1 to 5.")
+        if RECORDING_MODE not in ("push_to_talk", "vad"):
+            sys.exit("RECORDING_MODE must be 'push_to_talk' or 'vad'.")
+
+        try:
+            chosen_voice = input(f"Voice for {self.name} [{self.voice}]: ").strip()
+        except EOFError:
+            chosen_voice = ""
+        if chosen_voice:
+            self.voice = chosen_voice
 
         self.maybe_enroll_speakers()
 
-        if self.mode == "vad":
-            self._run_hands_free()
-        else:
-            self._run_push_to_talk()
-
-    def _run_hands_free(self):
-        """Fully continuous loop: no Enter key needed, ever. Just talk."""
-        print("Hands-free mode -- just start talking whenever you're ready.")
-        print(f"Say one of {sorted(VOICE_QUIT_PHRASES)} or press Ctrl+C to exit.\n")
-        self.calibrate_ambient_noise()
         try:
-            while self.process_one_turn():
-                pass
+            asyncio.run(self._run_async())
         except KeyboardInterrupt:
-            print()
-        print("Goodbye!")
-
-    def _run_push_to_talk(self):
-        print("(Type 'mode' to switch to hands-free, 'enroll' to add a voice, "
-              "or 'quit' to exit.)")
-        while True:
-            choice = input(
-                "\n[Enter] to talk, 'mode' to switch, 'enroll', or 'quit': "
-            ).strip().lower()
-
-            if choice == "quit":
-                break
-            if choice == "mode":
-                self.mode = "vad"
-                print("Switched to: vad (hands-free, continuous)")
-                self._run_hands_free()
-                return  # _run_hands_free only exits via quit-phrase/Ctrl+C
-            if choice == "enroll":
-                self.enroll_speaker_interactive()
-                continue
-
-            self.process_one_turn()
-
-        print("Goodbye!")
+            print("\nGoodbye!")
 
 
 # ---------------------------------------------------------------------------
-# 5. NOTE
+# 4. NOTE
 # ---------------------------------------------------------------------------
-# This file defines the shared PersonalityVoiceAgent base class only. It is
-# not meant to be run directly -- run sage.py or astra.py instead, each of
-# which subclasses PersonalityVoiceAgent with its own NAME/TRAITS/voice.
+# This file defines the shared base class only. Run 'python sage.py' (or
+# another agent subclass) instead of this file directly.
 
 if __name__ == "__main__":
     sys.exit(
         "agent_base.py defines the shared base class and isn't meant to be "
-        "run directly. Run 'python sage.py' or 'python astra.py' instead."
+        "run directly. Run 'python sage.py' instead."
     )
