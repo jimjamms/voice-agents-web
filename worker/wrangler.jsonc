@@ -3,7 +3,7 @@
   "main": "src/index.mjs",
   "compatibility_date": "2026-09-25",
   "vars": {
-    "PUBLIC_ORIGIN": "https://github.com/jimjamms/voice-agents-web.git",
+    "PUBLIC_ORIGIN": "https://jimjamms.github.io",
     "CHAT_MODEL": "gpt-6-astra"
   },
   "ratelimits": [
