@@ -4,7 +4,8 @@
   "compatibility_date": "2026-09-25",
   "vars": {
     "PUBLIC_ORIGIN": "https://jimjamms.github.io",
-    "REALTIME_MODEL": "gpt-realtime-2.1"
+    "REALTIME_MODEL": "gpt-realtime-2.1",
+    "PIPELINE_CHAT_MODEL": "gpt-4.1-mini"
   },
   "ratelimits": [
     { "name": "DEMO_RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 6, "period": 60 } }

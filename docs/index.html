@@ -7,7 +7,7 @@
   <title>Sage & Astra — a voice conversation</title>
   <meta name="description" content="Talk to Sage and Astra, two distinct voice personalities.">
   <link rel="stylesheet" href="styles.css">
-  <script src="config.js" defer></script><script src="app.js" defer></script>
+  <script src="config.js" defer></script><script src="pipeline.js" defer></script><script src="app.js" defer></script>
 </head>
 <body>
   <div class="shell">
@@ -22,10 +22,10 @@
         <div class="conversation">
           <div class="conversation-head"><div><span class="live-dot"></span><span id="conversation-title">Talking with Sage</span></div><button id="reset" type="button" class="text-button">New conversation ↺</button></div>
           <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Conversation"><div class="empty-state"><div class="tiny-orb" aria-hidden="true"></div><p>It starts with a hello.</p><span>Pick a voice. Take a breath. Say what’s on your mind.</span></div></div>
-          <div class="controls"><div class="access-row"><label for="access-code">Demo access code</label><input id="access-code" type="password" placeholder="Enter code from the host" autocomplete="off" spellcheck="false"></div><div class="mode-row"><span>Conversation mode</span><div class="mode-switch" role="group" aria-label="Conversation mode"><button id="tap-mode" type="button" aria-pressed="true" class="selected">Tap to talk</button><button id="handsfree-mode" type="button" aria-pressed="false">Hands-free</button></div></div><div class="record-row"><button id="record" class="record-button" type="button"><span class="mic" aria-hidden="true">●</span><span id="record-label">Connect</span></button><div class="record-help"><span id="status" role="status">Ready when you are</span><small id="hint">Choose a mode, then connect to start.</small></div></div><button id="disconnect" type="button" class="text-button" hidden>End session ×</button><audio id="playback" controls hidden aria-label="Agent reply"></audio></div>
+          <div class="controls"><div class="engine-row"><span>Voice system</span><div class="mode-switch" role="group" aria-label="Voice system"><button id="realtime-engine" type="button" class="selected" aria-pressed="true">Realtime</button><button id="pipeline-engine" type="button" aria-pressed="false">Classic pipeline</button></div></div><p id="engine-description" class="engine-description">Live conversation with natural interruptions.</p><div class="access-row"><label for="access-code">Demo access code</label><input id="access-code" type="password" placeholder="Enter code from the host" autocomplete="off" spellcheck="false"></div><div class="mode-row"><span>Conversation mode</span><div class="mode-switch" role="group" aria-label="Conversation mode"><button id="tap-mode" type="button" aria-pressed="true" class="selected">Tap to talk</button><button id="handsfree-mode" type="button" aria-pressed="false">Hands-free</button></div></div><div class="record-row"><button id="record" class="record-button" type="button"><span class="mic" aria-hidden="true">●</span><span id="record-label">Connect</span></button><div class="record-help"><span id="status" role="status">Ready when you are</span><small id="hint">Choose a mode, then connect to start.</small></div></div><button id="disconnect" type="button" class="text-button" hidden>End session ×</button><audio id="playback" controls hidden aria-label="Agent reply"></audio></div>
         </div>
       </section>
-      <section class="footnote"><p><span class="asterisk">✳</span> The microphone streams to the voice service during your session. Hands-free mode can hear you while the agent speaks. Transcripts stay in this tab until you leave or reset it.</p><button id="download" type="button" class="text-button">Download conversation ↓</button></section>
+      <section class="footnote"><p><span class="asterisk">✳</span> Realtime streams microphone audio during the session. Classic pipeline sends one recorded turn at a time. Transcripts stay in this tab until you leave or reset it.</p><button id="download" type="button" class="text-button">Download conversation ↓</button></section>
     </main>
     <footer><span>SAGE / ASTRA</span><span>Made to be heard. <span class="footer-flower">✳</span></span></footer>
   </div>

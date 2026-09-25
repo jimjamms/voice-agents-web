@@ -1,4 +1,5 @@
 import agents from './agents.json' with { type: 'json' };
+import { pipelineTurn } from './pipeline.mjs';
 
 const REALTIME = 'https://api.openai.com/v1/realtime/calls';
 const MAX_SDP_BYTES = 32_000;
@@ -36,14 +37,17 @@ export function sessionConfig(agent, mode, model = 'gpt-realtime-2.1') {
 }
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    if (request.method === 'GET' && url.pathname === '/health') {
+      return json({ status: 'ok', modes: ['realtime', 'pipeline'] }, 200, { 'cache-control': 'no-store' });
+    }
     const allowedOrigin = env.PUBLIC_ORIGIN?.replace(/\/$/, '');
     if (!allowedOrigin || request.headers.get('origin') !== allowedOrigin) {
       return json({ error: 'Origin not allowed.' }, 403);
     }
     const cors = corsFor(allowedOrigin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    const url = new URL(request.url);
-    if (url.pathname !== '/session' || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
+    if (!['/session', '/turn'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
     if (!env.OPENAI_API_KEY || !env.DEMO_ACCESS_CODE || !env.DEMO_RATE_LIMITER) {
       return json({ error: 'Voice service is not configured.' }, 503, cors);
     }
@@ -53,7 +57,9 @@ export default {
     if (!validCode(request.headers.get('x-demo-code'), env.DEMO_ACCESS_CODE)) {
       return json({ error: 'Invalid demo access code.' }, 401, cors);
     }
-    const agent = agents[url.searchParams.get('agent')];
+    if (url.pathname === '/turn') return pipelineTurn(request, env, cors);
+    const agentName = url.searchParams.get('agent');
+    const agent = Object.hasOwn(agents, agentName) ? agents[agentName] : null;
     const mode = url.searchParams.get('mode');
     if (!agent || !['tap', 'handsfree'].includes(mode)) return json({ error: 'Choose an agent and mode.' }, 400, cors);
     if (!(request.headers.get('content-type') || '').startsWith('application/sdp')) {

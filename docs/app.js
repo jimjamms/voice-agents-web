@@ -11,7 +11,11 @@
   const title = document.querySelector('#conversation-title');
   const tapMode = document.querySelector('#tap-mode');
   const handsfreeMode = document.querySelector('#handsfree-mode');
-  let agent = 'sage', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
+  const realtimeEngine = document.querySelector('#realtime-engine');
+  const pipelineEngine = document.querySelector('#pipeline-engine');
+  const engineDescription = document.querySelector('#engine-description');
+  let agent = 'sage', engine = 'realtime', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
+  let pipeline;
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
   let manualStartedAt = 0, connectionId = 0;
   const setStatus = (message, detail) => { status.textContent = message; if (detail) hint.textContent = detail; };
@@ -25,6 +29,45 @@
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
     history.push({ role, content: text, at: new Date().toISOString() });
   };
+  pipeline = window.createPipelineTransport({
+    agent: () => agent, isSelected: () => engine === 'pipeline', isHandsFree: () => handsFree,
+    history: () => history, code: () => codeInput.value.trim(),
+    focusCode: () => codeInput.focus(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
+    playback, onStatus: setStatus, getStatus: () => status.textContent,
+    onMessage: addMessage, onState: () => syncControls(),
+  });
+  function syncControls() {
+    const locked = engine === 'pipeline' ? pipeline.isLocked() : connecting || connected;
+    realtimeEngine.disabled = pipelineEngine.disabled = locked;
+    cards.forEach(card => { card.disabled = locked; });
+    if (engine === 'pipeline') {
+      tapMode.disabled = handsfreeMode.disabled = locked;
+      disconnectButton.hidden = true;
+      record.disabled = pipeline.connecting || (pipeline.busy && !pipeline.active);
+      record.classList.toggle('recording', pipeline.recording || pipeline.active);
+      recordLabel.textContent = pipeline.connecting ? 'Opening microphone…' :
+        handsFree ? (pipeline.active ? 'Stop hands-free' : 'Start hands-free') :
+        pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
+    }
+  }
+  function chooseEngine(next) {
+    if (connected || connecting || pipeline.isLocked() || engine === next) return;
+    reset(); engine = next;
+    if (next === 'realtime') recordLabel.textContent = 'Connect';
+    realtimeEngine.classList.toggle('selected', next === 'realtime');
+    pipelineEngine.classList.toggle('selected', next === 'pipeline');
+    realtimeEngine.setAttribute('aria-pressed', String(next === 'realtime'));
+    pipelineEngine.setAttribute('aria-pressed', String(next === 'pipeline'));
+    engineDescription.textContent = next === 'realtime' ?
+      'Live conversation with natural interruptions.' :
+      'Recorded turns with transcription, written replies, and OpenAI speech.';
+    setStatus('Ready when you are', next === 'pipeline' ?
+      (handsFree ? 'Start hands-free, then just speak and pause.' : 'Tap Start talking to record a turn.') :
+      'Choose a mode, then connect to start.');
+    syncControls();
+  }
+  realtimeEngine.addEventListener('click', () => chooseEngine('realtime'));
+  pipelineEngine.addEventListener('click', () => chooseEngine('pipeline'));
   function send(type, extra = {}) {
     if (channel?.readyState !== 'open') return false;
     channel.send(JSON.stringify({ type, ...extra })); return true;
@@ -41,24 +84,28 @@
     disconnectButton.hidden = true; tapMode.disabled = handsfreeMode.disabled = false;
     cards.forEach(card => { card.disabled = false; });
     setStatus(message, 'Choose a mode, then connect to start.');
+    syncControls();
   }
   function reset() {
-    endSession('Ready when you are'); history = []; messages.replaceChildren();
+    pipeline?.stop(); endSession('Ready when you are'); history = []; messages.replaceChildren();
     const empty = document.createElement('div'); empty.className = 'empty-state';
     empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><p>It starts with a hello.</p><span>Pick a voice. Take a breath. Say what’s on your mind.</span>';
     messages.append(empty);
   }
   function chooseMode(enabled) {
-    if (connecting || connected) return;
+    if (connecting || connected || pipeline.isLocked()) return;
     handsFree = enabled;
     tapMode.classList.toggle('selected', !enabled); handsfreeMode.classList.toggle('selected', enabled);
     tapMode.setAttribute('aria-pressed', String(!enabled)); handsfreeMode.setAttribute('aria-pressed', String(enabled));
-    setStatus('Ready when you are', enabled ? 'Connect once, then just speak and pause.' : 'Connect, then tap to start and stop each turn.');
+    setStatus('Ready when you are', engine === 'pipeline' ?
+      (enabled ? 'Start hands-free, then just speak and pause.' : 'Tap Start talking to record a turn.') :
+      (enabled ? 'Connect once, then just speak and pause.' : 'Connect, then tap to start and stop each turn.'));
+    syncControls();
   }
   tapMode.addEventListener('click', () => chooseMode(false));
   handsfreeMode.addEventListener('click', () => chooseMode(true));
   cards.forEach(card => card.addEventListener('click', () => {
-    if (connected || connecting) return;
+    if (connected || connecting || pipeline.isLocked()) return;
     if (agent !== card.dataset.agent) { agent = card.dataset.agent; reset(); }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
@@ -67,7 +114,7 @@
   disconnectButton.addEventListener('click', () => endSession());
   document.querySelector('#download').addEventListener('click', () => {
     if (!history.length) { setStatus('There’s no conversation to download yet.'); return; }
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ agent, messages: history }, null, 2)], { type: 'application/json' }));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ agent, engine, messages: history }, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `${agent}-conversation.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   const transcripts = new Map();
@@ -109,7 +156,7 @@
     const base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
     if (!base || base.includes('REPLACE-ME')) { setStatus('Set the Worker URL in docs/config.js first.'); return; }
     if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) { setStatus('This browser needs microphone and WebRTC support over HTTPS.'); return; }
-    connecting = true; record.disabled = true; recordLabel.textContent = 'Connecting…';
+    connecting = true; record.disabled = true; recordLabel.textContent = 'Connecting…'; syncControls();
     const thisConnection = ++connectionId;
     setStatus('Connecting to the voice service…', 'Allow microphone access when asked.');
     try {
@@ -129,7 +176,7 @@
       channel.onmessage = e => { try { handleEvent(JSON.parse(e.data)); } catch (error) { console.error('Realtime event:', error); } };
       channel.onopen = () => {
         if (thisConnection !== connectionId) return;
-        connecting = false; connected = true; record.disabled = false;
+        connecting = false; connected = true; record.disabled = false; syncControls();
         recordLabel.textContent = handsFree ? 'Stop session' : 'Start talking';
         disconnectButton.hidden = false;
         setStatus(handsFree ? 'Listening… just start talking' : 'Connected to your agent', handsFree ? 'Speak naturally. You can interrupt the reply.' : 'Tap Start talking, then Stop & send.');
@@ -149,6 +196,7 @@
     }
   }
   record.addEventListener('click', async () => {
+    if (engine === 'pipeline') { await pipeline.press(); return; }
     if (connecting) return;
     if (!connected) { await connect(); return; }
     if (handsFree) { endSession(); return; }
@@ -167,5 +215,5 @@
       setTimeout(() => { if (connected) { send('input_audio_buffer.commit'); send('response.create'); } }, 160);
     }
   });
-  window.addEventListener('pagehide', () => { if (connected || connecting) endSession(); });
+  window.addEventListener('pagehide', () => { pipeline.stop(); if (connected || connecting) endSession(); });
 })();
