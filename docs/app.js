@@ -6,196 +6,166 @@
   const status = document.querySelector('#status');
   const hint = document.querySelector('#hint');
   const playback = document.querySelector('#playback');
+  const disconnectButton = document.querySelector('#disconnect');
   const codeInput = document.querySelector('#access-code');
   const title = document.querySelector('#conversation-title');
   const tapMode = document.querySelector('#tap-mode');
   const handsfreeMode = document.querySelector('#handsfree-mode');
-  let agent = 'sage', history = [], recorder, stream, chunks = [], timeout, busy = false, audioUrl;
-  let handsFree = false, active = false, listening = false, meterTimer, audioContext, analyser, samples;
-  let startedAt = 0, lastSpeech = 0, voicedMs = 0, ambient = .004, recorderStartedAt = 0, session = 0;
-  const formats = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm', 'audio/ogg;codecs=opus'];
+  let agent = 'sage', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
+  let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
+  let manualStartedAt = 0, connectionId = 0;
   const setStatus = (message, detail) => { status.textContent = message; if (detail) hint.textContent = detail; };
-  const append = (role, content) => {
+  const addMessage = (role, content) => {
+    const text = String(content || '').trim();
+    if (!text) return;
     messages.querySelector('.empty-state')?.remove();
     const item = document.createElement('div'); item.className = `message ${role}`;
     const label = document.createElement('span'); label.className = 'sender'; label.textContent = role === 'user' ? 'You' : agent === 'sage' ? 'Sage' : 'Astra';
-    const text = document.createElement('span'); text.textContent = content;
-    item.append(label, text); messages.append(item); messages.scrollTop = messages.scrollHeight;
+    const body = document.createElement('span'); body.textContent = text;
+    item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
+    history.push({ role, content: text, at: new Date().toISOString() });
   };
-  const stopAudio = () => { playback.pause(); playback.removeAttribute('src'); playback.hidden = true; if (audioUrl) URL.revokeObjectURL(audioUrl); audioUrl = null; };
-  const reset = () => {
-    history = []; stopAudio(); messages.replaceChildren();
+  function send(type, extra = {}) {
+    if (channel?.readyState !== 'open') return false;
+    channel.send(JSON.stringify({ type, ...extra })); return true;
+  }
+  function endSession(message = 'Session ended') {
+    connectionId++; connected = false; connecting = false; recording = false; responseActive = false;
+    clearTimeout(sessionTimer); clearTimeout(turnTimer);
+    if (micTrack) micTrack.enabled = false;
+    mic?.getTracks().forEach(track => track.stop()); mic = null; micTrack = null;
+    channel?.close(); channel = null;
+    pc?.close(); pc = null;
+    playback.pause(); playback.srcObject = null; playback.hidden = true;
+    record.disabled = false; record.classList.remove('recording'); recordLabel.textContent = 'Connect';
+    disconnectButton.hidden = true; tapMode.disabled = handsfreeMode.disabled = false;
+    cards.forEach(card => { card.disabled = false; });
+    setStatus(message, 'Choose a mode, then connect to start.');
+  }
+  function reset() {
+    endSession('Ready when you are'); history = []; messages.replaceChildren();
     const empty = document.createElement('div'); empty.className = 'empty-state';
     empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><p>It starts with a hello.</p><span>Pick a voice. Take a breath. Say what’s on your mind.</span>';
-    messages.append(empty); setStatus('Ready when you are', handsFree ? 'Start hands-free, then just speak and pause.' : 'Tap once to record. Tap again to send.');
-  };
-  const setMode = enabled => {
-    if (active || busy || recorder?.state === 'recording') return;
+    messages.append(empty);
+  }
+  function chooseMode(enabled) {
+    if (connecting || connected) return;
     handsFree = enabled;
     tapMode.classList.toggle('selected', !enabled); handsfreeMode.classList.toggle('selected', enabled);
     tapMode.setAttribute('aria-pressed', String(!enabled)); handsfreeMode.setAttribute('aria-pressed', String(enabled));
-    recordLabel.textContent = enabled ? 'Start hands-free' : 'Start talking';
-    setStatus('Ready when you are', enabled ? 'Automatically sends after 1.2 seconds of silence.' : 'Tap once to record. Tap again to send.');
-  };
-  tapMode.addEventListener('click', () => setMode(false));
-  handsfreeMode.addEventListener('click', () => setMode(true));
+    setStatus('Ready when you are', enabled ? 'Connect once, then just speak and pause.' : 'Connect, then tap to start and stop each turn.');
+  }
+  tapMode.addEventListener('click', () => chooseMode(false));
+  handsfreeMode.addEventListener('click', () => chooseMode(true));
   cards.forEach(card => card.addEventListener('click', () => {
-    if (active || busy || recorder?.state === 'recording') return;
+    if (connected || connecting) return;
     if (agent !== card.dataset.agent) { agent = card.dataset.agent; reset(); }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
   }));
-  document.querySelector('#reset').addEventListener('click', () => { if (!active && !busy && recorder?.state !== 'recording') reset(); });
+  document.querySelector('#reset').addEventListener('click', reset);
+  disconnectButton.addEventListener('click', () => endSession());
   document.querySelector('#download').addEventListener('click', () => {
     if (!history.length) { setStatus('There’s no conversation to download yet.'); return; }
     const url = URL.createObjectURL(new Blob([JSON.stringify({ agent, messages: history }, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `${agent}-conversation.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  const setRecording = isRecording => { record.classList.toggle('recording', isRecording); recordLabel.textContent = isRecording ? 'Stop & send' : 'Start talking'; };
-  async function submit(blob, currentSession = null) {
-    busy = true; record.disabled = !active;
-    setStatus('Finding your words…', 'Transcribing, thinking, then speaking.');
-    const form = new FormData(); form.append('agent', agent); form.append('history', JSON.stringify(history));
-    const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : blob.type.includes('wav') ? 'wav' : 'webm';
-    form.append('audio', blob, `turn.${ext}`);
-    let succeeded = false;
-    try {
-      const base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
-      if (!base || base.includes('REPLACE-ME')) throw new Error('The demo server has not been configured yet.');
-      const response = await fetch(`${base.replace(/\/$/, '')}/turn`, { method: 'POST', headers: { 'x-demo-code': codeInput.value.trim() }, body: form });
-      const data = await response.json();
-      if (currentSession !== null && (!active || session !== currentSession)) return false;
-      if (!response.ok) throw new Error(data.error || 'Could not complete this turn.');
-      append('user', data.transcript); append('assistant', data.reply);
-      history.push({ role: 'user', content: data.transcript }, { role: 'assistant', content: data.reply });
-      history = history.slice(-12);
-      stopAudio();
-      const binary = atob(data.audio); const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
-      audioUrl = URL.createObjectURL(new Blob([bytes], { type: data.mimeType || 'audio/mpeg' }));
-      playback.src = audioUrl;
-      setStatus('Playing reply…', handsFree && active ? 'Listening resumes after the reply.' : 'Tap Start talking when you’re ready.');
-      try { await playback.play(); succeeded = true; }
-      catch { playback.hidden = false; setStatus('Tap play to hear the reply.', 'Your browser paused automatic audio playback.'); succeeded = true; }
-    } catch (error) {
-      if (currentSession === null || (active && session === currentSession))
-        setStatus(error.name === 'TypeError' && error.message === 'Failed to fetch' ? 'Could not reach the voice server. Check its URL and PUBLIC_ORIGIN.' : error.message || 'Something went wrong.', 'Try again after checking the connection.');
-    } finally { busy = false; record.disabled = false; }
-    return succeeded;
-  }
-  function stopHandsFree() {
-    active = false; listening = false; session++;
-    clearInterval(meterTimer); meterTimer = null;
-    clearTimeout(timeout); timeout = null;
-    if (recorder?.state === 'recording') recorder.stop();
-    stream?.getTracks().forEach(track => track.stop()); stream = null;
-    if (audioContext) audioContext.close().catch(() => {});
-    audioContext = null; analyser = null;
-    stopAudio();
-    record.classList.remove('recording'); recordLabel.textContent = 'Start hands-free';
-    tapMode.disabled = handsfreeMode.disabled = false;
-    setStatus('Hands-free stopped', 'Start hands-free to listen again.');
-  }
-  function listenAgain() {
-    if (!active || !stream) return;
-    stream.getAudioTracks().forEach(track => { track.enabled = true; });
-    startedAt = performance.now(); ambient = .004; listening = true;
-    setStatus('Listening… just start talking', 'Pause for 1.2 seconds to send your turn.');
-  }
-  playback.addEventListener('ended', () => {
-    if (active) listenAgain();
-    else setStatus('Your turn', 'Tap Start talking when you’re ready.');
-  });
-  function finishVoiceTurn() {
-    if (!active || !listening || recorder?.state !== 'recording') return;
-    listening = false;
-    stream?.getAudioTracks().forEach(track => { track.enabled = false; });
-    recorder.stop();
-  }
-  function measure() {
-    if (!active || !listening || !analyser) return;
-    analyser.getFloatTimeDomainData(samples);
-    let power = 0;
-    for (let i = 0; i < samples.length; i++) power += samples[i] * samples[i];
-    const rms = Math.sqrt(power / samples.length);
-    const now = performance.now();
-    if (now - startedAt < 500) { ambient = Math.max(.002, ambient * .9 + rms * .1); return; }
-    const speech = rms > Math.max(.018, ambient * 3);
-    if (speech) {
-      if (!recorder || recorder.state !== 'recording') {
-        chunks = []; voicedMs = 0; recorderStartedAt = now;
-        recorder = new MediaRecorder(stream, { mimeType: formats.find(f => MediaRecorder.isTypeSupported(f)) });
-        const mimeType = recorder.mimeType;
-        const thisSession = session;
-        recorder.addEventListener('dataavailable', e => { if (e.data.size) chunks.push(e.data); });
-        recorder.addEventListener('stop', async () => {
-          const blob = new Blob(chunks, { type: mimeType }); chunks = [];
-          if (!active || thisSession !== session) return;
-          if (voicedMs < 300 || blob.size < 500) { listenAgain(); return; }
-          setStatus('Sending your recording…');
-          const ok = await submit(blob, thisSession);
-          if (!active || thisSession !== session) return;
-          if (!ok) {
-            const failure = status.textContent;
-            stopHandsFree(); setStatus(failure, 'Check your connection, then start hands-free again.');
-          }
-        }, { once: true });
-        recorder.start(); setStatus('I hear you…', 'Pause for 1.2 seconds when you finish.');
+  const transcripts = new Map();
+  function handleEvent(event) {
+    switch (event.type) {
+      case 'input_audio_buffer.speech_started':
+        setStatus(responseActive ? 'Listening — reply interrupted' : 'I hear you…', 'Pause when you finish.');
+        break;
+      case 'input_audio_buffer.speech_stopped':
+        setStatus('Thinking…', 'Your reply is on the way.');
+        break;
+      case 'conversation.item.input_audio_transcription.completed':
+        addMessage('user', event.transcript);
+        break;
+      case 'response.created':
+        responseActive = true; setStatus('Speaking…', 'You can interrupt in hands-free mode.');
+        break;
+      case 'response.output_audio_transcript.delta': {
+        const id = event.item_id || event.response_id || 'reply';
+        transcripts.set(id, (transcripts.get(id) || '') + (event.delta || ''));
+        break;
       }
-      voicedMs += 60; lastSpeech = now;
-    } else if (recorder?.state === 'recording') {
-      if (now - lastSpeech >= 1200) finishVoiceTurn();
-    } else {
-      ambient = Math.max(.002, ambient * .97 + rms * .03);
+      case 'response.output_audio_transcript.done': {
+        const id = event.item_id || event.response_id || 'reply';
+        addMessage('assistant', event.transcript || transcripts.get(id)); transcripts.delete(id);
+        break;
+      }
+      case 'response.done':
+        responseActive = false;
+        setStatus(handsFree ? 'Listening… just start talking' : 'Your turn', handsFree ? 'The agent can hear you now.' : 'Tap Start talking for another turn.');
+        break;
+      case 'error':
+        setStatus(event.error?.message || 'Voice session error.', 'End the session and reconnect if this continues.');
+        break;
     }
-    if (recorder?.state === 'recording' && now - recorderStartedAt >= 30000) finishVoiceTurn();
   }
-  async function startHandsFree() {
-    active = true; const thisSession = ++session;
-    record.classList.add('recording'); recordLabel.textContent = 'Stop hands-free';
-    tapMode.disabled = handsfreeMode.disabled = true;
-    setStatus('Opening microphone…');
+  async function connect() {
+    if (!codeInput.value.trim()) { setStatus('Enter the demo access code first.'); codeInput.focus(); return; }
+    const base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
+    if (!base || base.includes('REPLACE-ME')) { setStatus('Set the Worker URL in docs/config.js first.'); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.RTCPeerConnection) { setStatus('This browser needs microphone and WebRTC support over HTTPS.'); return; }
+    connecting = true; record.disabled = true; recordLabel.textContent = 'Connecting…';
+    const thisConnection = ++connectionId;
+    setStatus('Connecting to the voice service…', 'Allow microphone access when asked.');
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      if (!active || thisSession !== session) { stream.getTracks().forEach(track => track.stop()); stream = null; return; }
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      await audioContext.resume();
-      const source = audioContext.createMediaStreamSource(stream);
-      analyser = audioContext.createAnalyser(); analyser.fftSize = 2048; source.connect(analyser);
-      samples = new Float32Array(analyser.fftSize);
-      startedAt = performance.now(); ambient = .004; listening = true;
-      meterTimer = setInterval(measure, 60);
-      setStatus('Listening… just start talking', 'Pause for 1.2 seconds to send your turn.');
+      mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      if (thisConnection !== connectionId) { mic.getTracks().forEach(track => track.stop()); return; }
+      micTrack = mic.getAudioTracks()[0]; micTrack.enabled = handsFree;
+      pc = new RTCPeerConnection(); pc.addTrack(micTrack, mic);
+      const currentPeer = pc;
+      pc.ontrack = e => {
+        playback.srcObject = e.streams[0]; playback.autoplay = true; playback.playsInline = true;
+        playback.play().catch(() => { playback.hidden = false; setStatus('Tap play to hear the reply.', 'Your browser paused automatic audio playback.'); });
+      };
+      pc.onconnectionstatechange = () => {
+        if (pc === currentPeer && currentPeer.connectionState === 'failed') endSession('Voice connection lost. Try connecting again.');
+      };
+      channel = pc.createDataChannel('oai-events');
+      channel.onmessage = e => { try { handleEvent(JSON.parse(e.data)); } catch (error) { console.error('Realtime event:', error); } };
+      channel.onopen = () => {
+        if (thisConnection !== connectionId) return;
+        connecting = false; connected = true; record.disabled = false;
+        recordLabel.textContent = handsFree ? 'Stop session' : 'Start talking';
+        disconnectButton.hidden = false;
+        setStatus(handsFree ? 'Listening… just start talking' : 'Connected to your agent', handsFree ? 'Speak naturally. You can interrupt the reply.' : 'Tap Start talking, then Stop & send.');
+        sessionTimer = setTimeout(() => endSession('Session ended after 10 minutes. Reconnect to continue.'), 10 * 60 * 1000);
+      };
+      const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
+      const url = `${base.replace(/\/$/, '')}/session?agent=${encodeURIComponent(agent)}&mode=${handsFree ? 'handsfree' : 'tap'}`;
+      const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/sdp', 'x-demo-code': codeInput.value.trim() }, body: offer.sdp });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || `Could not connect (HTTP ${response.status}).`);
+      }
+      if (thisConnection !== connectionId) return;
+      await pc.setRemoteDescription({ type: 'answer', sdp: await response.text() });
     } catch (error) {
-      stopHandsFree();
-      setStatus(error.name === 'NotAllowedError' ? 'Allow microphone access to start talking.' : error.message || 'Microphone unavailable.');
+      endSession(error.name === 'NotAllowedError' ? 'Allow microphone access to connect.' : error.name === 'TypeError' ? 'Cannot reach the Worker. Check its URL and PUBLIC_ORIGIN.' : error.message || 'Could not connect.');
     }
   }
   record.addEventListener('click', async () => {
-    if (handsFree && active) { stopHandsFree(); return; }
-    if (recorder?.state === 'recording') { clearTimeout(timeout); recorder.stop(); setRecording(false); setStatus('Sending your recording…'); return; }
-    if (busy) return;
-    if (!codeInput.value.trim()) { setStatus('Enter the demo access code first.'); codeInput.focus(); return; }
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) { setStatus('This browser cannot record audio. Try an updated browser over HTTPS.'); return; }
-    if (!formats.some(f => MediaRecorder.isTypeSupported(f))) { setStatus('This browser does not support a compatible recording format.'); return; }
-    stopAudio();
-    if (handsFree) {
-      if (!window.AudioContext && !window.webkitAudioContext) { setStatus('Hands-free listening is not available in this browser.'); return; }
-      await startHandsFree(); return;
+    if (connecting) return;
+    if (!connected) { await connect(); return; }
+    if (handsFree) { endSession(); return; }
+    if (!recording) {
+      if (responseActive) { send('response.cancel'); send('output_audio_buffer.clear'); responseActive = false; }
+      send('input_audio_buffer.clear');
+      recording = true; manualStartedAt = performance.now(); micTrack.enabled = true;
+      record.classList.add('recording'); recordLabel.textContent = 'Stop & send';
+      setStatus('Listening to you…', 'Tap Stop & send when you finish.');
+      turnTimer = setTimeout(() => { if (recording) record.click(); }, 30000);
+    } else {
+      clearTimeout(turnTimer); recording = false; micTrack.enabled = false;
+      record.classList.remove('recording'); recordLabel.textContent = 'Start talking';
+      if (performance.now() - manualStartedAt < 450) { send('input_audio_buffer.clear'); setStatus('That turn was too short. Try again.'); return; }
+      setStatus('Sending your turn…', 'Waiting for the agent.');
+      setTimeout(() => { if (connected) { send('input_audio_buffer.commit'); send('response.create'); } }, 160);
     }
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      chunks = []; const mimeType = formats.find(f => MediaRecorder.isTypeSupported(f));
-      recorder = new MediaRecorder(stream, { mimeType });
-      recorder.addEventListener('dataavailable', e => { if (e.data.size) chunks.push(e.data); });
-      recorder.addEventListener('stop', () => {
-        stream?.getTracks().forEach(track => track.stop()); stream = null;
-        const blob = new Blob(chunks, { type: mimeType }); chunks = [];
-        if (blob.size < 500) { setStatus('That recording was too short. Try again.'); return; }
-        submit(blob);
-      }, { once: true });
-      recorder.start(); setRecording(true); setStatus('Listening to you…', 'Tap Stop & send, or wait 30 seconds.');
-      timeout = setTimeout(() => { if (recorder?.state === 'recording') record.click(); }, 30000);
-    } catch (error) { stream?.getTracks().forEach(track => track.stop()); setStatus(error.name === 'NotAllowedError' ? 'Allow microphone access to start talking.' : error.message || 'Microphone unavailable.'); }
   });
-  window.addEventListener('pagehide', () => { if (active) stopHandsFree(); });
+  window.addEventListener('pagehide', () => { if (connected || connecting) endSession(); });
 })();
