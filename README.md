@@ -1,6 +1,6 @@
 # Sage & Astra — browser voice demo
 
-This project uses the **three Python files supplied by the owner**. Byte-for-byte copies are in `desktop/`. The browser demo takes a recorded turn, transcribes it, gets a chat response using the agent's original Big Five prompt, and speaks it using that agent's original OpenAI voice and delivery instructions. `scripts/sync_agents.py` extracts these settings from the Python files into `worker/src/agents.json`. Run it whenever you change the Python personality or voice settings.
+This project uses the **three Python files supplied by the owner**. The browser demo takes a recorded turn, transcribes it, gets a chat response using the agent's original Big Five prompt, and speaks it using that agent's original OpenAI voice and delivery instructions. `scripts/sync_agents.py` extracts these settings from the Python files into `worker/src/agents.json`. Run it whenever you change the Python personality or voice settings.
 
 | Agent | Chat personality | OpenAI voice |
 | --- | --- | --- |

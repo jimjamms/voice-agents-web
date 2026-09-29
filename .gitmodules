@@ -1,0 +1,3 @@
+[submodule "Shifts-and-Giggles"]
+	path = lib/Shifts-and-Giggles
+	url = ssh://git@github.com/angelync07/Shifts-and-Giggles

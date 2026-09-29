@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
-base = ast.parse((root / 'desktop/agent_base.py').read_text())
+base = ast.parse((root / 'lib/Shifts-and-Giggles/agent_base.py').read_text())
 descriptions = next(ast.literal_eval(node.value) for node in base.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'TRAIT_DESCRIPTIONS' for t in node.targets))
 result = {}
 for name in ('sage', 'astra'):
-    source = ast.parse((root / f'desktop/{name}.py').read_text())
+    source = ast.parse((root / f'lib/Shifts-and-Giggles/{name}.py').read_text())
     cls = next(node for node in source.body if isinstance(node, ast.ClassDef) and node.name.lower() == name + 'agent')
     fields = {}
     for node in cls.body:

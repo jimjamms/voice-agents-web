@@ -1,0 +1,38 @@
+1. download python
+2. install ffmpeg
+    https://www.gyan.dev/ffmpeg/builds/
+    download ffmpeg-release-essentials.zip
+    extract zip
+
+     Add it to your PATH
+    This is the step people usually get stuck on. PATH is just a list of folders Windows checks whenever you type a command, so it knows where to find the program.
+
+    Press the Windows key, type "environment variables", and click "Edit the system environment variables"
+    In the window that opens, click the "Environment Variables..." button near the bottom
+    In the bottom section ("System variables"), find and select the row named Path, then click Edit
+    Click New, and paste in the exact path to the bin folder inside your extracted ffmpeg folder, e.g.:
+    C:\ffmpeg\ffmpeg-7.x-essentials_build\bin
+
+    Verify it worked
+    Close any open terminal/PowerShell windows completely (this matters — PATH changes don't apply to terminals that were already open) and open a fresh one. Then type:
+
+    ffmpeg -version
+3. install pyaudio type in terminal:
+    py -m pip install pyaudio
+
+4. install python packages (requirements.txt)
+    pip install -r requirements.txt
+
+5. environment values
+    open new terminal:
+    setx OPENAI_API_KEY "sk-your-key-here"
+    setx AZURE_SPEECH_KEY "your-azure-key-here"
+    setx AZURE_SPEECH_REGION "eastus" 
+
+    if successful, close and reopen terminal and 
+    verify success:
+    echo $env:OPENAI_API_KEY
+
+6. run code
+    cd into Shifts-and-Giggles
+    python talk.py

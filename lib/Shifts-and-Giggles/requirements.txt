@@ -1,0 +1,7 @@
+sounddevice
+numpy
+librosa
+faster-whisper
+azure-cognitiveservices-speech
+openai
+websockets
