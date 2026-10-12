@@ -84,3 +84,17 @@ test('tap interruption stops playback and starts recording in one action', async
   assert.equal(interrupted, 1); assert.equal(paused, 1); assert.equal(recording, 1);
   assert.equal(transport.playing, false);
 });
+
+test('Recorded text follows audio position, ignores missing duration, and completes on interruption', () => {
+  const events = {}; const shown = [];
+  const playback = { currentTime: 0, duration: NaN, addEventListener(type, fn) { events[type] = fn; }, pause() {}, removeAttribute() {} };
+  const context = { window: {}, URL: { revokeObjectURL() {} } };
+  vm.runInNewContext(readFileSync(new URL('../docs/pipeline.js', import.meta.url), 'utf8'), context);
+  const transport = context.window.createPipelineTransport({ playback, isSelected: () => true, onReplyStart: () => text => shown.push(text) });
+  transport.beginReply('One two three four');
+  events.timeupdate(); assert.equal(shown.length, 0);
+  playback.duration = 4; playback.currentTime = 2; events.timeupdate();
+  assert.equal(shown.at(-1), 'One two');
+  transport.stopPlayback(); assert.equal(shown.at(-1), 'One two three four');
+  playback.currentTime = 3; events.timeupdate(); assert.equal(shown.at(-1), 'One two three four');
+});

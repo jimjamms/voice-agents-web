@@ -18,10 +18,10 @@ function setup() {
   const document = { querySelector: selector => get(selector.slice(1)), querySelectorAll: () => cards,
     createElement: () => element('new'), addEventListener() {} };
   const transport = { isLocked: () => false, stop() {}, busy: false, active: false };
-  vm.runInNewContext(source, { document, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
-    window: { createPipelineTransport(value) { options = value; return transport; }, addEventListener() {},
-      AgentMemory: { forget() { return true; } } } });
-  return { get, options, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
+  const testWindow = { createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
+  vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
+    window: testWindow });
+  return { get, options, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
   const app = setup();
@@ -52,4 +52,24 @@ test('speaker and memory mode changes keep conversation histories separate', () 
   app.click('isolated-memory'); assert.equal(app.options.history().length, 0);
   app.options.onMessage('user', 'Jenny separate chat'); app.click('shared-memory');
   assert.equal(app.options.history()[0].content, 'Jenny shared chat');
+});
+
+test('Recorded reply displays progressively while full text stays in history', () => {
+  const app = setup();
+  const update = app.options.onReplyStart('Visit Kyoto and Osaka.');
+  const bubble = app.get('messages').children.at(-1).children[1];
+  assert.equal(bubble.textContent, '…');
+  update('Visit Kyoto'); assert.equal(bubble.textContent, 'Visit Kyoto');
+  assert.equal(app.options.history()[0].content, 'Visit Kyoto and Osaka.');
+  update('Visit Kyoto and Osaka.'); assert.equal(app.options.history().length, 1);
+});
+test('Realtime transcript deltas update one bubble and completion saves one message', () => {
+  const app = setup();
+  app.event({ type: 'response.output_audio_transcript.delta', item_id: 'reply-1', delta: 'Visit ' });
+  const bubble = app.get('messages').children.at(-1).children[1];
+  assert.equal(bubble.textContent, 'Visit '); assert.equal(app.options.history().length, 0);
+  app.event({ type: 'response.output_audio_transcript.delta', item_id: 'reply-1', delta: 'Kyoto.' });
+  assert.equal(bubble.textContent, 'Visit Kyoto.');
+  app.event({ type: 'response.output_audio_transcript.done', item_id: 'reply-1', transcript: 'Visit Kyoto.' });
+  assert.equal(app.get('messages').children.length, 1); assert.equal(app.options.history().length, 1);
 });

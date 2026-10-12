@@ -32,22 +32,24 @@
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
   let manualStartedAt = 0, connectionId = 0;
   const setStatus = (message, detail) => { status.textContent = message; if (detail) hint.textContent = detail; };
-  const renderMessage = (role, content, speaker) => {
+  const renderMessage = (role, content, speaker, allowEmpty = false) => {
     const text = String(content || '').trim();
-    if (!text) return;
+    if (!text && !allowEmpty) return;
     messages.querySelector('.empty-state')?.remove();
     const item = document.createElement('div'); item.className = `message ${role}`;
     const label = document.createElement('span'); label.className = 'sender';
     label.textContent = role === 'user' ? (speaker?.name && speaker.name !== 'Unknown' ? speaker.name : 'You') : agent === 'sage' ? 'Sage' : 'Astra';
     const body = document.createElement('span'); body.textContent = text;
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
+    return body;
   };
   const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
-    renderMessage(role, text, speaker);
+    const body = renderMessage(role, text, speaker);
     history.push({ role, content: text, at: new Date().toISOString(),
       ...(speaker && { speaker: speaker.name, speaker_score: Math.round(speaker.score * 1000) / 1000 }) });
+    return body;
   };
   pipeline = window.createPipelineTransport({
     agent: () => agent, isSelected: () => engine === 'pipeline', isHandsFree: () => handsFree,
@@ -57,6 +59,11 @@
     memories: () => window.AgentMemory.entries(speakerName.value.trim(), memoryMode.value, agent),
     onTurn: saveTurn, onInterrupt: markInterrupted,
     playback, onStatus: setStatus, getStatus: () => status.textContent,
+    onReplyStart: reply => {
+      const body = addMessage('assistant', reply);
+      body.textContent = '…';
+      return text => { body.textContent = text || '…'; messages.scrollTop = messages.scrollHeight; };
+    },
     onMessage: addMessage, onState: () => syncControls(),
   });
   function syncControls() {
@@ -217,13 +224,21 @@
         break;
       case 'response.output_audio_transcript.delta': {
         const id = event.item_id || event.response_id || 'reply';
-        transcripts.set(id, (transcripts.get(id) || '') + (event.delta || ''));
+        let pending = transcripts.get(id);
+        if (!pending) { pending = { text: '', body: renderMessage('assistant', '', undefined, true) }; transcripts.set(id, pending); }
+        pending.text += event.delta || '';
+        pending.body.textContent = pending.text; messages.scrollTop = messages.scrollHeight;
         break;
       }
       case 'response.output_audio_transcript.done': {
         const id = event.item_id || event.response_id || 'reply';
-        const reply = event.transcript || transcripts.get(id);
-        addMessage('assistant', reply); transcripts.delete(id);
+        const pending = transcripts.get(id);
+        const reply = event.transcript || pending?.text;
+        if (pending && reply) {
+          pending.body.textContent = reply;
+          history.push({ role: 'assistant', content: reply, at: new Date().toISOString() });
+        } else if (reply) addMessage('assistant', reply);
+        transcripts.delete(id);
         rememberRealtime(reply);
         break;
       }

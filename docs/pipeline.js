@@ -13,8 +13,15 @@
       this.chunks = []; this.timer = null; this.interval = null; this.audioUrl = null;
       this.request = null; this.generation = 0;
       this.playing = false; this.interruptStartedAt = null;
+      this.replyText = ''; this.replyDisplay = null;
+      for (const type of ['timeupdate', 'playing', 'seeked']) {
+        this.options.playback.addEventListener(type, () => {
+          if (this.options.isSelected()) this.revealReply();
+        });
+      }
       this.options.playback.addEventListener('ended', () => {
         if (!this.options.isSelected()) return;
+        this.finishReply();
         this.playing = false; this.notify();
         if (this.interruptStartedAt !== null && this.recording) {
           this.interruptStartedAt = null;
@@ -27,17 +34,38 @@
         else this.status('Your turn', 'Tap Start talking for another turn.');
       });
       this.options.playback.addEventListener('play', () => {
-        if (!this.active || !this.options.isSelected()) return;
-        this.playing = true;
+        if (!this.options.isSelected()) return;
+        this.playing = true; this.notify();
+        if (!this.active) return;
         this.stream?.getAudioTracks().forEach(track => { track.enabled = true; });
         this.status('Playing reply…', 'You can interrupt by speaking. Headphones help prevent echo.');
       });
+    }
+    beginReply(text) {
+      this.replyText = text;
+      this.replyDisplay = this.options.onReplyStart?.(text) || null;
+      if (!this.replyDisplay) this.options.onMessage('assistant', text);
+    }
+    revealReply() {
+      if (!this.replyDisplay) return;
+      const { currentTime, duration } = this.options.playback;
+      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return;
+      const ratio = Math.max(0, Math.min(1, currentTime / duration));
+      const words = this.replyText.match(/\S+\s*/g) || [];
+      const count = ratio > 0 ? Math.max(1, Math.floor(words.length * ratio)) : 0;
+      this.replyDisplay(words.slice(0, count).join('').trimEnd());
+    }
+    finishReply() {
+      // Keep the complete generated reply readable after playback or interruption.
+      this.replyDisplay?.(this.replyText);
+      this.replyDisplay = null; this.replyText = '';
     }
     isLocked() { return this.active || this.busy || this.recording || this.connecting || this.playing; }
     notify() { this.options.onState(this); }
     status(message, detail) { this.options.onStatus(message, detail); }
     format() { return formats.find(type => MediaRecorder.isTypeSupported(type)); }
     stopPlayback() {
+      this.finishReply();
       this.playing = false; this.interruptStartedAt = null;
       const audio = this.options.playback;
       audio.pause(); audio.removeAttribute('src'); audio.hidden = true;
@@ -223,7 +251,7 @@
         this.options.onTurn({ agent: selectedAgent, mode, speaker: speaker.name, ...result, audio: undefined });
         if (generation !== this.generation) return;
         this.options.onMessage('user', result.transcript, speaker);
-        this.options.onMessage('assistant', result.reply);
+        this.beginReply(result.reply);
         const bytes = Uint8Array.from(atob(result.audio), char => char.charCodeAt(0));
         this.audioUrl = URL.createObjectURL(new Blob([bytes], { type: result.mimeType || 'audio/mpeg' }));
         this.options.playback.src = this.audioUrl;
