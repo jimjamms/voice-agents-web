@@ -52,9 +52,12 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 .footnote button{color:#365a40;font-weight:700}
 @media(max-width:600px){.footnote{padding:16px;align-items:stretch;gap:8px}.footnote p{padding-left:31px}.footnote button{align-self:flex-start;margin-left:31px}}
 
-.scene-background::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.1);
+/* Input focus follows the selected companion's palette. */
+.conversation[data-agent] .access-row input:focus,
+.conversation[data-agent] .speaker-row input:focus {
+  outline: 2px solid var(--chat-accent);
+  outline-offset: 3px;
+  border-color: var(--chat-accent);
+  background: var(--chat-surface);
+  box-shadow: 0 0 0 5px var(--selected-shadow);
 }
