@@ -6,3 +6,7 @@
 
 /* Fixed landscape behind the entire page; cream surfaces keep controls legible. */
 body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;background:linear-gradient(180deg,#f4f1e9 0%,#e1ebe0 64%,#d8e5d7 100%)}.scene-background .journey-art{position:absolute;bottom:0;left:0;width:100%;height:clamp(380px,48vw,740px);display:block;max-width:none;border:0;border-radius:0}.scene-wash{position:absolute;inset:0;background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 20%,#f4f1e980 46%,#f4f1e928 76%,#f4f1e938 100%)}.shell{position:relative;z-index:1}.conversation{background:#fffdf7;box-shadow:0 15px 50px #294d4020}.agent-card{box-shadow:0 12px 30px #294d4010}.footnote{margin-top:22px;padding:18px 20px 22px;background:#f8f7efe8;border:1px solid #d8ded3;border-radius:12px;margin-bottom:30px}.topbar,footer{border-color:#bccdbb}.top-note,footer{color:#516a5a}@media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}.scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9e8 23%,#f4f1e966 65%,#f4f1e93d 100%)}.footnote{padding:16px;margin-bottom:22px}}
+
+.scene-background .journey-art {
+  opacity: 0.35;
+}
