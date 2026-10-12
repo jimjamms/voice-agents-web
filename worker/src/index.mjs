@@ -20,9 +20,9 @@ function validCode(given, expected) {
   for (let i = 0; i < given.length; i++) mismatch |= given.charCodeAt(i) ^ expected.charCodeAt(i);
   return mismatch === 0;
 }
-export function sessionConfig(agent, mode, model = 'gpt-realtime-2.1') {
+export function sessionConfig(agent, mode, model = 'gpt-realtime-2.1', memoryMode = 'disabled') {
   return {
-    type: 'realtime', model, instructions: agent.instructions,
+    type: 'realtime', model, instructions: agent.instructions + '\n\n' + agent.handoff[Object.hasOwn(agent.handoff, memoryMode) ? memoryMode : 'disabled'],
     output_modalities: ['audio'],
     audio: {
       input: {
@@ -77,7 +77,7 @@ export default {
       }
       const form = new FormData();
       form.set('sdp', sdp);
-      form.set('session', JSON.stringify(sessionConfig(agent, mode, env.REALTIME_MODEL || 'gpt-realtime-2.1')));
+      form.set('session', JSON.stringify(sessionConfig(agent, mode, env.REALTIME_MODEL || 'gpt-realtime-2.1', url.searchParams.get('memory'))));
       const response = await fetch(REALTIME, {
         method: 'POST',
         headers: { authorization: `Bearer ${env.OPENAI_API_KEY}` },

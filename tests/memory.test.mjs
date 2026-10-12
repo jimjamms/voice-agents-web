@@ -62,7 +62,12 @@ test('pipeline injects saved facts and extracts new ones with configured chat mo
     const data = await response.json();
     assert.equal(response.status, 200); assert.equal(data.fact, 'Jenny likes Hanabi.');
     const chat = JSON.parse(calls.find(call => call.url.endsWith('/chat/completions')).init.body);
-    assert.equal(chat.model, 'configured-model'); assert.match(chat.messages[1].content, /learned by Sage, not by you/);
+    assert.equal(chat.model, 'configured-model'); assert.match(chat.messages[0].content, /Current memory mode: shared/); assert.match(chat.messages[1].content, /learned by Sage, not by you/);
+    fd.set('memory_mode', 'isolated'); fd.set('memories', '[]');
+    const isolatedResponse = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
+    assert.equal(isolatedResponse.status, 200);
+    const isolatedChat = JSON.parse(calls.filter(call => call.url.endsWith('/chat/completions')).at(-2).init.body);
+    assert.match(isolatedChat.messages[0].content, /Current memory mode: isolated/);
   } finally { globalThis.fetch = original; }
 });
 test('fact extraction failure does not fail the conversation', async () => {
@@ -99,4 +104,10 @@ test('Recorded reply streams word groups without waiting for audio and cancels o
   step(0); step(60); assert.equal(shown.at(-1), 'Visit Kyoto and Osaka');
   transport.stopPlayback(); assert.equal(shown.at(-1), 'Visit Kyoto and Osaka then explore Tokyo.');
   assert.equal(frames.size, 0);
+});
+
+test('Realtime session receives shared, isolated or unavailable handoff instructions', () => {
+  assert.match(sessionConfig(agents.sage, 'tap', 'model', 'shared').instructions, /Do not give a message to repeat or copy/);
+  assert.match(sessionConfig(agents.astra, 'tap', 'model', 'isolated').instructions, /provide a short summary/);
+  assert.match(sessionConfig(agents.sage, 'tap', 'model', 'invalid').instructions, /Cross-agent memory is unavailable/);
 });

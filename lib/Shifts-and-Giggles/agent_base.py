@@ -171,7 +171,10 @@ TRAIT_DESCRIPTIONS = {
 }
 
 
-TRIP_PLANNING_GUIDANCE = "Help the user plan a trip collaboratively while keeping each agent's distinct goal. Give concise spoken replies focused on the next useful step. Make handoffs purposeful: explain the specific decision or result the other agent can help with, and provide a short summary the user can repeat or copy. Offer a handoff when a stage is complete or the other agent's specialty is needed, not after every reply; do not force the user to switch or withhold a useful answer. Use remembered preferences and confirmed plans when available. Shared memory contains selected facts, not the complete other agent's conversation, and separate memory does not transfer facts between agents. Do not claim to have sent a brief, read the other chat, or automatically switched agents. If the needed details are absent, ask for the user's summary. Distinguish rough cost and travel-time estimates from verified details. You have no live browsing or booking tools: never claim to have checked current prices, schedules, opening hours, availability, entry rules, or completed a booking. Identify what the user should verify before finalizing."
+TRIP_PLANNING_GUIDANCE = "Help the user plan a trip collaboratively while keeping each agent's distinct goal. Give concise spoken replies focused on the next useful step. Make handoffs purposeful: explain the specific decision or result the other agent can help with. Follow the current memory-mode handoff instruction; provide a repeatable summary only when memories are isolated or unavailable. Offer a handoff when a stage is complete or the other agent's specialty is needed, not after every reply; do not force the user to switch or withhold a useful answer. Use remembered preferences and confirmed plans when available. Shared memory contains selected facts, not the complete other agent's conversation, and separate memory does not transfer facts between agents. Do not claim to have sent a brief, read the other chat, or automatically switched agents. If needed details are absent in shared mode, ask only for the specific missing details. In isolated or unavailable mode, ask for a brief summary if needed. Distinguish rough cost and travel-time estimates from verified details. You have no live browsing or booking tools: never claim to have checked current prices, schedules, opening hours, availability, entry rules, or completed a booking. Identify what the user should verify before finalizing."
+
+
+HANDOFF_INSTRUCTIONS = {'shared': 'Current memory mode: shared. When handing off, suggest switching to the other agent and state what it can help with. Do not give a message to repeat or copy, and do not ask the user to relay the entire trip brief. The receiving agent should use available saved facts and ask only for specific missing details. Shared memory contains selected facts, so do not claim the complete brief or chat was transferred.', 'isolated': 'Current memory mode: isolated. The agents do not share memories. When a handoff is useful, provide a short summary of confirmed trip details the user can repeat or copy to the other agent. Explain briefly that the other agent needs those details. The receiving agent must use its own conversation or memories and ask for a brief summary if needed.', 'disabled': 'Cross-agent memory is unavailable for this speaker. When a handoff is useful, offer a short summary of confirmed trip details the user can repeat or copy. Do not claim those details will be remembered or transferred automatically.'}
 
 
 def build_system_prompt(name: str, traits: dict, role_instructions: str = "") -> str:
@@ -687,7 +690,10 @@ class PersonalityVoiceAgent:
         # with a 400 error, so we don't set it here.
         completion = self.openai_client.chat.completions.create(
             model=self.model,
-            messages=self.history,
+            messages=[self.history[0], {
+                "role": "system",
+                "content": HANDOFF_INSTRUCTIONS[self.memory_sharing_mode if self.memory_enabled and self.speaker_name.lower() != "unknown" else "disabled"],
+            }, *self.history[1:]],
         )
         reply = completion.choices[0].message.content.strip()
         self.history.append({"role": "assistant", "content": reply})

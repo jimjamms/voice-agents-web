@@ -305,7 +305,7 @@
         sessionTimer = setTimeout(() => endSession('Session ended after 10 minutes. Reconnect to continue.'), 10 * 60 * 1000);
       };
       const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
-      const url = `${base.replace(/\/$/, '')}/session?agent=${encodeURIComponent(agent)}&mode=${handsFree ? 'handsfree' : 'tap'}`;
+      const url = `${base.replace(/\/$/, '')}/session?agent=${encodeURIComponent(agent)}&mode=${handsFree ? 'handsfree' : 'tap'}&memory=${speakerName.value.trim() && speakerName.value.trim().toLowerCase() !== 'unknown' ? memoryMode.value : 'disabled'}`;
       const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/sdp', 'x-demo-code': codeInput.value.trim() }, body: offer.sdp });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));

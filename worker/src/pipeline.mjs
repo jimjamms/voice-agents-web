@@ -55,6 +55,8 @@ export async function pipelineTurn(request, env, cors) {
     if (typeof rawMemories === 'string' && rawMemories.length <= 15000) {
       try { memories = JSON.parse(rawMemories); } catch {}
     }
+    const memoryMode = form.get('memory_mode') === 'isolated' ? 'isolated' : 'shared';
+    const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     const input = new FormData();
@@ -70,7 +72,7 @@ export async function pipelineTurn(request, env, cors) {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: env.PIPELINE_CHAT_MODEL || 'gpt-4.1-mini',
-        messages: [{ role: 'system', content: agent.prompt }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')),
+        messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')),
           { role: 'user', content: transcript }],
       }),
     })).json();

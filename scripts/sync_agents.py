@@ -7,6 +7,7 @@ root = Path(__file__).resolve().parents[1]
 base = ast.parse((root / 'lib/Shifts-and-Giggles/agent_base.py').read_text())
 descriptions = next(ast.literal_eval(node.value) for node in base.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'TRAIT_DESCRIPTIONS' for t in node.targets))
 guidance = next(ast.literal_eval(node.value) for node in base.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'TRIP_PLANNING_GUIDANCE' for t in node.targets))
+handoffs = next(ast.literal_eval(node.value) for node in base.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'HANDOFF_INSTRUCTIONS' for t in node.targets))
 result = {}
 for name in ('sage', 'astra'):
     source = ast.parse((root / f'lib/Shifts-and-Giggles/{name}.py').read_text())
@@ -34,7 +35,7 @@ You are speaking out loud in a voice conversation, so:
 - Never use markdown, bullet points, numbered lists, or asterisks.
 - Stay in character at all times.'''
     prompt += '\n\nTrip-planning role:\n' + fields['ROLE_INSTRUCTIONS'] + '\n\n' + guidance
-    result[name] = {'name': fields['NAME'], 'prompt': prompt, 'voice': fields['OPENAI_VOICE'], 'instructions': fields['OPENAI_TTS_INSTRUCTIONS'], 'traits': fields['TRAITS']}
+    result[name] = {'name': fields['NAME'], 'prompt': prompt, 'voice': fields['OPENAI_VOICE'], 'instructions': fields['OPENAI_TTS_INSTRUCTIONS'], 'traits': fields['TRAITS'], 'handoff': handoffs}
 (root / 'worker/src/pipeline_agents.json').write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n')
 
 realtime = {name: {**settings, 'instructions': settings['prompt'] + '\n\nSpeaking style: ' + settings['instructions']} for name, settings in result.items()}
