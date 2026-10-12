@@ -17,6 +17,9 @@
   const speakerControls = document.querySelector('#speaker-controls');
   const speakerName = document.querySelector('#speaker-name');
   const memoryMode = document.querySelector('#memory-mode');
+  const sharedMemory = document.querySelector('#shared-memory');
+  const isolatedMemory = document.querySelector('#isolated-memory');
+  const memoryDescription = document.querySelector('#memory-description');
   const memoryStatus = document.querySelector('#memory-status');
   const turns = [];
   let sessionId = crypto.randomUUID();
@@ -62,6 +65,7 @@
         handsFree ? (pipeline.active ? 'Stop hands-free' : 'Start hands-free') :
         pipeline.playing ? 'Interrupt & talk' : pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
     }
+    sharedMemory.disabled = isolatedMemory.disabled = locked;
     speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
   }
   function markInterrupted() {
@@ -78,7 +82,18 @@
     }
   }
   speakerName.addEventListener('change', reset);
-  memoryMode.addEventListener('change', reset);
+  function chooseMemory(mode) {
+    if (sharedMemory.disabled || memoryMode.value === mode) return;
+    memoryMode.value = mode;
+    sharedMemory.classList.toggle('selected', mode === 'shared');
+    isolatedMemory.classList.toggle('selected', mode === 'isolated');
+    sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
+    isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
+    memoryDescription.textContent = mode === 'shared' ? 'Sage and Astra share what they remember about you.' : 'Each companion remembers separately. Memories are still enabled.';
+    reset();
+  }
+  sharedMemory.addEventListener('click', () => chooseMemory('shared'));
+  isolatedMemory.addEventListener('click', () => chooseMemory('isolated'));
   document.querySelector('#forget-memory').addEventListener('click', () => {
     if (!speakerName.value.trim()) { setStatus('Type your name to forget its memories.'); return; }
     const saved = window.AgentMemory.forget(speakerName.value.trim()); reset();
@@ -95,7 +110,7 @@
     pipelineEngine.setAttribute('aria-pressed', String(next === 'pipeline'));
     engineDescription.textContent = next === 'realtime' ?
       'Live conversation with natural interruptions.' :
-      'Recorded turns with written replies and OpenAI speech. Hands-free supports interruptions.';
+      'Speak, pause, and hear your companion’s reply. Hands-free supports interruptions.';
     setStatus('Ready when you are', next === 'pipeline' ?
       (handsFree ? 'Start hands-free, then just speak and pause.' : 'Tap Start talking to record a turn.') :
       'Choose a mode, then connect to start.');
@@ -124,7 +139,7 @@
   function reset() {
     pipeline?.stop(); endSession('Ready when you are'); history = []; sessionId = crypto.randomUUID(); transcripts.clear(); messages.replaceChildren();
     const empty = document.createElement('div'); empty.className = 'empty-state';
-    empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><p>It starts with a hello.</p><span>Pick a voice. Take a breath. Say what’s on your mind.</span>';
+    empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><p>Every journey starts with hello.</p><span>Pick a companion. Settle in. See where it takes you.</span>';
     messages.append(empty);
   }
   function chooseMode(enabled) {
