@@ -43,34 +43,6 @@
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
     return body;
   };
-  const livePainters = new Set();
-  function smoothTranscript(body) {
-    let target = '', visible = 0, frame = null, previous = 0;
-    const paint = text => { body.textContent = text; messages.scrollTop = messages.scrollHeight; };
-    const tick = now => {
-      frame = null;
-      const characters = Array.from(target);
-      const elapsed = previous ? Math.min(50, now - previous) : 16;
-      previous = now;
-      const backlog = characters.length - visible;
-      visible = Math.min(characters.length, visible + Math.max(1, Math.floor(Math.max(160, backlog * 18) * elapsed / 1000)));
-      paint(characters.slice(0, visible).join(''));
-      if (visible < characters.length) frame = requestAnimationFrame(tick);
-    };
-    const painter = {
-      update(text) {
-        target = text;
-        if (typeof requestAnimationFrame !== 'function') { paint(text); return; }
-        if (frame === null) { previous = 0; frame = requestAnimationFrame(tick); }
-      },
-      finish(text = target) {
-        if (frame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame);
-        frame = null; paint(text); livePainters.delete(painter);
-      },
-    };
-    livePainters.add(painter);
-    return painter;
-  }
   const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
@@ -88,8 +60,7 @@
     onTurn: saveTurn, onInterrupt: markInterrupted,
     playback, onStatus: setStatus, getStatus: () => status.textContent,
     onReplyStart: reply => {
-      const body = addMessage('assistant', reply);
-      body.textContent = '…';
+      const body = addMessage('assistant', reply); body.textContent = '…';
       return text => { body.textContent = text || '…'; messages.scrollTop = messages.scrollHeight; };
     },
     onMessage: addMessage, onState: () => syncControls(),
@@ -170,7 +141,6 @@
     channel.send(JSON.stringify({ type, ...extra })); return true;
   }
   function endSession(message = 'Session ended') {
-    for (const painter of [...livePainters]) painter.finish();
     connectionId++; connected = false; connecting = false; recording = false; responseActive = false;
     clearTimeout(sessionTimer); clearTimeout(turnTimer);
     if (micTrack) micTrack.enabled = false;
@@ -254,9 +224,9 @@
       case 'response.output_audio_transcript.delta': {
         const id = event.item_id || event.response_id || 'reply';
         let pending = transcripts.get(id);
-        if (!pending) { pending = { text: '', body: renderMessage('assistant', '', undefined, true) }; pending.painter = smoothTranscript(pending.body); transcripts.set(id, pending); }
+        if (!pending) { pending = { text: '', body: renderMessage('assistant', '', undefined, true) }; transcripts.set(id, pending); }
         pending.text += event.delta || '';
-        pending.painter.update(pending.text);
+        pending.body.textContent = pending.text.match(/[\s\S]*[\s.!?,;:]/)?.[0] || ''; messages.scrollTop = messages.scrollHeight;
         break;
       }
       case 'response.output_audio_transcript.done': {
@@ -264,7 +234,7 @@
         const pending = transcripts.get(id);
         const reply = event.transcript || pending?.text;
         if (pending && reply) {
-          pending.painter.finish(reply);
+          pending.body.textContent = reply;
           history.push({ role: 'assistant', content: reply, at: new Date().toISOString() });
         } else if (reply) addMessage('assistant', reply);
         transcripts.delete(id);

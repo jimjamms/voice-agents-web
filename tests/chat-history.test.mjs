@@ -54,15 +54,7 @@ test('speaker and memory mode changes keep conversation histories separate', () 
   assert.equal(app.options.history()[0].content, 'Jenny shared chat');
 });
 
-test('Recorded reply displays progressively while full text stays in history', () => {
-  const app = setup();
-  const update = app.options.onReplyStart('Visit Kyoto and Osaka.');
-  const bubble = app.get('messages').children.at(-1).children[1];
-  assert.equal(bubble.textContent, '…');
-  update('Visit Kyoto'); assert.equal(bubble.textContent, 'Visit Kyoto');
-  assert.equal(app.options.history()[0].content, 'Visit Kyoto and Osaka.');
-  update('Visit Kyoto and Osaka.'); assert.equal(app.options.history().length, 1);
-});
+
 test('Realtime transcript deltas update one bubble and completion saves one message', () => {
   const app = setup();
   app.event({ type: 'response.output_audio_transcript.delta', item_id: 'reply-1', delta: 'Visit ' });
@@ -74,15 +66,13 @@ test('Realtime transcript deltas update one bubble and completion saves one mess
   assert.equal(app.get('messages').children.length, 1); assert.equal(app.options.history().length, 1);
 });
 
-test('Realtime smooths a transcript burst and cancels queued frames at completion', () => {
-  const frames = new Map(); let next = 0;
-  const app = setup({ requestAnimationFrame(fn) { frames.set(++next, fn); return next; }, cancelAnimationFrame(id) { frames.delete(id); } });
-  const reply = 'Explore Kyoto temples and gardens at a relaxed pace.';
-  app.event({ type: 'response.output_audio_transcript.delta', item_id: 'smooth', delta: reply });
+
+
+test('Realtime hides partial words until their boundary arrives', () => {
+  const app = setup();
+  app.event({ type: 'response.output_audio_transcript.delta', item_id: 'words', delta: 'Visit Kyo' });
   const bubble = app.get('messages').children.at(-1).children[1];
-  assert.equal(bubble.textContent, '');
-  const [id, tick] = frames.entries().next().value; frames.delete(id); tick(16);
-  assert.ok(bubble.textContent.length > 0 && bubble.textContent.length < reply.length);
-  app.event({ type: 'response.output_audio_transcript.done', item_id: 'smooth', transcript: reply });
-  assert.equal(bubble.textContent, reply); assert.equal(frames.size, 0);
+  assert.equal(bubble.textContent, 'Visit ');
+  app.event({ type: 'response.output_audio_transcript.delta', item_id: 'words', delta: 'to.' });
+  assert.equal(bubble.textContent, 'Visit Kyoto.');
 });

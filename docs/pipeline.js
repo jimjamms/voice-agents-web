@@ -13,12 +13,10 @@
       this.chunks = []; this.timer = null; this.interval = null; this.audioUrl = null;
       this.request = null; this.generation = 0;
       this.playing = false; this.interruptStartedAt = null;
-      this.replyText = ''; this.replyDisplay = null; this.replyCharacters = []; this.replyFrame = null; this.lastReplyCount = -1;
-      for (const type of ['timeupdate', 'playing', 'seeked']) {
-        this.options.playback.addEventListener(type, () => {
-          if (this.options.isSelected()) this.revealReply();
-        });
-      }
+      this.replyText = ''; this.replyDisplay = null; this.replyWords = []; this.replyFrame = null; this.lastWordCount = -1;
+      for (const type of ['timeupdate', 'seeked']) this.options.playback.addEventListener(type, () => {
+        if (this.options.isSelected()) this.revealReply();
+      });
       this.options.playback.addEventListener('playing', () => this.startReplyFrames());
       for (const type of ['pause', 'waiting']) this.options.playback.addEventListener(type, () => this.stopReplyFrames());
       this.options.playback.addEventListener('ended', () => {
@@ -45,7 +43,7 @@
     }
     beginReply(text) {
       this.stopReplyFrames();
-      this.replyText = text; this.replyCharacters = Array.from(text); this.lastReplyCount = -1;
+      this.replyText = text; this.replyWords = text.match(/\S+\s*/g) || []; this.lastWordCount = -1;
       this.replyDisplay = this.options.onReplyStart?.(text) || null;
       if (!this.replyDisplay) this.options.onMessage('assistant', text);
     }
@@ -54,10 +52,9 @@
       const { currentTime, duration } = this.options.playback;
       if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return;
       const ratio = Math.max(0, Math.min(1, currentTime * 1.2 / duration));
-      const count = Math.floor(this.replyCharacters.length * ratio);
-      if (count !== this.lastReplyCount) {
-        this.lastReplyCount = count;
-        this.replyDisplay(this.replyCharacters.slice(0, count).join(''));
+      const count = ratio > 0 ? Math.max(1, Math.floor(this.replyWords.length * ratio)) : 0;
+      if (count !== this.lastWordCount) {
+        this.lastWordCount = count; this.replyDisplay(this.replyWords.slice(0, count).join('').trimEnd());
       }
     }
     startReplyFrames() {
@@ -75,10 +72,8 @@
       this.replyFrame = null;
     }
     finishReply() {
-      this.stopReplyFrames();
-      // Keep the complete generated reply readable after playback or interruption.
-      this.replyDisplay?.(this.replyText);
-      this.replyDisplay = null; this.replyText = '';
+      this.stopReplyFrames(); this.replyDisplay?.(this.replyText);
+      this.replyDisplay = null; this.replyText = ''; this.replyWords = [];
     }
     isLocked() { return this.active || this.busy || this.recording || this.connecting || this.playing; }
     notify() { this.options.onState(this); }

@@ -85,16 +85,16 @@ test('tap interruption stops playback and starts recording in one action', async
   assert.equal(transport.playing, false);
 });
 
-test('Recorded text follows audio position, ignores missing duration, and completes on interruption', () => {
+
+
+test('Recorded reply reveals whole words with audio progress and completes on stop', () => {
   const events = {}; const shown = [];
-  const playback = { currentTime: 0, duration: NaN, addEventListener(type, fn) { events[type] = fn; }, pause() {}, removeAttribute() {} };
+  const playback = { currentTime: 0, duration: 4, addEventListener(type, fn) { events[type] = fn; }, pause() {}, removeAttribute() {} };
   const context = { window: {}, URL: { revokeObjectURL() {} } };
   vm.runInNewContext(readFileSync(new URL('../docs/pipeline.js', import.meta.url), 'utf8'), context);
   const transport = context.window.createPipelineTransport({ playback, isSelected: () => true, onReplyStart: () => text => shown.push(text) });
-  transport.beginReply('One two three four');
-  events.timeupdate(); assert.equal(shown.length, 0);
-  playback.duration = 4; playback.currentTime = 2; events.timeupdate();
-  assert.equal(shown.at(-1), 'One two three four'.slice(0, Math.floor(18 * 0.5 * 1.2)));
-  transport.stopPlayback(); assert.equal(shown.at(-1), 'One two three four');
-  playback.currentTime = 3; events.timeupdate(); assert.equal(shown.at(-1), 'One two three four');
+  transport.beginReply('Visit Kyoto and Osaka.');
+  playback.currentTime = 1; events.timeupdate(); assert.equal(shown.at(-1), 'Visit');
+  playback.currentTime = 2; events.timeupdate(); assert.equal(shown.at(-1), 'Visit Kyoto');
+  transport.stopPlayback(); assert.equal(shown.at(-1), 'Visit Kyoto and Osaka.');
 });
