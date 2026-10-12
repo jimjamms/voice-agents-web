@@ -10,3 +10,10 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 .scene-background .journey-art {
   opacity: 0.35;
 }
+
+.scene-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.2);
+}
