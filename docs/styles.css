@@ -51,3 +51,10 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 .footnote p::before{content:'i';position:absolute;left:0;top:2px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#e1ebd9;color:#47694c;font-family:Georgia,serif;font-size:15px;font-weight:700}
 .footnote button{color:#365a40;font-weight:700}
 @media(max-width:600px){.footnote{padding:16px;align-items:stretch;gap:8px}.footnote p{padding-left:31px}.footnote button{align-self:flex-start;margin-left:31px}}
+
+.scene-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.1);
+}
