@@ -139,7 +139,7 @@
   function reset() {
     pipeline?.stop(); endSession('Ready when you are'); history = []; sessionId = crypto.randomUUID(); transcripts.clear(); messages.replaceChildren();
     const empty = document.createElement('div'); empty.className = 'empty-state';
-    empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><p>Every journey starts with hello.</p><span>Pick a companion. Settle in. See where it takes you.</span>';
+    empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><div class="destination-dots" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><p>Every journey starts with hello.</p><span>Pick a companion. Settle in. See where it takes you.</span>';
     messages.append(empty);
   }
   function chooseMode(enabled) {
