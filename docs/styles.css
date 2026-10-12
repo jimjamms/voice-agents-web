@@ -61,3 +61,10 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
   background: var(--chat-surface);
   box-shadow: 0 0 0 5px var(--selected-shadow);
 }
+
+/* Center the info badge against the full note, including wrapped text. */
+.footnote p::before {
+  top: 50%;
+  transform: translateY(-50%);
+  line-height: 1;
+}
