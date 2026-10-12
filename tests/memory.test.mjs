@@ -87,14 +87,16 @@ test('tap interruption stops playback and starts recording in one action', async
 
 
 
-test('Recorded reply reveals whole words with audio progress and completes on stop', () => {
-  const events = {}; const shown = [];
-  const playback = { currentTime: 0, duration: 4, addEventListener(type, fn) { events[type] = fn; }, pause() {}, removeAttribute() {} };
-  const context = { window: {}, URL: { revokeObjectURL() {} } };
+test('Recorded reply streams word groups without waiting for audio and cancels on stop', () => {
+  const shown = []; const frames = new Map(); let next = 0;
+  const playback = { paused: true, currentTime: 0, duration: NaN, addEventListener() {}, pause() {}, removeAttribute() {} };
+  const context = { window: {}, URL: { revokeObjectURL() {} }, requestAnimationFrame(fn) { frames.set(++next, fn); return next; }, cancelAnimationFrame(id) { frames.delete(id); } };
   vm.runInNewContext(readFileSync(new URL('../docs/pipeline.js', import.meta.url), 'utf8'), context);
   const transport = context.window.createPipelineTransport({ playback, isSelected: () => true, onReplyStart: () => text => shown.push(text) });
-  transport.beginReply('Visit Kyoto and Osaka.');
-  playback.currentTime = 1; events.timeupdate(); assert.equal(shown.at(-1), 'Visit');
-  playback.currentTime = 2; events.timeupdate(); assert.equal(shown.at(-1), 'Visit Kyoto');
-  transport.stopPlayback(); assert.equal(shown.at(-1), 'Visit Kyoto and Osaka.');
+  transport.beginReply('Visit Kyoto and Osaka then explore Tokyo.');
+  assert.equal(shown.at(-1), 'Visit Kyoto');
+  const step = now => { const [id, tick] = frames.entries().next().value; frames.delete(id); tick(now); };
+  step(0); step(60); assert.equal(shown.at(-1), 'Visit Kyoto and Osaka');
+  transport.stopPlayback(); assert.equal(shown.at(-1), 'Visit Kyoto and Osaka then explore Tokyo.');
+  assert.equal(frames.size, 0);
 });

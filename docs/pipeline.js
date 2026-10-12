@@ -14,11 +14,6 @@
       this.request = null; this.generation = 0;
       this.playing = false; this.interruptStartedAt = null;
       this.replyText = ''; this.replyDisplay = null; this.replyWords = []; this.replyFrame = null; this.lastWordCount = -1;
-      for (const type of ['timeupdate', 'seeked']) this.options.playback.addEventListener(type, () => {
-        if (this.options.isSelected()) this.revealReply();
-      });
-      this.options.playback.addEventListener('playing', () => this.startReplyFrames());
-      for (const type of ['pause', 'waiting']) this.options.playback.addEventListener(type, () => this.stopReplyFrames());
       this.options.playback.addEventListener('ended', () => {
         if (!this.options.isSelected()) return;
         this.finishReply();
@@ -45,25 +40,33 @@
       this.stopReplyFrames();
       this.replyText = text; this.replyWords = text.match(/\S+\s*/g) || []; this.lastWordCount = -1;
       this.replyDisplay = this.options.onReplyStart?.(text) || null;
-      if (!this.replyDisplay) this.options.onMessage('assistant', text);
+      if (!this.replyDisplay) { this.options.onMessage('assistant', text); return; }
+      this.startReplyFrames();
     }
-    revealReply() {
+    revealReply(count) {
       if (!this.replyDisplay) return;
-      const { currentTime, duration } = this.options.playback;
-      if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return;
-      const ratio = Math.max(0, Math.min(1, currentTime * 1.2 / duration));
-      const count = ratio > 0 ? Math.max(1, Math.floor(this.replyWords.length * ratio)) : 0;
+      count = Math.min(this.replyWords.length, count);
       if (count !== this.lastWordCount) {
         this.lastWordCount = count; this.replyDisplay(this.replyWords.slice(0, count).join('').trimEnd());
       }
     }
     startReplyFrames() {
       this.stopReplyFrames();
-      if (!this.replyDisplay || typeof requestAnimationFrame !== 'function') return;
-      const tick = () => {
+      if (!this.replyDisplay) return;
+      if (typeof requestAnimationFrame !== 'function' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        this.finishReply(); return;
+      }
+      // Small word groups every 60 ms, independent of speech; long replies catch up in about four seconds.
+      const batch = Math.max(2, Math.ceil(this.replyWords.length / 65));
+      this.revealReply(batch);
+      let startedAt = null;
+      const tick = now => {
         this.replyFrame = null;
-        if (!this.replyDisplay || !this.options.isSelected() || this.options.playback.paused) return;
-        this.revealReply(); this.replyFrame = requestAnimationFrame(tick);
+        if (!this.replyDisplay || !this.options.isSelected()) return;
+        if (startedAt === null) startedAt = now;
+        this.revealReply(batch * (1 + Math.floor((now - startedAt) / 60)));
+        if (this.lastWordCount >= this.replyWords.length) { this.finishReply(); return; }
+        this.replyFrame = requestAnimationFrame(tick);
       };
       this.replyFrame = requestAnimationFrame(tick);
     }
