@@ -60,6 +60,7 @@
     onMessage: addMessage, onState: () => syncControls(),
   });
   function syncControls() {
+    document.querySelector('.conversation').dataset.agent = agent;
     const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
     cards.forEach(card => { card.disabled = locked; });

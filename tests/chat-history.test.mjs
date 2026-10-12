@@ -25,11 +25,13 @@ function setup() {
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
   const app = setup();
+  assert.equal(app.get('conversation').dataset.agent, 'sage');
   app.options.onMessage('user', 'Hello Sage', { name: 'Jenny', score: 1 });
   app.options.onMessage('assistant', 'Hi Jenny');
-  app.click('astra'); assert.equal(app.options.history().length, 0);
+  app.click('astra'); assert.equal(app.get('conversation').dataset.agent, 'astra'); assert.equal(app.options.history().length, 0);
   app.options.onMessage('user', 'Hello Astra'); app.options.onMessage('assistant', 'Welcome');
   app.click('sage');
+  assert.equal(app.get('conversation').dataset.agent, 'sage');
   assert.deepEqual(Array.from(app.options.history(), entry => entry.content), ['Hello Sage', 'Hi Jenny']);
   assert.equal(app.get('messages').children[0].children[0].textContent, 'Jenny');
   assert.equal(app.get('messages').children[1].children[0].textContent, 'Sage');
