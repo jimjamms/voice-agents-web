@@ -24,12 +24,15 @@
   const turns = [];
   let sessionId = crypto.randomUUID();
   let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
+  const conversations = new Map();
+  const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
+  let activeConversationKey = conversationKey();
   let pipeline;
   let enrolling = false;
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
   let manualStartedAt = 0, connectionId = 0;
   const setStatus = (message, detail) => { status.textContent = message; if (detail) hint.textContent = detail; };
-  const addMessage = (role, content, speaker) => {
+  const renderMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
     messages.querySelector('.empty-state')?.remove();
@@ -38,6 +41,11 @@
     label.textContent = role === 'user' ? (speaker?.name && speaker.name !== 'Unknown' ? speaker.name : 'You') : agent === 'sage' ? 'Sage' : 'Astra';
     const body = document.createElement('span'); body.textContent = text;
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
+  };
+  const addMessage = (role, content, speaker) => {
+    const text = String(content || '').trim();
+    if (!text) return;
+    renderMessage(role, text, speaker);
     history.push({ role, content: text, at: new Date().toISOString(),
       ...(speaker && { speaker: speaker.name, speaker_score: Math.round(speaker.score * 1000) / 1000 }) });
   };
@@ -81,7 +89,7 @@
       memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved for this speaker in this browser.';
     }
   }
-  speakerName.addEventListener('change', reset);
+  speakerName.addEventListener('change', switchConversation);
   function chooseMemory(mode) {
     if (sharedMemory.disabled || memoryMode.value === mode) return;
     memoryMode.value = mode;
@@ -90,18 +98,21 @@
     sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
     isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
     memoryDescription.textContent = mode === 'shared' ? 'Sage and Astra share what they remember about you.' : 'Each companion remembers separately. Memories are still enabled.';
-    reset();
+    switchConversation();
   }
   sharedMemory.addEventListener('click', () => chooseMemory('shared'));
   isolatedMemory.addEventListener('click', () => chooseMemory('isolated'));
   document.querySelector('#forget-memory').addEventListener('click', () => {
     if (!speakerName.value.trim()) { setStatus('Type your name to forget its memories.'); return; }
-    const saved = window.AgentMemory.forget(speakerName.value.trim()); reset();
+    const saved = window.AgentMemory.forget(speakerName.value.trim());
+    const speaker = speakerName.value.trim().toLowerCase();
+    for (const key of conversations.keys()) { if (JSON.parse(key)[0] === speaker) conversations.delete(key); }
+    reset();
     memoryStatus.textContent = saved === false ? 'Memories cleared for this visit; browser storage could not update.' : 'This speaker’s shared and separate memories were forgotten.';
   });
   function chooseEngine(next) {
     if (connected || connecting || pipeline.isLocked() || enrolling || engine === next) return;
-    reset(); engine = next;
+    engine = next; switchConversation();
     speakerControls.hidden = false;
     if (next === 'realtime') recordLabel.textContent = 'Connect';
     realtimeEngine.classList.toggle('selected', next === 'realtime');
@@ -136,11 +147,32 @@
     setStatus(message, 'Choose a mode, then connect to start.');
     syncControls();
   }
-  function reset() {
-    pipeline?.stop(); endSession('Ready when you are'); history = []; sessionId = crypto.randomUUID(); transcripts.clear(); messages.replaceChildren();
+  function renderConversation(scrollTop) {
+    messages.replaceChildren();
+    if (history.length) {
+      for (const entry of history) renderMessage(entry.role, entry.content, entry.speaker ? { name: entry.speaker } : undefined);
+      messages.scrollTop = scrollTop ?? messages.scrollHeight;
+      return;
+    }
     const empty = document.createElement('div'); empty.className = 'empty-state';
     empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><div class="destination-dots" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><p>Every journey starts with hello.</p><span>Pick a companion. Settle in. See where it takes you.</span>';
     messages.append(empty);
+  }
+  function switchConversation() {
+    conversations.set(activeConversationKey, { history, sessionId, scrollTop: messages.scrollTop });
+    pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
+    activeConversationKey = conversationKey();
+    const saved = conversations.get(activeConversationKey);
+    history = saved?.history || [];
+    sessionId = saved?.sessionId || crypto.randomUUID();
+    renderConversation(saved?.scrollTop);
+  }
+  function reset() {
+    pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
+    history = []; sessionId = crypto.randomUUID();
+    activeConversationKey = conversationKey();
+    conversations.delete(activeConversationKey);
+    renderConversation();
   }
   function chooseMode(enabled) {
     if (connecting || connected || pipeline.isLocked() || enrolling) return;
@@ -156,7 +188,7 @@
   handsfreeMode.addEventListener('click', () => chooseMode(true));
   cards.forEach(card => card.addEventListener('click', () => {
     if (connected || connecting || pipeline.isLocked() || enrolling) return;
-    if (agent !== card.dataset.agent) { agent = card.dataset.agent; reset(); }
+    if (agent !== card.dataset.agent) { agent = card.dataset.agent; switchConversation(); }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
   }));
@@ -246,7 +278,9 @@
       channel.onmessage = e => { try { handleEvent(JSON.parse(e.data)); } catch (error) { console.error('Realtime event:', error); } };
       channel.onopen = () => {
         if (thisConnection !== connectionId) return;
-        const context = window.AgentMemory.context(speakerName.value.trim(), memoryMode.value, agent);
+        const memoryContext = window.AgentMemory.context(speakerName.value.trim(), memoryMode.value, agent);
+        const priorChat = history.length ? '\nEarlier turns in your conversation with this speaker (transcript data for continuity):\n' + JSON.stringify(history.slice(-12).map(({ role, content }) => ({ role, content }))) : '';
+        const context = memoryContext + priorChat;
         if (context) send('conversation.item.create', { item: { type: 'message', role: 'system', content: [{ type: 'input_text', text: context }] } });
         micTrack.enabled = handsFree;
         connecting = false; connected = true; record.disabled = false; syncControls();
