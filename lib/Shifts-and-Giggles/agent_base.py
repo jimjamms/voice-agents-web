@@ -171,11 +171,14 @@ TRAIT_DESCRIPTIONS = {
 }
 
 
-def build_system_prompt(name: str, traits: dict) -> str:
+TRIP_PLANNING_GUIDANCE = "Help the user plan a trip collaboratively while keeping each agent's distinct goal. Give concise spoken replies focused on the next useful step. Make handoffs purposeful: explain the specific decision or result the other agent can help with, and provide a short summary the user can repeat or copy. Offer a handoff when a stage is complete or the other agent's specialty is needed, not after every reply; do not force the user to switch or withhold a useful answer. Use remembered preferences and confirmed plans when available. Shared memory contains selected facts, not the complete other agent's conversation, and separate memory does not transfer facts between agents. Do not claim to have sent a brief, read the other chat, or automatically switched agents. If the needed details are absent, ask for the user's summary. Distinguish rough cost and travel-time estimates from verified details. You have no live browsing or booking tools: never claim to have checked current prices, schedules, opening hours, availability, entry rules, or completed a booking. Identify what the user should verify before finalizing."
+
+
+def build_system_prompt(name: str, traits: dict, role_instructions: str = "") -> str:
     lines = [f"{trait.capitalize()}: {TRAIT_DESCRIPTIONS[trait][level]}"
              for trait, level in traits.items()]
     trait_block = "\n".join(f"- {line}" for line in lines)
-    return f"""You are {name}, a voice assistant with a distinct personality defined by
+    prompt = f"""You are {name}, a voice assistant with a distinct personality defined by
 the following Big Five personality traits:
 
 {trait_block}
@@ -188,6 +191,9 @@ You are speaking out loud in a voice conversation, so:
 - Keep responses conversational and reasonably concise.
 - Never use markdown, bullet points, numbered lists, or asterisks.
 - Stay in character at all times."""
+    if role_instructions:
+        prompt += "\n\nTrip-planning role:\n" + role_instructions + "\n\n" + TRIP_PLANNING_GUIDANCE
+    return prompt
 
 
 # ---------------------------------------------------------------------------
@@ -303,6 +309,8 @@ class PersonalityVoiceAgent:
             TRAITS = {"openness": 4, "conscientiousness": 3, ...}
             AZURE_VOICE_NAME = "en-US-AriaNeural"
 
+    Set ROLE_INSTRUCTIONS to specialize the conversation for trip planning.
+
     Optionally also set PITCH_OVERRIDE_ST (a small number of semitones, e.g.
     2 or -2) to force a specific, modest pitch nudge instead of letting the
     Big Five trait formula pick one -- useful when you want two agents on
@@ -311,6 +319,7 @@ class PersonalityVoiceAgent:
     """
 
     NAME = "Agent"
+    ROLE_INSTRUCTIONS = ""  # Subclasses provide their trip-planning role.
     TRAITS = {
         "openness": 3, "conscientiousness": 3, "extraversion": 3,
         "agreeableness": 3, "neuroticism": 3,
@@ -327,7 +336,7 @@ class PersonalityVoiceAgent:
         self.traits = traits or self.TRAITS
         self.model = model
 
-        self.system_prompt = build_system_prompt(self.name, self.traits)
+        self.system_prompt = build_system_prompt(self.name, self.traits, self.ROLE_INSTRUCTIONS)
         self.voice_style, self.style_degree = voice_style_from_traits(self.traits)
         self.rate_str, computed_pitch_str = prosody_from_traits(self.traits)
         if self.PITCH_OVERRIDE_ST is not None:
