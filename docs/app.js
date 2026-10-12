@@ -87,7 +87,7 @@
       agent_traits: turn.traits, interrupted: false, engine, ...turn });
     if (turn.fact) {
       const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.fact);
-      memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved for this speaker in this browser.';
+      memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved.';
     }
   }
   speakerName.addEventListener('change', switchConversation);
@@ -98,7 +98,7 @@
     isolatedMemory.classList.toggle('selected', mode === 'isolated');
     sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
     isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
-    memoryDescription.textContent = mode === 'shared' ? 'Sage and Astra share what they remember about you.' : 'Each companion remembers separately. Memories are still enabled.';
+    memoryDescription.textContent = mode === 'shared' ? 'Share saved trip details between agents.' : 'Each agent saves trip details separately.';
     switchConversation();
   }
   sharedMemory.addEventListener('click', () => chooseMemory('shared'));
@@ -109,7 +109,7 @@
     const speaker = speakerName.value.trim().toLowerCase();
     for (const key of conversations.keys()) { if (JSON.parse(key)[0] === speaker) conversations.delete(key); }
     reset();
-    memoryStatus.textContent = saved === false ? 'Memories cleared for this visit; browser storage could not update.' : 'This speaker’s shared and separate memories were forgotten.';
+    memoryStatus.textContent = saved === false ? 'Memories cleared for this visit; browser storage could not update.' : 'Memories forgotten.';
   });
   function chooseEngine(next) {
     if (connected || connecting || pipeline.isLocked() || enrolling || engine === next) return;
@@ -156,7 +156,7 @@
       return;
     }
     const empty = document.createElement('div'); empty.className = 'empty-state';
-    empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><div class="destination-dots" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><p>Every journey starts with hello.</p><span>Pick a companion. Settle in. See where it takes you.</span>';
+    empty.innerHTML = `<div class="tiny-orb" aria-hidden="true"></div><div class="destination-dots" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><p>Where would you like to go?</p><span>Tell ${agent === 'sage' ? 'Sage what kind of trip you have in mind.' : 'Astra your destination, dates, or chosen ideas.'}</span>`;
     messages.append(empty);
   }
   function switchConversation() {
