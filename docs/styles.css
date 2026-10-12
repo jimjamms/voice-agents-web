@@ -36,9 +36,18 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 .conversation[data-agent] .text-button{color:var(--chat-accent)}
 .conversation[data-agent] .text-button:hover{color:var(--button-ink)}
 
-.scene-background::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.1);
+/* Fill the companion column beside the chat instead of leaving a blank gap. */
+@media(min-width:851px){
+  .workspace{align-items:stretch}
+  .chooser{align-self:stretch;grid-template-rows:repeat(2,minmax(260px,1fr))}
+  .agent-card{height:100%;min-height:260px;padding-bottom:28px}
+  .agent-card strong{margin-top:auto;padding-top:90px}
+  .agent-card small{margin-bottom:0;max-width:245px}
+  .agent-card .orb{width:180px;height:180px;top:24%;right:18px}
 }
+/* Highlight privacy and booking guidance without adding more copy. */
+.footnote{background:#fffaf0;border:1px solid #bdcdb5;border-left:4px solid #66856a;box-shadow:0 7px 24px #294d4014;padding:19px 22px;align-items:center;gap:22px}
+.footnote p{position:relative;padding-left:35px;color:#405645;font-size:11px;font-weight:500;line-height:1.8}
+.footnote p::before{content:'i';position:absolute;left:0;top:2px;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:#e1ebd9;color:#47694c;font-family:Georgia,serif;font-size:15px;font-weight:700}
+.footnote button{color:#365a40;font-weight:700}
+@media(max-width:600px){.footnote{padding:16px;align-items:stretch;gap:8px}.footnote p{padding-left:31px}.footnote button{align-self:flex-start;margin-left:31px}}
