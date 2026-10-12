@@ -16,10 +16,11 @@
   const engineDescription = document.querySelector('#engine-description');
   const speakerControls = document.querySelector('#speaker-controls');
   const speakerName = document.querySelector('#speaker-name');
-  const speakerList = document.querySelector('#speaker-list');
-  const enrollSpeaker = document.querySelector('#enroll-speaker');
-  const forgetSpeakers = document.querySelector('#forget-speakers');
-  let agent = 'sage', engine = 'realtime', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
+  const memoryMode = document.querySelector('#memory-mode');
+  const memoryStatus = document.querySelector('#memory-status');
+  const turns = [];
+  let sessionId = crypto.randomUUID();
+  let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   let pipeline;
   let enrolling = false;
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
@@ -41,7 +42,10 @@
     agent: () => agent, isSelected: () => engine === 'pipeline', isHandsFree: () => handsFree,
     history: () => history, code: () => codeInput.value.trim(),
     focusCode: () => codeInput.focus(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
-    playback, speakers: window.VoiceSpeakers, onStatus: setStatus, getStatus: () => status.textContent,
+    speaker: () => speakerName.value.trim() || 'Unknown', memoryMode: () => memoryMode.value,
+    memories: () => window.AgentMemory.entries(speakerName.value.trim(), memoryMode.value, agent),
+    onTurn: saveTurn, onInterrupt: markInterrupted,
+    playback, onStatus: setStatus, getStatus: () => status.textContent,
     onMessage: addMessage, onState: () => syncControls(),
   });
   function syncControls() {
@@ -56,57 +60,34 @@
       record.classList.toggle('recording', pipeline.recording || pipeline.active);
       recordLabel.textContent = pipeline.connecting ? 'Opening microphone…' :
         handsFree ? (pipeline.active ? 'Stop hands-free' : 'Start hands-free') :
-        pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
+        pipeline.playing ? 'Interrupt & talk' : pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
     }
-    enrollSpeaker.disabled = forgetSpeakers.disabled = enrolling || pipeline.isLocked();
+    speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
   }
-  function refreshSpeakers() {
-    const names = window.VoiceSpeakers?.names() || [];
-    speakerList.textContent = names.length
-      ? `Enrolled here: ${names.join(', ')}. Matching is approximate, not secure identification.`
-      : 'No voices enrolled. Saved only in this browser; voice matching is approximate.';
+  function markInterrupted() {
+    const last = turns.at(-1); if (last) last.interrupted = true;
   }
-  refreshSpeakers();
-  enrollSpeaker.addEventListener('click', async () => {
-    if (pipeline.isLocked() || enrolling || engine !== 'pipeline') return;
-    const name = speakerName.value.trim();
-    if (!name || name.toLowerCase() === 'unknown') { setStatus('Enter a speaker name first.'); speakerName.focus(); return; }
-    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder || !pipeline.format()) {
-      setStatus('This browser needs a compatible microphone and recording format over HTTPS.'); return;
+  function saveTurn(turn) {
+    turns.push({ timestamp: new Date().toISOString(), session_id: sessionId,
+      agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
+      speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
+      agent_traits: turn.traits, interrupted: false, engine, ...turn });
+    if (turn.fact) {
+      const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.fact);
+      memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved for this speaker in this browser.';
     }
-    enrolling = true; syncControls();
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-      const recorder = new MediaRecorder(stream, { mimeType: pipeline.format() });
-      const chunks = [];
-      const recording = new Promise((resolve, reject) => {
-        recorder.addEventListener('dataavailable', event => { if (event.data.size) chunks.push(event.data); });
-        recorder.addEventListener('error', event => reject(event.error || new Error('Voice recording failed.')));
-        recorder.addEventListener('stop', () => resolve(new Blob(chunks, { type: recorder.mimeType })), { once: true });
-      });
-      recorder.start();
-      setStatus(`Recording ${name}…`, 'Speak continuously for four seconds.');
-      await new Promise(resolve => setTimeout(resolve, 4000));
-      if (recorder.state === 'recording') recorder.stop();
-      const saved = await window.VoiceSpeakers.enroll(name, await recording);
-      refreshSpeakers();
-      setStatus(`${saved} enrolled`, 'Only the voice fingerprint was saved in this browser.');
-    } catch (error) {
-      setStatus(error.name === 'NotAllowedError' ? 'Allow microphone access to enroll.' : error.message || 'Could not enroll this voice.');
-    } finally {
-      stream?.getTracks().forEach(track => track.stop());
-      enrolling = false; syncControls();
-    }
-  });
-  forgetSpeakers.addEventListener('click', () => {
-    if (pipeline.isLocked() || enrolling) return;
-    window.VoiceSpeakers.forget(); refreshSpeakers(); setStatus('Enrolled voices forgotten from this browser.');
+  }
+  speakerName.addEventListener('change', reset);
+  memoryMode.addEventListener('change', reset);
+  document.querySelector('#forget-memory').addEventListener('click', () => {
+    if (!speakerName.value.trim()) { setStatus('Type your name to forget its memories.'); return; }
+    const saved = window.AgentMemory.forget(speakerName.value.trim()); reset();
+    memoryStatus.textContent = saved === false ? 'Memories cleared for this visit; browser storage could not update.' : 'This speaker’s shared and separate memories were forgotten.';
   });
   function chooseEngine(next) {
     if (connected || connecting || pipeline.isLocked() || enrolling || engine === next) return;
     reset(); engine = next;
-    speakerControls.hidden = next !== 'pipeline';
+    speakerControls.hidden = false;
     if (next === 'realtime') recordLabel.textContent = 'Connect';
     realtimeEngine.classList.toggle('selected', next === 'realtime');
     pipelineEngine.classList.toggle('selected', next === 'pipeline');
@@ -141,7 +122,7 @@
     syncControls();
   }
   function reset() {
-    pipeline?.stop(); endSession('Ready when you are'); history = []; messages.replaceChildren();
+    pipeline?.stop(); endSession('Ready when you are'); history = []; sessionId = crypto.randomUUID(); transcripts.clear(); messages.replaceChildren();
     const empty = document.createElement('div'); empty.className = 'empty-state';
     empty.innerHTML = '<div class="tiny-orb" aria-hidden="true"></div><p>It starts with a hello.</p><span>Pick a voice. Take a breath. Say what’s on your mind.</span>';
     messages.append(empty);
@@ -168,7 +149,7 @@
   disconnectButton.addEventListener('click', () => endSession());
   document.querySelector('#download').addEventListener('click', () => {
     if (!history.length) { setStatus('There’s no conversation to download yet.'); return; }
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ agent, engine, messages: history }, null, 2)], { type: 'application/json' }));
+    const url = URL.createObjectURL(new Blob([JSON.stringify({ agent, engine, speaker: speakerName.value.trim() || 'Unknown', memory_sharing_mode: memoryMode.value, messages: history, turns }, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a'); a.href = url; a.download = `${agent}-conversation.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   const transcripts = new Map();
@@ -181,7 +162,7 @@
         setStatus('Thinking…', 'Your reply is on the way.');
         break;
       case 'conversation.item.input_audio_transcription.completed':
-        addMessage('user', event.transcript);
+        addMessage('user', event.transcript, { name: speakerName.value.trim() || 'Unknown', score: 1 });
         break;
       case 'response.created':
         responseActive = true; setStatus('Speaking…', 'You can interrupt in hands-free mode.');
@@ -193,7 +174,9 @@
       }
       case 'response.output_audio_transcript.done': {
         const id = event.item_id || event.response_id || 'reply';
-        addMessage('assistant', event.transcript || transcripts.get(id)); transcripts.delete(id);
+        const reply = event.transcript || transcripts.get(id);
+        addMessage('assistant', reply); transcripts.delete(id);
+        rememberRealtime(reply);
         break;
       }
       case 'response.done':
@@ -204,6 +187,24 @@
         setStatus(event.error?.message || 'Voice session error.', 'End the session and reconnect if this continues.');
         break;
     }
+  }
+  async function rememberRealtime(reply) {
+    const user = [...history].reverse().find(item => item.role === 'user');
+    if (!user || !reply) return;
+    const generation = sessionId;
+    const turn = { agent, speaker: speakerName.value.trim() || 'Unknown', mode: memoryMode.value, transcript: user.content, reply };
+    saveTurn(turn);
+    if (turn.speaker.toLowerCase() === 'unknown') return;
+    try {
+      const response = await fetch(`${window.VOICE_DEMO_CONFIG.apiBaseUrl.replace(/\/$/, '')}/memory`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': codeInput.value.trim() },
+        body: JSON.stringify({ agent: turn.agent, speaker: turn.speaker, userText: turn.transcript.slice(0, 3500), reply: reply.slice(0, 3500) }),
+      });
+      if (response.ok) {
+        const { fact } = await response.json();
+        if (fact && sessionId === generation) window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, fact);
+      } else memoryStatus.textContent = 'Reply received, but this turn’s memory could not be saved.';
+    } catch { memoryStatus.textContent = 'Reply received, but this turn’s memory could not be saved.'; }
   }
   async function connect() {
     if (!codeInput.value.trim()) { setStatus('Enter the demo access code first.'); codeInput.focus(); return; }
@@ -216,7 +217,7 @@
     try {
       mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
       if (thisConnection !== connectionId) { mic.getTracks().forEach(track => track.stop()); return; }
-      micTrack = mic.getAudioTracks()[0]; micTrack.enabled = handsFree;
+      micTrack = mic.getAudioTracks()[0]; micTrack.enabled = false;
       pc = new RTCPeerConnection(); pc.addTrack(micTrack, mic);
       const currentPeer = pc;
       pc.ontrack = e => {
@@ -230,6 +231,9 @@
       channel.onmessage = e => { try { handleEvent(JSON.parse(e.data)); } catch (error) { console.error('Realtime event:', error); } };
       channel.onopen = () => {
         if (thisConnection !== connectionId) return;
+        const context = window.AgentMemory.context(speakerName.value.trim(), memoryMode.value, agent);
+        if (context) send('conversation.item.create', { item: { type: 'message', role: 'system', content: [{ type: 'input_text', text: context }] } });
+        micTrack.enabled = handsFree;
         connecting = false; connected = true; record.disabled = false; syncControls();
         recordLabel.textContent = handsFree ? 'Stop session' : 'Start talking';
         disconnectButton.hidden = false;
@@ -255,7 +259,7 @@
     if (!connected) { await connect(); return; }
     if (handsFree) { endSession(); return; }
     if (!recording) {
-      if (responseActive) { send('response.cancel'); send('output_audio_buffer.clear'); responseActive = false; }
+      if (responseActive) { markInterrupted(); send('response.cancel'); send('output_audio_buffer.clear'); responseActive = false; }
       send('input_audio_buffer.clear');
       recording = true; manualStartedAt = performance.now(); micTrack.enabled = true;
       record.classList.add('recording'); recordLabel.textContent = 'Stop & send';
@@ -268,6 +272,11 @@
       setStatus('Sending your turn…', 'Waiting for the agent.');
       setTimeout(() => { if (connected) { send('input_audio_buffer.commit'); send('response.create'); } }, 160);
     }
+  });
+  syncControls();
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || event.repeat || ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(event.target.tagName)) return;
+    event.preventDefault(); record.click();
   });
   window.addEventListener('pagehide', () => { pipeline.stop(); if (connected || connecting) endSession(); });
 })();

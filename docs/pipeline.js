@@ -15,7 +15,7 @@
       this.playing = false; this.interruptStartedAt = null;
       this.options.playback.addEventListener('ended', () => {
         if (!this.options.isSelected()) return;
-        this.playing = false;
+        this.playing = false; this.notify();
         if (this.interruptStartedAt !== null && this.recording) {
           this.interruptStartedAt = null;
           this.voicedMs = Math.max(this.voicedMs, INTERRUPT_TRIGGER_MS);
@@ -33,7 +33,7 @@
         this.status('Playing reply…', 'You can interrupt by speaking. Headphones help prevent echo.');
       });
     }
-    isLocked() { return this.active || this.busy || this.recording || this.connecting; }
+    isLocked() { return this.active || this.busy || this.recording || this.connecting || this.playing; }
     notify() { this.options.onState(this); }
     status(message, detail) { this.options.onStatus(message, detail); }
     format() { return formats.find(type => MediaRecorder.isTypeSupported(type)); }
@@ -56,6 +56,12 @@
       this.notify();
     }
     async press() {
+      if (this.playing) {
+        this.options.onInterrupt?.();
+        this.stopPlayback();
+        if (this.active) { this.discardCandidate(); this.resume(); this.beginRecording(this.generation); this.lastSpeech = performance.now(); this.voicedMs = 300; return; }
+        await this.startTap(); return;
+      }
       if (this.active) { await this.stop(); this.status('Hands-free stopped', 'Start it again when you’re ready.'); return; }
       if (this.busy || this.connecting) return;
       if (this.recording) { this.finishRecording(); return; }
@@ -166,6 +172,7 @@
           } else if (now - this.interruptStartedAt >= INTERRUPT_TRIGGER_MS) {
             this.voicedMs = now - this.interruptStartedAt;
             this.lastSpeech = now;
+            this.options.onInterrupt?.();
             this.stopPlayback();
             this.status('Reply interrupted — I hear you…', 'Pause when you finish.');
           }
@@ -192,9 +199,13 @@
     async submit(blob, generation) {
       this.busy = true; this.notify();
       this.request = new AbortController();
-      const speakerPromise = this.options.speakers?.match(blob);
+      const speaker = { name: this.options.speaker(), score: 1 };
+      const selectedAgent = this.options.agent();
+      const mode = this.options.memoryMode();
       const form = new FormData();
-      form.set('agent', this.options.agent());
+      form.set('agent', selectedAgent);
+      form.set('speaker', speaker.name);
+      form.set('memories', JSON.stringify(this.options.memories()));
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
       const extension = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
       form.set('audio', blob, `turn.${extension}`);
@@ -209,16 +220,18 @@
         const result = await response.json();
         if (generation !== this.generation) return;
         if (!response.ok) throw new Error(result.error || `Could not complete turn (HTTP ${response.status}).`);
-        const speaker = await speakerPromise || { name: 'Unknown', score: 0 };
+        this.options.onTurn({ agent: selectedAgent, mode, speaker: speaker.name, ...result, audio: undefined });
         if (generation !== this.generation) return;
         this.options.onMessage('user', result.transcript, speaker);
         this.options.onMessage('assistant', result.reply);
         const bytes = Uint8Array.from(atob(result.audio), char => char.charCodeAt(0));
         this.audioUrl = URL.createObjectURL(new Blob([bytes], { type: result.mimeType || 'audio/mpeg' }));
         this.options.playback.src = this.audioUrl;
+        this.playing = true; this.notify();
         this.status('Playing reply…', this.active ? 'Speak to interrupt; headphones help prevent echo.' : 'Tap Start talking for another turn.');
         try { await this.options.playback.play(); }
         catch {
+          this.playing = false; this.notify();
           this.options.playback.hidden = false;
           if (this.active) this.resume();
           this.status('Tap play to hear the reply.', 'Your browser paused automatic playback.');

@@ -32,5 +32,8 @@ You are speaking out loud in a voice conversation, so:
 - Keep responses conversational and reasonably concise.
 - Never use markdown, bullet points, numbered lists, or asterisks.
 - Stay in character at all times.'''
-    result[name] = {'name': fields['NAME'], 'prompt': prompt, 'voice': fields['OPENAI_VOICE'], 'instructions': fields['OPENAI_TTS_INSTRUCTIONS']}
-(root / 'worker/src/agents.json').write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n')
+    result[name] = {'name': fields['NAME'], 'prompt': prompt, 'voice': fields['OPENAI_VOICE'], 'instructions': fields['OPENAI_TTS_INSTRUCTIONS'], 'traits': fields['TRAITS']}
+(root / 'worker/src/pipeline_agents.json').write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n')
+
+realtime = {name: {**settings, 'instructions': settings['prompt'] + '\n\nSpeaking style: ' + settings['instructions']} for name, settings in result.items()}
+(root / 'worker/src/agents.json').write_text(json.dumps(realtime, indent=2, ensure_ascii=False) + '\n')

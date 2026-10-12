@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../worker/src/index.mjs';
-import agentSettings from '../worker/src/agents.json' with { type: 'json' };
+import agentSettings from '../worker/src/pipeline_agents.json' with { type: 'json' };
 const origin = 'https://example.github.io';
 const env = { PUBLIC_ORIGIN: origin, DEMO_ACCESS_CODE: 'test-only-code', OPENAI_API_KEY: 'server-only-key', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
 const request = (form, code = 'test-only-code', source = origin) => new Request('https://demo.workers.dev/turn', { method: 'POST', headers: { origin: source, 'x-demo-code': code, 'cf-connecting-ip': '192.0.2.1' }, body: form });

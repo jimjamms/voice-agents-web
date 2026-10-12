@@ -14,7 +14,7 @@ Personality: bubbly, cheerful, empathetic, kind, soft.
 
 import sys
 
-from agent_base import PersonalityVoiceAgent, RECORDING_MODE
+from agent_base import PersonalityVoiceAgent
 
 
 class SageAgent(PersonalityVoiceAgent):
@@ -43,8 +43,6 @@ class SageAgent(PersonalityVoiceAgent):
 
 
 if __name__ == "__main__":
-    if RECORDING_MODE not in ("push_to_talk", "vad"):
-        sys.exit("RECORDING_MODE (in agent_base.py) must be 'push_to_talk' or 'vad'.")
     for trait in SageAgent.TRAITS.values():
         if trait not in (1, 2, 3, 4, 5):
             sys.exit("All trait values in SageAgent.TRAITS must be integers from 1 to 5.")

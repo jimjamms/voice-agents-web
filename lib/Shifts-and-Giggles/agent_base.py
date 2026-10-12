@@ -4,8 +4,8 @@ Big Five Personality Voice Agent -- shared base class
 
 This file (agent_base.py) is NOT run directly. It defines the shared
 PersonalityVoiceAgent class -- everything common to every agent: recording,
-local Whisper transcription, GPT chat, Azure TTS with emotional styling,
-speaker ID, and research logging.
+local Whisper transcription, GPT chat, text-to-speech with emotional
+styling, per-speaker memory, and research logging.
 
 Each actual agent is a small subclass in its own file (e.g. sage.py,
 astra.py) that overrides three class attributes:
@@ -23,18 +23,9 @@ Run an actual agent with, e.g.:
     python sage.py
     python astra.py
 
-Recording modes:
-    "push_to_talk" -- press Enter to start talking, Enter again to stop.
-    "vad"           -- fully hands-free and CONTINUOUS. The agent listens
-                        all the time and automatically detects when you
-                        start and stop speaking (voice activity
-                        detection). There is no button to press, and no
-                        Enter key needed between turns -- as soon as it
-                        finishes replying it starts listening again.
-    "vad" mode also supports BARGE-IN: if you start talking while the
-    agent is still speaking, it immediately stops itself and starts
-    listening to you, just like a real conversation. (Best with
-    headphones/earbuds -- see the ENABLE_BARGE_IN note below.)
+Recording: push-to-talk only -- press Enter to start talking, Enter again
+to stop. Type "quit" at the prompt instead to exit, or "name" to change
+who's talking.
 
 Pipeline:
     Mic audio -> local Whisper transcription -> OpenAI GPT-6 Astra (chat, with a
@@ -43,7 +34,7 @@ Pipeline:
 Setup
 -----
 1. Install dependencies:
-       pip install sounddevice numpy librosa faster-whisper openai
+       pip install sounddevice numpy faster-whisper openai
        pip install azure-cognitiveservices-speech  # for Azure voice
 
    You also need ffmpeg installed on your system (faster-whisper relies on
@@ -71,11 +62,11 @@ Setup
    first run will download the model weights (a few hundred MB) once.
 
 Controls:
-    - push_to_talk mode: press Enter to start talking, Enter again to stop.
-      Type "mode" at that prompt to switch to hands-free on the fly.
-    - vad mode: fully continuous -- just start talking whenever you're
-      ready. No Enter key needed at all, before or between turns. Say
-      "quit" (or press Ctrl+C) to exit.
+    - Press Enter to start talking, Enter again to stop.
+    - While the agent is replying, press Enter to interrupt it and start
+      talking immediately -- no need to wait for it to finish.
+    - Type "name" at the prompt to change who's talking.
+    - Type "quit" at the prompt (or press Ctrl+C) to exit.
 """
 
 import os
@@ -84,20 +75,42 @@ import json
 import time
 import uuid
 import wave
-import queue
 import random
 import tempfile
 import threading
 import subprocess
-from collections import deque
 from datetime import datetime, timezone
 from xml.sax.saxutils import escape as xml_escape
 
 import numpy as np
-import librosa
 import sounddevice as sd
 from faster_whisper import WhisperModel
 from openai import OpenAI
+
+try:
+    import msvcrt  # Windows: non-blocking single-key check
+except ImportError:
+    msvcrt = None
+    import select  # macOS/Linux: non-blocking check via select on stdin
+
+
+def _enter_pressed() -> bool:
+    """Non-blocking check: has the user pressed Enter since the last call?
+    Used to let someone interrupt the agent mid-reply just by pressing
+    Enter, without needing a second microphone stream or any audio-level
+    tuning -- this is deliberately much simpler than the old VAD-based
+    barge-in, and has none of its false-positive/echo problems."""
+    if msvcrt is not None:
+        hit = False
+        while msvcrt.kbhit():
+            if msvcrt.getch() in (b"\r", b"\n"):
+                hit = True
+        return hit
+    ready, _, _ = select.select([sys.stdin], [], [], 0)
+    if ready:
+        sys.stdin.readline()
+        return True
+    return False
 
 # ---------------------------------------------------------------------------
 # 1. PERSONALITY CONFIGURATION
@@ -239,69 +252,9 @@ CHANNELS = 1
 # each machine -- re-check this on every new laptop (w/ audio.py)
 INPUT_DEVICE_INDEX = None
 
-# "push_to_talk": press Enter to start/stop each turn.
-# "vad": fully hands-free and continuous -- no Enter key at all.
-RECORDING_MODE = "push_to_talk"
-
-# Words that end the conversation when spoken in "vad" mode (since there's
-# no keyboard prompt to type "quit" into anymore).
-VOICE_QUIT_PHRASES = {"quit", "exit", "stop listening", "goodbye", "good bye"}
-
-# -- VAD tuning (only used in "vad" mode) ------------------------------------
-VAD_CHUNK_SECONDS = 0.1        # how often we check the audio level
-VAD_CALIBRATION_SECONDS = 1.0  # how long to measure ambient noise at startup
-VAD_ENERGY_MULTIPLIER = 3.0    # speech threshold = ambient noise * this
-VAD_MIN_THRESHOLD = 80.0       # floor, in case a room is dead silent
-VAD_SILENCE_SECONDS = 1.2      # trailing silence required to end a turn
-VAD_PRE_ROLL_SECONDS = 0.3     # audio kept from just before speech is detected
-VAD_MAX_RECORD_SECONDS = 30    # safety cap so a stuck stream can't run forever
-
-# -- Barge-in / interruption tuning (only used in "vad" mode) ---------------
-# Lets you cut the agent off mid-reply just by talking, instead of waiting
-# for it to finish. NOTE: without an echo-cancelling mic/headset, the mic
-# can pick up the agent's own voice from the speakers and "hear itself" as
-# an interruption. Using headphones/earbuds makes this far more reliable.
-ENABLE_BARGE_IN = True
-
-# The actual interrupt threshold is:
-#     max(INTERRUPT_BASELINE, ambient_noise * INTERRUPT_ENERGY_MULTIPLIER)
-#
-# INTERRUPT_BASELINE is a hard floor in raw RMS units -- nothing quieter than
-# this can EVER register as an interruption, no matter how quiet the room's
-# ambient calibration came out. This is what stops small/random noises from
-# triggering it. If you're still getting false interruptions, raise this
-# number first (try doubling it); if real speech isn't being detected,
-# lower it.
-INTERRUPT_BASELINE = 600.0
-
-INTERRUPT_ENERGY_MULTIPLIER = 2.5   # extra margin above the normal speech
-                                     # threshold, to resist speaker bleed-through
-INTERRUPT_TRIGGER_SECONDS = 0.5     # how much continuous "speech" is needed
-                                     # before we treat it as a real interruption
-                                     # (filters out clicks/pops/coughs)
-
 # ---------------------------------------------------------------------------
-# SPEAKER IDENTIFICATION + RESEARCH LOGGING
+# RESEARCH LOGGING + MEMORY
 # ---------------------------------------------------------------------------
-# This is a lightweight, heuristic voice fingerprint (MFCC statistics +
-# cosine similarity) -- NOT deep-learning-grade speaker recognition. It's
-# meant to distinguish a small number of known participants' voices, not
-# to be robust against a large or adversarial set of speakers.
-
-ENABLE_SPEAKER_ID = True
-VOICEPRINTS_PATH = "voiceprints.json"
-N_MFCC = 20                    # number of MFCC coefficients extracted
-MFCC_SR = 16000                # audio is resampled to this rate before
-                                # extracting features, so voiceprints compare
-                                # fairly regardless of the mic's native rate
-MIN_AUDIO_SECONDS_FOR_ID = 0.4 # utterances shorter than this aren't reliable
-                                # enough to fingerprint -- treated as Unknown
-SPEAKER_MATCH_THRESHOLD = 0.90 # cosine similarity needed to count as a match.
-                                # Lower this if real matches keep coming back
-                                # "Unknown"; raise it if different people are
-                                # being confused for each other.
-ENROLL_DURATION_SECONDS = 4.0  # length of the voice sample recorded when
-                                # enrolling a new speaker
 
 ENABLE_LOGGING = True
 LOG_PATH = "conversation_log.jsonl"  # one JSON object per line, per turn --
@@ -315,15 +268,32 @@ MEMORIES_PATH = "memories.json"  # {speaker_name: [fact, fact, ...]} -- short,
 MAX_MEMORIES_PER_SPEAKER = 20     # oldest facts drop off once a speaker's
                                    # array exceeds this length.
 
+# -- Memory sharing mode: the actual independent variable for the research --
+# "shared"   -- Sage and Astra read/write the SAME memory file. A fact
+#               learned by one is visible to the other the next time that
+#               speaker is recognized, regardless of which agent they're
+#               talking to.
+# "isolated" -- each agent gets its OWN separate memory file. Nothing
+#               learned by one agent is ever visible to the other.
+#
+# Run the same scenario once in each mode to compare whether cross-agent
+# memory sharing makes repeated interactions more coherent/engaging.
+# NOTE: this only controls WHICH FILE each agent reads/writes -- it doesn't
+# yet decide what's worth sharing or how; that logic (extract_memory,
+# _prime_speaker_memory) is unchanged and still applies equally in both
+# modes. This is just the on/off plumbing to build that on top of next.
+MEMORY_SHARING_MODE = "shared"  # "shared" or "isolated"
+
 
 # ---------------------------------------------------------------------------
 # 4. THE AGENT
 # ---------------------------------------------------------------------------
 
 class PersonalityVoiceAgent:
-    """Shared base class for all personality voice agents: recording,
-    Whisper transcription, GPT chat, Azure TTS with emotional styling,
-    speaker ID, and research logging all live here.
+    """Shared base class for all personality voice agents: push-to-talk
+    recording, Whisper transcription, GPT chat, text-to-speech with
+    emotional styling, per-speaker memory, and research logging all live
+    here.
 
     A specific agent (Sage, Astra, ...) is a subclass that overrides these
     three class attributes -- everything else is inherited unchanged:
@@ -356,7 +326,6 @@ class PersonalityVoiceAgent:
         self.name = name or self.NAME
         self.traits = traits or self.TRAITS
         self.model = model
-        self.mode = RECORDING_MODE
 
         self.system_prompt = build_system_prompt(self.name, self.traits)
         self.voice_style, self.style_degree = voice_style_from_traits(self.traits)
@@ -419,16 +388,18 @@ class PersonalityVoiceAgent:
         print(f"Recording at {self.record_rate} Hz, {self.record_channels} channel(s), "
               f"on device index {INPUT_DEVICE_INDEX}")
 
-        self.silence_threshold = None  # set by calibrate_ambient_noise()
-        self._interrupt_threshold_logged = False
         self.history = [{"role": "system", "content": self.system_prompt}]
 
         self.session_id = uuid.uuid4().hex[:8]
-        self.speaker_id_enabled = ENABLE_SPEAKER_ID
-        self.voiceprints = self._load_voiceprints() if self.speaker_id_enabled else {}
+        self.speaker_name = "Unknown"  # set by typed name, see set_speaker()
 
         self.memory_enabled = ENABLE_MEMORY
-        self.memories = self._load_memories() if self.memory_enabled else {}
+        self.memory_sharing_mode = MEMORY_SHARING_MODE  # default; can be
+                                                           # changed interactively
+                                                           # in run() before anyone
+                                                           # types their name
+        self.memories_path = None   # resolved by _setup_memory(), see run()
+        self.memories = {}          # loaded by _setup_memory(), see run()
         self._speakers_primed = set()  # speakers already given their memory
                                          # context in self.history this run
 
@@ -460,60 +431,136 @@ class PersonalityVoiceAgent:
             wf.setframerate(self.record_rate)
             wf.writeframes(audio_data.tobytes())
 
-    # -- Speaker identification (lightweight MFCC + cosine similarity) -----
+    # -- Cross-session memory (short facts per named speaker) -------------
 
-    @staticmethod
-    def _load_voiceprints() -> dict:
-        if os.path.exists(VOICEPRINTS_PATH):
-            with open(VOICEPRINTS_PATH, "r", encoding="utf-8") as f:
-                raw = json.load(f)
-            return {name: np.array(vec, dtype=np.float64) for name, vec in raw.items()}
-        return {}
+    def _resolve_memories_path(self) -> str:
+        """Returns the actual memory file this agent should use, based on
+        self.memory_sharing_mode (set from MEMORY_SHARING_MODE by default,
+        but changeable interactively each run via choose_memory_sharing_mode()).
+        "shared" -> every agent uses the same path (MEMORIES_PATH as-is).
+        "isolated" -> each agent gets its own file, named after it, so
+        nothing it learns is visible to any other agent."""
+        if self.memory_sharing_mode == "shared":
+            return MEMORIES_PATH
+        elif self.memory_sharing_mode == "isolated":
+            base, ext = os.path.splitext(MEMORIES_PATH)
+            return f"{base}_{self.name.lower()}{ext}"
+        else:
+            raise ValueError(
+                f"memory_sharing_mode must be 'shared' or 'isolated', "
+                f"got {self.memory_sharing_mode!r}"
+            )
 
-    def _save_voiceprints(self):
-        raw = {name: vec.tolist() for name, vec in self.voiceprints.items()}
-        with open(VOICEPRINTS_PATH, "w", encoding="utf-8") as f:
-            json.dump(raw, f, indent=2)
+    def _setup_memory(self):
+        """Resolves the memory file path (based on self.memory_sharing_mode)
+        and loads it. Called from run(), after the interactive mode prompt
+        has had a chance to change memory_sharing_mode from its default."""
+        self.memories_path = self._resolve_memories_path()
+        self.memories = self._load_memories() if self.memory_enabled else {}
+        print(f"Memory file: {self.memories_path}")
 
-    # -- Cross-session memory (short facts per identified speaker) --------
+    def choose_memory_sharing_mode(self):
+        """Lets the user pick shared vs. isolated memory for this run,
+        before anyone's name is taken. Pressing Enter keeps whatever
+        MEMORY_SHARING_MODE defaults to in the code."""
+        default_choice = "1" if self.memory_sharing_mode == "shared" else "2"
+        print("\nSelect a mode:")
+        print("  1. Enable Agent-to-agent Memory")
+        print("  2. Disable Agent-to-agent Memory")
+        while True:
+            choice = input(f"Choice [{default_choice}]: ").strip()
+            if not choice:
+                choice = default_choice
+            if choice == "1":
+                self.memory_sharing_mode = "shared"
+                break
+            elif choice == "2":
+                self.memory_sharing_mode = "isolated"
+                break
+            print("Please enter 1 or 2.")
+        status = "ENABLED" if self.memory_sharing_mode == "shared" else "DISABLED"
+        print(f"Agent-to-agent memory: {status}")
 
-    @staticmethod
-    def _load_memories() -> dict:
-        if os.path.exists(MEMORIES_PATH):
-            with open(MEMORIES_PATH, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return {}
+    def _load_memories(self) -> dict:
+        """Loads memories_path as-is -- no shape transformation needed.
+        Entries can be plain strings (isolated mode, or legacy data) or
+        {"fact": ..., "learned_by": ...} dicts (shared mode); both shapes
+        are handled directly wherever facts are read (remember,
+        _prime_speaker_memory), so there's nothing to normalize here."""
+        if not os.path.exists(self.memories_path):
+            return {}
+        with open(self.memories_path, "r", encoding="utf-8") as f:
+            return json.load(f)
 
     def _save_memories(self):
-        with open(MEMORIES_PATH, "w", encoding="utf-8") as f:
+        with open(self.memories_path, "w", encoding="utf-8") as f:
             json.dump(self.memories, f, indent=2)
 
     def remember(self, speaker_name: str, fact: str):
-        """Appends a short fact to speaker_name's memory array (oldest
-        facts drop off past MAX_MEMORIES_PER_SPEAKER) and persists it."""
+        """Appends a fact to speaker_name's fact list (oldest entries drop
+        off past MAX_MEMORIES_PER_SPEAKER) and persists it.
+
+        In "shared" mode, the fact is tagged {"fact": ..., "learned_by":
+        self.name} -- the other agent needs to know WHO learned this,
+        since they're both reading the same file. In "isolated" mode,
+        it's just the plain fact string -- there's no "other agent" to
+        attribute it for, since this file is this agent's alone."""
         if not speaker_name or speaker_name == "Unknown" or not fact:
             return
-        facts = self.memories.setdefault(speaker_name, [])
-        facts.append(fact)
-        del facts[:-MAX_MEMORIES_PER_SPEAKER]
+        entries = self.memories.setdefault(speaker_name, [])
+        if self.memory_sharing_mode == "shared":
+            entries.append({"fact": fact, "learned_by": self.name})
+        else:
+            entries.append(fact)
+        del entries[:-MAX_MEMORIES_PER_SPEAKER]
         self._save_memories()
 
     def _prime_speaker_memory(self, speaker_name: str):
-        """The first time speaker_name is recognized this session, injects
+        """The first time speaker_name talks this session, injects
         what's remembered about them into the running chat history so the
-        model can draw on past conversations."""
+        model can draw on past conversations. Facts learned by a
+        DIFFERENT agent (only possible in "shared" mode) are explicitly
+        attributed, so the model can reference them honestly instead of
+        acting like it personally learned them."""
         if (not self.memory_enabled or speaker_name == "Unknown"
                 or speaker_name in self._speakers_primed):
             return
         self._speakers_primed.add(speaker_name)
-        facts = self.memories.get(speaker_name)
-        if not facts:
+        entries = self.memories.get(speaker_name, [])
+        if not entries:
             return
-        bullet_list = "\n".join(f"- {fact}" for fact in facts)
+
+        lines = []
+        any_cross_agent = False
+        for entry in entries:
+            if isinstance(entry, dict):
+                fact = entry["fact"]
+                learned_by = entry.get("learned_by")
+            else:
+                # Plain string: isolated-mode data (no other agent to
+                # attribute it to) or legacy data from before attribution
+                # existed. Either way, show it with no attribution note.
+                fact, learned_by = entry, None
+
+            if learned_by and learned_by != self.name:
+                any_cross_agent = True
+                lines.append(f"- (learned by {learned_by}, not by you) {fact}")
+            else:
+                lines.append(f"- {fact}")
+        bullet_list = "\n".join(lines)
+
+        note = ""
+        if any_cross_agent:
+            note = (
+                f"\n\nSome of these were learned by a DIFFERENT agent, not "
+                f"by you directly -- you may naturally reference them (e.g. "
+                f"something you heard about {speaker_name}), but don't "
+                f"claim you personally experienced that conversation."
+            )
         self.history.append({
             "role": "system",
             "content": f"What you remember about {speaker_name} from "
-                       f"previous conversations:\n{bullet_list}",
+                       f"previous conversations:\n{bullet_list}{note}",
         })
 
     def extract_memory(self, speaker_name: str, user_text: str, reply: str):
@@ -543,95 +590,36 @@ class PersonalityVoiceAgent:
         if fact and fact.upper() != "NONE":
             self.remember(speaker_name, fact)
 
-    @staticmethod
-    def extract_voice_features(wav_path: str):
-        """Returns a normalized MFCC-statistics feature vector for the
-        given WAV file, or None if there wasn't enough audio to trust."""
-        y, _sr = librosa.load(wav_path, sr=MFCC_SR, mono=True)
-        if y.size < MFCC_SR * MIN_AUDIO_SECONDS_FOR_ID:
-            return None
-        mfcc = librosa.feature.mfcc(y=y, sr=MFCC_SR, n_mfcc=N_MFCC)
-        feature = np.concatenate([mfcc.mean(axis=1), mfcc.std(axis=1)])
-        norm = np.linalg.norm(feature)
-        if norm > 0:
-            feature = feature / norm
-        return feature
-
-    def identify_speaker(self, features):
-        """Compares a feature vector against all enrolled voiceprints.
-        Returns (name, similarity) -- name is "Unknown" if nothing enrolled
-        clears SPEAKER_MATCH_THRESHOLD, or if features is None."""
-        if features is None or not self.voiceprints:
-            return "Unknown", 0.0
-
-        best_name, best_score = "Unknown", -1.0
-        for name, voiceprint in self.voiceprints.items():
-            score = float(np.dot(features, voiceprint))  # both are unit vectors
-            if score > best_score:
-                best_name, best_score = name, score
-
-        if best_score >= SPEAKER_MATCH_THRESHOLD:
-            return best_name, best_score
-        return "Unknown", best_score
-
-    def record_fixed_duration(self, path: str, duration: float):
-        """Records exactly `duration` seconds, no VAD/Enter-key involved --
-        used for voice enrollment."""
-        recorded_chunks = []
-
-        def callback(indata, frames_count, time_info, status):
-            recorded_chunks.append(indata.copy())
-
-        with sd.InputStream(**self._stream_kwargs(callback)):
-            sd.sleep(int(duration * 1000))
-
-        self._write_wav(path, recorded_chunks)
-
-    def enroll_speaker_interactive(self, name: str = None):
-        """Records a short sample and saves it as a named voiceprint."""
-        if name is None:
-            name = input("Enter a name for this voice (blank to cancel): ").strip()
-        if not name:
-            print("Cancelled -- no name given.")
-            return
-
-        print(f"Okay {name}, talk continuously for the next "
-              f"{ENROLL_DURATION_SECONDS:.0f} seconds so I can learn your voice...")
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            wav_path = tmp.name
-        try:
-            self.record_fixed_duration(wav_path, ENROLL_DURATION_SECONDS)
-            features = self.extract_voice_features(wav_path)
-        finally:
-            os.remove(wav_path)
-
-        if features is None:
-            print("(Didn't catch enough audio -- try enrolling again.)")
-            return
-
-        self.voiceprints[name] = features
-        self._save_voiceprints()
-        print(f"Voice enrolled for '{name}'. Enrolled voices: {list(self.voiceprints.keys())}")
-
-    def maybe_enroll_speakers(self):
-        """Lets you enroll any number of voices before a session starts.
-        Safe to skip entirely by just pressing Enter."""
-        if not self.speaker_id_enabled:
-            return
-        existing = list(self.voiceprints.keys())
-        print(f"\nEnrolled voices: {existing if existing else 'none yet'}")
-        while True:
-            name = input(
-                "Type a name to enroll a new voice, or press Enter to continue: "
-            ).strip()
-            if not name:
+    def set_speaker(self, name: str):
+        """Makes name the current speaker, creating their (empty) fact
+        list if they don't have one yet, and resetting the live
+        conversation to just the system prompt. Names match
+        case-insensitively, so "nayeli" picks up the existing "Nayeli" entry."""
+        for known in self.memories:
+            if known.lower() == name.lower():
+                name = known
                 break
-            self.enroll_speaker_interactive(name)
+        self.speaker_name = name
+        if self.memory_enabled and name not in self.memories:
+            self.memories[name] = []
+            self._save_memories()
+        self.history = [{"role": "system", "content": self.system_prompt}]
+
+    def ask_speaker_name(self):
+        """Asks who's talking, by typed name. Safe to skip by just pressing
+        Enter, which keeps the current speaker."""
+        known = list(self.memories.keys())
+        print(f"\nKnown names: {known if known else 'none yet'}")
+        name = input(
+            f"Type your name, or press Enter to stay as '{self.speaker_name}': "
+        ).strip()
+        if name:
+            self.set_speaker(name)
 
     # -- Research logging --------------------------------------------------
 
-    def log_turn(self, speaker: str, speaker_score: float, user_text: str,
-                 reply: str, extra: dict = None):
+    def log_turn(self, speaker: str, user_text: str, reply: str,
+                 extra: dict = None):
         """Appends one JSON line per conversational turn to LOG_PATH."""
         if not ENABLE_LOGGING:
             return
@@ -640,8 +628,8 @@ class PersonalityVoiceAgent:
             "session_id": self.session_id,
             "agent_name": self.name,
             "agent_traits": self.traits,
+            "memory_sharing_mode": self.memory_sharing_mode,
             "speaker": speaker,
-            "speaker_confidence": round(speaker_score, 3),
             "user_text": user_text,
             "agent_reply": reply,
         }
@@ -652,7 +640,7 @@ class PersonalityVoiceAgent:
 
     # -- Recording: push-to-talk -----------------------------------------
 
-    def record_push_to_talk(self, path: str):
+    def record_audio_to_wav(self, path: str):
         """Press Enter to start talking, Enter again to stop."""
         print("Listening... press Enter again to stop.")
         recorded_chunks = []
@@ -674,93 +662,6 @@ class PersonalityVoiceAgent:
                 sd.sleep(100)
 
         self._write_wav(path, recorded_chunks)
-
-    # -- Recording: automatic voice activity detection ---------------------
-
-    def calibrate_ambient_noise(self):
-        """Measures the room's background noise level once at startup so
-        the VAD threshold adapts to wherever you actually are."""
-        print(f"Calibrating microphone for background noise "
-              f"({VAD_CALIBRATION_SECONDS:.0f}s, please stay quiet)...")
-        frames = []
-
-        def callback(indata, frames_count, time_info, status):
-            frames.append(indata.copy())
-
-        blocksize = int(self.record_rate * VAD_CHUNK_SECONDS)
-        with sd.InputStream(**self._stream_kwargs(callback, blocksize=blocksize)):
-            sd.sleep(int(VAD_CALIBRATION_SECONDS * 1000))
-
-        ambient_rms = self._rms(np.concatenate(frames, axis=0)) if frames else VAD_MIN_THRESHOLD
-        self.silence_threshold = max(ambient_rms * VAD_ENERGY_MULTIPLIER, VAD_MIN_THRESHOLD)
-        print(f"Ambient noise level: {ambient_rms:.1f} -> "
-              f"speech threshold set to {self.silence_threshold:.1f}")
-
-    def record_vad(self, path: str):
-        """Hands-free recording: starts automatically when speech is
-        detected, stops automatically after a beat of silence."""
-        if self.silence_threshold is None:
-            self.calibrate_ambient_noise()
-
-        print("Listening... just start talking (stops automatically when you pause).")
-
-        blocksize = int(self.record_rate * VAD_CHUNK_SECONDS)
-        chunk_queue = queue.Queue()
-
-        def callback(indata, frames_count, time_info, status):
-            if status:
-                print(f"(Audio status: {status})")
-            chunk_queue.put(indata.copy())
-
-        # Pre-roll/silence/max-duration are tracked in actual seconds of
-        # audio received, not a count of chunks -- chunk size can vary
-        # (e.g. WDM-KS devices ignore our requested blocksize and choose
-        # their own), so counting chunks would silently give the wrong
-        # timing on those devices.
-        pre_buffer = deque()
-        pre_buffer_seconds = 0.0
-        speech_chunks = []
-        state = "waiting"  # "waiting" -> "recording" -> done
-        silence_seconds = 0.0
-        total_seconds = 0.0
-
-        with sd.InputStream(**self._stream_kwargs(callback, blocksize=blocksize)):
-            while True:
-                chunk = chunk_queue.get()
-                chunk_seconds = chunk.shape[0] / self.record_rate
-                total_seconds += chunk_seconds
-                is_speech = self._rms(chunk) > self.silence_threshold
-
-                if state == "waiting":
-                    pre_buffer.append(chunk)
-                    pre_buffer_seconds += chunk_seconds
-                    while pre_buffer_seconds > VAD_PRE_ROLL_SECONDS and len(pre_buffer) > 1:
-                        dropped = pre_buffer.popleft()
-                        pre_buffer_seconds -= dropped.shape[0] / self.record_rate
-                    if is_speech:
-                        state = "recording"
-                        speech_chunks.extend(pre_buffer)
-                        speech_chunks.append(chunk)
-                        silence_seconds = 0.0
-                else:  # state == "recording"
-                    speech_chunks.append(chunk)
-                    if is_speech:
-                        silence_seconds = 0.0
-                    else:
-                        silence_seconds += chunk_seconds
-                        if silence_seconds >= VAD_SILENCE_SECONDS:
-                            break
-
-                if total_seconds >= VAD_MAX_RECORD_SECONDS:
-                    break
-
-        self._write_wav(path, speech_chunks)
-
-    def record_audio_to_wav(self, path: str):
-        if self.mode == "vad":
-            self.record_vad(path)
-        else:
-            self.record_push_to_talk(path)
 
     # -- Speech-to-text (local Whisper) ------------------------------------
 
@@ -806,30 +707,14 @@ class PersonalityVoiceAgent:
 
     def speak(self, text: str) -> bool:
         """Speak text aloud. Returns True if it played to completion, or
-        False if it was cut off early because the user started talking
-        (barge-in -- only possible in "vad" mode with ENABLE_BARGE_IN)."""
+        False if the user pressed Enter partway through to interrupt it
+        and start talking right away."""
+        print("(Press Enter to interrupt...)")
         if self.tts_provider == "openai":
             return self._speak_openai(text)
-        import azure.cognitiveservices.speech as speechsdk
-        if self.mode == "vad" and ENABLE_BARGE_IN:
-            return self._speak_interruptible(text)
+        return self._speak_azure(text)
 
-        audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
-        synthesizer = speechsdk.SpeechSynthesizer(
-            speech_config=self.speech_config, audio_config=audio_config
-        )
-        ssml = self.build_ssml(text)
-        result = synthesizer.speak_ssml_async(ssml).get()
-
-        if result.reason == speechsdk.ResultReason.Canceled:
-            details = result.cancellation_details
-            print(f"(Speech synthesis failed: {details.reason} -- {details.error_details})")
-        return True
-
-    def _speak_interruptible(self, text: str) -> bool:
-        """Play back TTS audio while a second mic stream watches for the
-        user starting to talk. If sustained speech is detected, playback
-        is stopped immediately and this returns False."""
+    def _speak_azure(self, text: str) -> bool:
         import azure.cognitiveservices.speech as speechsdk
         audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True)
         synthesizer = speechsdk.SpeechSynthesizer(
@@ -838,66 +723,26 @@ class PersonalityVoiceAgent:
         ssml = self.build_ssml(text)
 
         interrupted = threading.Event()
-        stop_monitor = threading.Event()
         playback_done = threading.Event()
-
-        threshold = max(
-            INTERRUPT_BASELINE,
-            (self.silence_threshold or VAD_MIN_THRESHOLD) * INTERRUPT_ENERGY_MULTIPLIER,
-        )
-        if not self._interrupt_threshold_logged:
-            print(f"(Barge-in threshold: {threshold:.1f} "
-                  f"[baseline={INTERRUPT_BASELINE:.1f}, "
-                  f"ambient*mult={((self.silence_threshold or VAD_MIN_THRESHOLD) * INTERRUPT_ENERGY_MULTIPLIER):.1f}])")
-            self._interrupt_threshold_logged = True
-        blocksize = int(self.record_rate * VAD_CHUNK_SECONDS)
-
-        def monitor():
-            consecutive_speech_seconds = 0.0
-
-            def callback(indata, frames_count, time_info, status):
-                nonlocal consecutive_speech_seconds
-                if stop_monitor.is_set():
-                    return
-                chunk_seconds = indata.shape[0] / self.record_rate
-                if self._rms(indata) > threshold:
-                    consecutive_speech_seconds += chunk_seconds
-                    if consecutive_speech_seconds >= INTERRUPT_TRIGGER_SECONDS:
-                        interrupted.set()
-                        stop_monitor.set()
-                else:
-                    consecutive_speech_seconds = 0.0
-
-            try:
-                with sd.InputStream(**self._stream_kwargs(callback, blocksize=blocksize)):
-                    while not stop_monitor.is_set():
-                        sd.sleep(30)
-            except Exception as e:
-                print(f"(Interrupt monitor error: {e})")
 
         def playback():
             result = synthesizer.speak_ssml_async(ssml).get()
-            if (not interrupted.is_set()
-                    and result.reason == speechsdk.ResultReason.Canceled):
+            if not interrupted.is_set() and result.reason == speechsdk.ResultReason.Canceled:
                 details = result.cancellation_details
                 print(f"(Speech synthesis failed: {details.reason} -- {details.error_details})")
             playback_done.set()
 
-        monitor_thread = threading.Thread(target=monitor, daemon=True)
-        playback_thread = threading.Thread(target=playback, daemon=True)
-        monitor_thread.start()
-        playback_thread.start()
+        threading.Thread(target=playback, daemon=True).start()
 
-        while not playback_done.is_set() and not interrupted.is_set():
+        while not playback_done.is_set():
+            if _enter_pressed():
+                interrupted.set()
+                break
             time.sleep(0.03)
 
         if interrupted.is_set() and not playback_done.is_set():
-            print("(Heard you -- stopping to listen...)")
             synthesizer.stop_speaking_async().get()
-
-        stop_monitor.set()
-        monitor_thread.join(timeout=2)
-        playback_thread.join(timeout=2)
+            print("(Interrupted -- go ahead, listening now...)")
 
         return not interrupted.is_set()
 
@@ -911,7 +756,8 @@ class PersonalityVoiceAgent:
             return self._play_mp3(response.read())
 
     def _play_mp3(self, mp3: bytes) -> bool:
-        """Decode MP3 and play it, with optional interruption in VAD mode."""
+        """Decode MP3 and play it in small chunks, checking between each
+        one for an Enter-key interrupt."""
         try:
             decoded = subprocess.run(
                 ["ffmpeg", "-hide_banner", "-loglevel", "error", "-i", "pipe:0",
@@ -923,110 +769,66 @@ class PersonalityVoiceAgent:
             print(f"(Speech synthesis failed: {exc})")
             return True
 
-        interrupted = threading.Event()
-        stop_monitor = threading.Event()
-        barge_in = self.mode == "vad" and ENABLE_BARGE_IN
-        if barge_in:
-            threshold = max(INTERRUPT_BASELINE,
-                            (self.silence_threshold or VAD_MIN_THRESHOLD)
-                            * INTERRUPT_ENERGY_MULTIPLIER)
+        chunk_size = 2205  # ~0.1s at 22050 Hz
+        interrupted = False
+        with sd.OutputStream(samplerate=22050, channels=1, dtype="int16") as output:
+            for offset in range(0, len(samples), chunk_size):
+                if _enter_pressed():
+                    interrupted = True
+                    break
+                output.write(samples[offset:offset + chunk_size])
 
-            def monitor():
-                consecutive = 0.0
+        if interrupted:
+            print("(Interrupted -- go ahead, listening now...)")
+        return not interrupted
 
-                def callback(indata, frames_count, time_info, status):
-                    nonlocal consecutive
-                    if self._rms(indata) > threshold:
-                        consecutive += len(indata) / self.record_rate
-                        if consecutive >= INTERRUPT_TRIGGER_SECONDS:
-                            interrupted.set()
-                    else:
-                        consecutive = 0.0
-
-                try:
-                    with sd.InputStream(**self._stream_kwargs(
-                            callback, blocksize=int(self.record_rate * VAD_CHUNK_SECONDS))):
-                        stop_monitor.wait()
-                except Exception as exc:
-                    print(f"(Interrupt monitor error: {exc})")
-
-            monitor_thread = threading.Thread(target=monitor, daemon=True)
-            monitor_thread.start()
-        try:
-            with sd.OutputStream(samplerate=22050, channels=1, dtype="int16") as output:
-                for offset in range(0, len(samples), 2205):
-                    if interrupted.is_set():
-                        print("(Heard you -- stopping to listen...)")
-                        break
-                    output.write(samples[offset:offset + 2205])
-        finally:
-            stop_monitor.set()
-            if barge_in:
-                monitor_thread.join(timeout=2)
-        return not interrupted.is_set()
-
-    # -- One conversational turn (shared by both modes) ---------------------
+    # -- One conversational turn --------------------------------------------
 
     def process_one_turn(self) -> bool:
-        """Record, transcribe, get a reply, and speak it.
+        """Record, transcribe, get a reply, and speak it. Always returns
+        True (the caller only stops on the typed 'quit' command).
 
-        Returns False if the user asked to end the conversation (only
-        relevant in "vad" mode, where there's no keyboard prompt to type
-        "quit" into -- you just say it instead). Returns True otherwise,
-        including on a turn where nothing understandable was heard, so the
-        caller can just keep looping.
-        """
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-            wav_path = tmp.name
-        try:
-            turn_start = time.time()
-            self.record_audio_to_wav(wav_path)
+        If the user interrupts the agent mid-reply (pressing Enter while
+        it's speaking), that same keypress is treated as "start recording
+        the next turn" -- this loops internally rather than returning to
+        the outer '[Enter] to talk' prompt, so interrupting feels like one
+        continuous action instead of needing a second separate press."""
+        while True:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                wav_path = tmp.name
+            try:
+                turn_start = time.time()
+                self.record_audio_to_wav(wav_path)
+                user_text = self.transcribe(wav_path)
+            finally:
+                os.remove(wav_path)
 
-            speaker_name, speaker_score = "Unknown", 0.0
-            if self.speaker_id_enabled:
-                features = self.extract_voice_features(wav_path)
-                speaker_name, speaker_score = self.identify_speaker(features)
+            if not user_text:
+                print("(Didn't catch that -- try again.)")
+                return True
 
-            user_text = self.transcribe(wav_path)
-        finally:
-            os.remove(wav_path)
+            speaker_name = self.speaker_name
+            print(f"You said [{speaker_name}]: {user_text}")
 
-        if not user_text:
-            print("(Didn't catch that -- try again.)")
-            return True
+            self._prime_speaker_memory(speaker_name)
+            reply = self.get_response(user_text)
+            print(f"{self.name}: {reply}")
+            self.extract_memory(speaker_name, user_text, reply)
 
-        if self.speaker_id_enabled:
-            print(f"You said [{speaker_name}, {speaker_score:.2f}]: {user_text}")
-        else:
-            print(f"You said: {user_text}")
+            finished = self.speak(reply)
 
-        normalized = user_text.strip().lower().strip(".!?")
-        if self.mode == "vad" and normalized in VOICE_QUIT_PHRASES:
-            return False
+            self.log_turn(
+                speaker_name, user_text, reply,
+                extra={
+                    "turn_seconds": round(time.time() - turn_start, 3),
+                    "interrupted": not finished,
+                },
+            )
 
-        self._prime_speaker_memory(speaker_name)
-        reply = self.get_response(user_text)
-        print(f"{self.name}: {reply}")
-        self.extract_memory(speaker_name, user_text, reply)
-
-        # In push_to_talk mode the mic isn't reopened until we loop back
-        # around, so there's no risk of hearing/transcribing itself. In
-        # "vad" mode with ENABLE_BARGE_IN, speak() runs its own monitoring
-        # stream and returns False early if you start talking over it --
-        # in that case we just fall straight back into listening below.
-        finished = self.speak(reply)
-        if not finished:
-            print("(Go ahead, I'm listening.)")
-
-        self.log_turn(
-            speaker_name, speaker_score, user_text, reply,
-            extra={
-                "recording_mode": self.mode,
-                "turn_seconds": round(time.time() - turn_start, 3),
-                "barge_in": not finished,
-            },
-        )
-        return True
+            if finished:
+                return True
+            # else: interrupted -- loop back and record immediately,
+            # consuming no further prompt from the caller
 
     # -- Main loop --------------------------------------------------------
 
@@ -1036,44 +838,21 @@ class PersonalityVoiceAgent:
               + (f" ({self.openai_voice})" if self.tts_provider == "openai"
                  else (f"; style: {self.voice_style} (intensity {self.style_degree})"
                        if self.tts_provider == "azure" else "")))
-        print(f"Recording mode: {self.mode}")
 
-        self.maybe_enroll_speakers()
+        if self.memory_enabled:
+            self.choose_memory_sharing_mode()
+            self._setup_memory()
 
-        if self.mode == "vad":
-            self._run_hands_free()
-        else:
-            self._run_push_to_talk()
+        self.ask_speaker_name()
 
-    def _run_hands_free(self):
-        """Fully continuous loop: no Enter key needed, ever. Just talk."""
-        print("Hands-free mode -- just start talking whenever you're ready.")
-        print(f"Say one of {sorted(VOICE_QUIT_PHRASES)} or press Ctrl+C to exit.\n")
-        self.calibrate_ambient_noise()
-        try:
-            while self.process_one_turn():
-                pass
-        except KeyboardInterrupt:
-            print()
-        print("Goodbye!")
-
-    def _run_push_to_talk(self):
-        print("(Type 'mode' to switch to hands-free, 'enroll' to add a voice, "
-              "or 'quit' to exit.)")
+        print("(Type 'name' to change who's talking, or 'quit' to exit.)")
         while True:
-            choice = input(
-                "\n[Enter] to talk, 'mode' to switch, 'enroll', or 'quit': "
-            ).strip().lower()
+            choice = input("\n[Enter] to talk, 'name', or 'quit': ").strip().lower()
 
             if choice == "quit":
                 break
-            if choice == "mode":
-                self.mode = "vad"
-                print("Switched to: vad (hands-free, continuous)")
-                self._run_hands_free()
-                return  # _run_hands_free only exits via quit-phrase/Ctrl+C
-            if choice == "enroll":
-                self.enroll_speaker_interactive()
+            if choice == "name":
+                self.ask_speaker_name()
                 continue
 
             self.process_one_turn()

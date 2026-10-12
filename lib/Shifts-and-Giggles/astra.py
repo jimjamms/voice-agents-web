@@ -15,7 +15,7 @@ Sage's bubbly/cheerful/empathetic energy.
 
 import sys
 
-from agent_base import PersonalityVoiceAgent, RECORDING_MODE
+from agent_base import PersonalityVoiceAgent
 
 
 class AstraAgent(PersonalityVoiceAgent):
@@ -45,8 +45,6 @@ class AstraAgent(PersonalityVoiceAgent):
 
 
 if __name__ == "__main__":
-    if RECORDING_MODE not in ("push_to_talk", "vad"):
-        sys.exit("RECORDING_MODE (in agent_base.py) must be 'push_to_talk' or 'vad'.")
     for trait in AstraAgent.TRAITS.values():
         if trait not in (1, 2, 3, 4, 5):
             sys.exit("All trait values in AstraAgent.TRAITS must be integers from 1 to 5.")

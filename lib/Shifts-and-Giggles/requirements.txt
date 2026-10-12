@@ -1,7 +1,7 @@
 sounddevice
 numpy
-librosa
 faster-whisper
+av<19
 azure-cognitiveservices-speech
 openai
 websockets
