@@ -1,4 +1,5 @@
 import agents from './agents.json' with { type: 'json' };
+import { memoryTurn } from './memory.mjs';
 import { pipelineTurn } from './pipeline.mjs';
 
 const REALTIME = 'https://api.openai.com/v1/realtime/calls';
@@ -47,7 +48,7 @@ export default {
     }
     const cors = corsFor(allowedOrigin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (!['/session', '/turn'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
+    if (!['/session', '/turn', '/memory'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
     if (!env.OPENAI_API_KEY || !env.DEMO_ACCESS_CODE || !env.DEMO_RATE_LIMITER) {
       return json({ error: 'Voice service is not configured.' }, 503, cors);
     }
@@ -57,6 +58,7 @@ export default {
     if (!validCode(request.headers.get('x-demo-code'), env.DEMO_ACCESS_CODE)) {
       return json({ error: 'Invalid demo access code.' }, 401, cors);
     }
+    if (url.pathname === '/memory') return memoryTurn(request, env, cors);
     if (url.pathname === '/turn') return pipelineTurn(request, env, cors);
     const agentName = url.searchParams.get('agent');
     const agent = Object.hasOwn(agents, agentName) ? agents[agentName] : null;
