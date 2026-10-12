@@ -16,3 +16,29 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 .conversation[data-agent] .message.assistant{background:var(--reply-surface);color:#243f3b}
 .conversation[data-agent] .message.user{background:var(--user-surface);border:1px solid var(--chat-border);color:#243f3b}
 .conversation[data-agent] .sender{color:var(--chat-accent)}
+
+/* Companion colors for buttons, the welcome icon, and its dotted route. */
+.conversation[data-agent="sage"]{--button-surface:#e7b98b;--button-hover:#dca674;--button-ink:#493324;--icon-light:#fff0d6;--icon-dark:#e0af7a;--route-color:#a87549;--selected-shadow:#94603c20}
+.conversation[data-agent="astra"]{--button-surface:#b6ceb0;--button-hover:#a0bf99;--button-ink:#294b35;--icon-light:#e5f0db;--icon-dark:#a0c19a;--route-color:#5d8558;--selected-shadow:#476e5320}
+.conversation[data-agent] .mode-switch{background:var(--chat-surface);border-color:var(--chat-border)}
+.conversation[data-agent] .mode-switch button{color:var(--chat-accent)}
+.conversation[data-agent] .mode-switch button.selected{background:var(--button-surface);color:var(--button-ink);box-shadow:0 2px 3px var(--selected-shadow)}
+.conversation[data-agent] .mode-switch button:hover:not(.selected){background:var(--reply-surface)}
+.conversation[data-agent] .record-button{background:var(--button-surface);color:var(--button-ink)}
+.conversation[data-agent] .record-button:hover{background:var(--button-hover)}
+.conversation[data-agent] .record-button.recording{background:var(--button-hover);color:var(--button-ink);box-shadow:0 0 0 3px var(--selected-shadow)}
+.conversation[data-agent] .tiny-orb{border-color:var(--chat-border);background:radial-gradient(circle at 30% 22%,var(--icon-light),var(--icon-dark))}
+.conversation[data-agent] .tiny-orb::before{color:var(--chat-accent)}
+.conversation[data-agent] .destination-dots span{border-color:var(--route-color)}
+.conversation[data-agent] .destination-dots span:last-child{background:var(--route-color)}
+.conversation[data-agent] .destination-dots i{border-color:var(--chat-border)}
+.conversation[data-agent] .live-dot{background:var(--chat-accent)}
+.conversation[data-agent] .text-button{color:var(--chat-accent)}
+.conversation[data-agent] .text-button:hover{color:var(--button-ink)}
+
+.scene-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.1);
+}
