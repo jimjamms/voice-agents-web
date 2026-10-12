@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../docs/app.js', import.meta.url), 'utf8');
-function setup() {
+function setup(frameTools = {}) {
   const elements = new Map(); let options; let counter = 0;
   function element(id) {
     return { id, children: [], listeners: {}, value: id === 'memory-mode' ? 'shared' : '', disabled: false,
@@ -20,7 +20,7 @@ function setup() {
   const transport = { isLocked: () => false, stop() {}, busy: false, active: false };
   const testWindow = { createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
   vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
-    window: testWindow });
+    window: testWindow, ...frameTools });
   return { get, options, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
@@ -72,4 +72,17 @@ test('Realtime transcript deltas update one bubble and completion saves one mess
   assert.equal(bubble.textContent, 'Visit Kyoto.');
   app.event({ type: 'response.output_audio_transcript.done', item_id: 'reply-1', transcript: 'Visit Kyoto.' });
   assert.equal(app.get('messages').children.length, 1); assert.equal(app.options.history().length, 1);
+});
+
+test('Realtime smooths a transcript burst and cancels queued frames at completion', () => {
+  const frames = new Map(); let next = 0;
+  const app = setup({ requestAnimationFrame(fn) { frames.set(++next, fn); return next; }, cancelAnimationFrame(id) { frames.delete(id); } });
+  const reply = 'Explore Kyoto temples and gardens at a relaxed pace.';
+  app.event({ type: 'response.output_audio_transcript.delta', item_id: 'smooth', delta: reply });
+  const bubble = app.get('messages').children.at(-1).children[1];
+  assert.equal(bubble.textContent, '');
+  const [id, tick] = frames.entries().next().value; frames.delete(id); tick(16);
+  assert.ok(bubble.textContent.length > 0 && bubble.textContent.length < reply.length);
+  app.event({ type: 'response.output_audio_transcript.done', item_id: 'smooth', transcript: reply });
+  assert.equal(bubble.textContent, reply); assert.equal(frames.size, 0);
 });

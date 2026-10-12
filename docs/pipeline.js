@@ -13,12 +13,14 @@
       this.chunks = []; this.timer = null; this.interval = null; this.audioUrl = null;
       this.request = null; this.generation = 0;
       this.playing = false; this.interruptStartedAt = null;
-      this.replyText = ''; this.replyDisplay = null;
+      this.replyText = ''; this.replyDisplay = null; this.replyCharacters = []; this.replyFrame = null; this.lastReplyCount = -1;
       for (const type of ['timeupdate', 'playing', 'seeked']) {
         this.options.playback.addEventListener(type, () => {
           if (this.options.isSelected()) this.revealReply();
         });
       }
+      this.options.playback.addEventListener('playing', () => this.startReplyFrames());
+      for (const type of ['pause', 'waiting']) this.options.playback.addEventListener(type, () => this.stopReplyFrames());
       this.options.playback.addEventListener('ended', () => {
         if (!this.options.isSelected()) return;
         this.finishReply();
@@ -42,7 +44,8 @@
       });
     }
     beginReply(text) {
-      this.replyText = text;
+      this.stopReplyFrames();
+      this.replyText = text; this.replyCharacters = Array.from(text); this.lastReplyCount = -1;
       this.replyDisplay = this.options.onReplyStart?.(text) || null;
       if (!this.replyDisplay) this.options.onMessage('assistant', text);
     }
@@ -51,11 +54,28 @@
       const { currentTime, duration } = this.options.playback;
       if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return;
       const ratio = Math.max(0, Math.min(1, currentTime / duration));
-      const words = this.replyText.match(/\S+\s*/g) || [];
-      const count = ratio > 0 ? Math.max(1, Math.floor(words.length * ratio)) : 0;
-      this.replyDisplay(words.slice(0, count).join('').trimEnd());
+      const count = Math.floor(this.replyCharacters.length * ratio);
+      if (count !== this.lastReplyCount) {
+        this.lastReplyCount = count;
+        this.replyDisplay(this.replyCharacters.slice(0, count).join(''));
+      }
+    }
+    startReplyFrames() {
+      this.stopReplyFrames();
+      if (!this.replyDisplay || typeof requestAnimationFrame !== 'function') return;
+      const tick = () => {
+        this.replyFrame = null;
+        if (!this.replyDisplay || !this.options.isSelected() || this.options.playback.paused) return;
+        this.revealReply(); this.replyFrame = requestAnimationFrame(tick);
+      };
+      this.replyFrame = requestAnimationFrame(tick);
+    }
+    stopReplyFrames() {
+      if (this.replyFrame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(this.replyFrame);
+      this.replyFrame = null;
     }
     finishReply() {
+      this.stopReplyFrames();
       // Keep the complete generated reply readable after playback or interruption.
       this.replyDisplay?.(this.replyText);
       this.replyDisplay = null; this.replyText = '';
