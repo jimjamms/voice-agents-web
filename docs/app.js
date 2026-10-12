@@ -53,7 +53,7 @@
       const elapsed = previous ? Math.min(50, now - previous) : 16;
       previous = now;
       const backlog = characters.length - visible;
-      visible = Math.min(characters.length, visible + Math.max(1, Math.floor(Math.max(80, backlog * 10) * elapsed / 1000)));
+      visible = Math.min(characters.length, visible + Math.max(1, Math.floor(Math.max(160, backlog * 18) * elapsed / 1000)));
       paint(characters.slice(0, visible).join(''));
       if (visible < characters.length) frame = requestAnimationFrame(tick);
     };

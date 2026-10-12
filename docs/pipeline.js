@@ -53,7 +53,7 @@
       if (!this.replyDisplay) return;
       const { currentTime, duration } = this.options.playback;
       if (!Number.isFinite(duration) || duration <= 0 || !Number.isFinite(currentTime)) return;
-      const ratio = Math.max(0, Math.min(1, currentTime / duration));
+      const ratio = Math.max(0, Math.min(1, currentTime * 1.2 / duration));
       const count = Math.floor(this.replyCharacters.length * ratio);
       if (count !== this.lastReplyCount) {
         this.lastReplyCount = count;

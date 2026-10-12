@@ -94,7 +94,7 @@ test('Recorded text follows audio position, ignores missing duration, and comple
   transport.beginReply('One two three four');
   events.timeupdate(); assert.equal(shown.length, 0);
   playback.duration = 4; playback.currentTime = 2; events.timeupdate();
-  assert.equal(shown.at(-1), 'One two three four'.slice(0, 9));
+  assert.equal(shown.at(-1), 'One two three four'.slice(0, Math.floor(18 * 0.5 * 1.2)));
   transport.stopPlayback(); assert.equal(shown.at(-1), 'One two three four');
   playback.currentTime = 3; events.timeupdate(); assert.equal(shown.at(-1), 'One two three four');
 });
