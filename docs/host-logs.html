@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f4f1e9">
   <title>Chat logs · Sage & Astra</title>
   <script src="config.js" defer></script>
-  <script src="host-logs.js?v=user-list-2" defer></script>
+  <script src="host-logs.js?v=row-delete-3" defer></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
     :root{font-family:'DM Sans',sans-serif;color:#294b3b;background:#f4f1e9;font-synthesis:none}
@@ -44,21 +44,16 @@
 footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.12em;color:#516a5a}
 @media(max-width:600px){.topbar{height:68px}}
 
-    .users-delete{margin-top:24px;padding-top:24px;border-top:1px solid #ddcabc}
-    .users-delete h3{font:800 18px Manrope,sans-serif;letter-spacing:-.03em;margin:0 0 10px}
-    .users-delete p{font-size:12px;line-height:1.7;color:#786c60;margin:0 0 20px}
-    .delete-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.delete-options{display:flex;flex-wrap:wrap;gap:18px;border:0;padding:0;margin:0 0 20px}
+.delete-options{display:flex;flex-wrap:wrap;gap:18px;border:0;padding:0;margin:0 0 20px}
     .delete-options legend{font-size:12px;font-weight:700;margin-bottom:12px}.delete-options label{display:flex;align-items:center;gap:8px;margin:0;font-weight:500}
     .delete-options input{width:16px;min-height:16px;height:16px;padding:0;accent-color:#94603c}
-    #delete-user{background:#f1ded0;border-color:#d8b49a;color:#804b33;max-width:300px}#delete-user:hover{background:#e9cbb7}
     #delete-status{margin:16px 0 0;overflow-wrap:anywhere}
-    @media(max-width:650px){.delete-grid{grid-template-columns:1fr;gap:0}#delete-user{max-width:none}}
 /* Center host panels with matching page gutters. */
 .shell{width:100%;max-width:1240px;margin-inline:auto;padding-inline:clamp(20px,4vw,48px)}
 .topbar,footer{width:100%;max-width:1120px;margin-inline:auto}
 .intro{width:100%;max-width:930px;margin-inline:auto}
 .host-card{width:100%;margin-inline:auto;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
-.archive,.export-panel,.delete-grid>*{min-width:0}
+.archive,.export-panel{min-width:0}
 @media(max-width:650px){.host-card{grid-template-columns:minmax(0,1fr)}}
 
 .users-card{width:100%;max-width:930px;margin:24px auto 0;padding:28px 32px;background:#fffaf1;border:1px solid #cad4bf;border-radius:16px;box-shadow:0 10px 30px #294d400b}
@@ -77,6 +72,13 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 #users-status{margin-top:12px;font-size:11px;color:#62745b}
 #users-more{max-width:220px;margin:12px auto 0;justify-content:center}
 @media(max-width:650px){.users-card{padding:25px}.users-toolbar{flex-direction:column;align-items:stretch}#load-users{width:100%}}
+
+.user-name-actions{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.user-name{min-width:0;overflow-wrap:anywhere}
+.users-table .user-delete-button{width:auto;flex-shrink:0;padding:7px 10px;background:#f1ded0;border-color:#d8b49a;color:#804b33;font-size:11px;white-space:nowrap}
+.users-table .user-delete-button:hover{background:#e9cbb7}
+.users-delete-options{padding:14px 16px;border:1px solid #ddcabc;border-radius:9px;background:#fff8ef;font-size:12px}
+.users-delete-options legend{padding:0 5px}
   </style>
 </head>
 <body>
@@ -130,28 +132,20 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 
       <section class="users-card" aria-labelledby="users-heading">
         <h2 id="users-heading">Saved users</h2>
-        <p>Find Name IDs with saved trip profiles or chat logs. Use an ID to fill the export and deletion fields.</p>
+        <p>Find Name IDs with saved trip profiles or chat logs. Use an ID for export, or delete data beside its name.</p>
         <form id="user-list-form" class="users-toolbar">
           <div class="field"><label for="user-search">Search Name IDs <span>optional</span></label><input id="user-search" type="search" maxlength="40" placeholder="Leave blank for everyone" autocomplete="off"></div>
           <button id="load-users" type="submit">Load users ↻</button>
         </form>
+        <fieldset class="delete-options users-delete-options"><legend>Data to delete with each user’s Delete button</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>
         <div class="users-table-wrap" tabindex="0" role="region" aria-label="Saved user list">
-          <table class="users-table"><thead><tr><th scope="col">Name ID</th><th scope="col">Chat turns</th><th scope="col">Last saved</th><th scope="col">Trip</th><th scope="col">Action</th></tr></thead>
+          <table class="users-table"><thead><tr><th scope="col">Name ID</th><th scope="col">Chat turns</th><th scope="col">Last saved</th><th scope="col">Trip</th><th scope="col">Export</th></tr></thead>
           <tbody id="users-rows"><tr><td colspan="5">Enter your host key above, then load users.</td></tr></tbody></table>
         </div>
         <p id="users-status" role="status" aria-live="polite"></p>
         <button id="users-more" type="button" hidden>Load more users</button>
 
-        <section class="users-delete" aria-labelledby="delete-heading">
-        <h3 id="delete-heading">Delete tester data</h3>
-        <p>Uses the private host key entered above. The selected saved data is erased. The tester can reuse the same name ID for a fresh trip. Older trip saves and queued logs are prevented from restoring the erased data.</p>
-        <form id="user-delete">
-          <div class="delete-grid"><div class="field"><label for="delete-name">Name ID</label><input id="delete-name" type="text" maxlength="40" placeholder="Exact tester name ID" autocomplete="off" required></div><div class="field"><label for="delete-confirm">Type the ID again to confirm</label><input id="delete-confirm" type="text" maxlength="40" autocomplete="off" required></div></div>
-          <fieldset class="delete-options"><legend>Data to delete</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>
-          <button id="delete-user" type="submit"><span>Delete selected data</span><span aria-hidden="true">×</span></button>
-          <p id="delete-status" role="status" aria-live="polite"></p>
-        </form>
-        </section>
+        <p id="delete-status" role="status" aria-live="polite"></p>
       </section>
     </main>
     <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>
