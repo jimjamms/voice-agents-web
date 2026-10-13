@@ -4,6 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { memoryContext, extractFact, sharedTurnContext } from '../worker/src/memory.mjs';
 import worker, { sessionConfig } from '../worker/src/index.mjs';
+import { notesTurn } from '../worker/src/notes.mjs';
 import agents from '../worker/src/agents.json' with { type: 'json' };
 const source = readFileSync(new URL('../docs/memory.js', import.meta.url), 'utf8');
 function browser(storage = new Map()) {
@@ -201,6 +202,7 @@ test('browser voice replies skip memory extraction and retain the configured GPT
     const body = JSON.parse(init.body);
     assert.equal(body.messages[0].content.startsWith('Extract'), false);
     assert.equal(body.model, 'gpt-6-astra');
+    assert.equal(body.reasoning_effort, 'low');
     return Response.json({ choices: [{ message: { content: 'What activity would you like in Tokyo?' } }] });
   };
   try {
@@ -212,5 +214,22 @@ test('browser voice replies skip memory extraction and retain the configured GPT
     assert.equal(response.status, 200); assert.equal(data.memoryDeferred, true); assert.equal(data.fact, null);
     assert.ok(data.audio); assert.equal(calls.length, 3);
     assert.equal(calls.filter(call => call.url.endsWith('/chat/completions')).length, 1);
+  } finally { globalThis.fetch = original; }
+});
+
+
+test('GPT-6 memory and checklist requests use low reasoning without changing the model', async () => {
+  const original = globalThis.fetch; const bodies = [];
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body); bodies.push(body);
+    const content = body.messages[0].content.startsWith('Extract') ? 'Jenny chose Japan.' : JSON.stringify({ notes: 'Need to know\n- Country: Japan', choices: { countries: ['Japan'], cities: [], activities: [] } });
+    return Response.json({ choices: [{ message: { content } }] });
+  };
+  try {
+    const env = { OPENAI_API_KEY: 'key', PIPELINE_CHAT_MODEL: 'gpt-6-astra' };
+    assert.equal(await extractFact(env, 'Sage', 'Jenny', 'Japan', 'Great.'), 'Jenny chose Japan.');
+    const response = await notesTurn(new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'Japan', reply: 'Great.', notes: '' }) }), env, {});
+    assert.equal(response.status, 200); assert.equal(bodies.length, 2);
+    for (const body of bodies) { assert.equal(body.model, 'gpt-6-astra'); assert.equal(body.reasoning_effort, 'low'); }
   } finally { globalThis.fetch = original; }
 });

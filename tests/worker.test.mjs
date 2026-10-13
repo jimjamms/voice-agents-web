@@ -31,6 +31,7 @@ test('passes only selected agent prompt, history roles and voice to OpenAI', asy
     assert.equal(data.audio, 'AQID'); assert.equal(calls.length, 3);
     const chat = JSON.parse(calls[1].init.body);
     assert.equal(chat.model, 'gpt-6-astra');
+    assert.equal(chat.reasoning_effort, 'low');
     assert.ok(chat.messages[0].content.startsWith(agentSettings.astra.prompt));
     assert.match(chat.messages[0].content, /Cross-agent memory is unavailable/);
     assert.deepEqual(chat.messages.map(m => m.role), ['system', 'user', 'user']);

@@ -1,3 +1,4 @@
+import { chatOptions } from './chat-options.mjs';
 import { memoryContext, extractFact, sharedTurnContext } from './memory.mjs';
 import pipelineAgents from './pipeline_agents.json' with { type: 'json' };
 
@@ -87,7 +88,7 @@ export async function pipelineTurn(request, env, cors) {
       const chat = await (await upstream('/chat/completions', {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra',
+          ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
           messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
             { role: 'user', content: transcript }],
         }),
