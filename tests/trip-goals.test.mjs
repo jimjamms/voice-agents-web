@@ -61,3 +61,22 @@ test('two cities require their own confirmed activities, with no guessed assignm
   assert.throws(() => normalizeChoices({ ...two, cityActivities: { Kyoto: '' } }));
   assert.deepEqual(normalizeChoices({ ...two, cityActivities: { tokyo: 'Food tour', KYOTO: 'Temple walk' } }).cityActivities, two.cityActivities);
 });
+
+
+test('first practical review belongs to Astra, survives a second city, and resets on revised budget', async () => {
+  const original = globalThis.fetch;
+  let generated = { ...complete, firstCityReviewed: 'Tokyo' };
+  globalThis.fetch = async () => Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'Need to know\n- Tokyo: Food tour', choices: generated }) } }] });
+  const send = async (agent, choices) => {
+    const request = new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent, userText: '9 days, 2500 USD per person.', reply: 'That first stop fits. Talk to Sage to choose your next city.', notes: '', choices }) });
+    return (await (await notesTurn(request, {}, {})).json()).choices;
+  };
+  try {
+    const first = { ...complete, cities: ['Tokyo'], firstCityReviewed: null };
+    assert.equal((await send('sage', first)).firstCityReviewed, null);
+    assert.equal((await send('astra', first)).firstCityReviewed, 'Tokyo');
+    assert.equal((await send('sage', { ...first, firstCityReviewed: 'Tokyo' })).firstCityReviewed, 'Tokyo');
+    generated = { ...generated, budget: { ...generated.budget, amount: 3000 } };
+    assert.equal((await send('sage', { ...first, firstCityReviewed: 'Tokyo' })).firstCityReviewed, null);
+  } finally { globalThis.fetch = original; }
+});

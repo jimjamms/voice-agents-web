@@ -271,12 +271,15 @@
     }
     async submit(blob, generation) {
       this.busy = true; this.notify();
+      this.status(blob ? 'Preparing your reply…' : 'Preparing your welcome…', 'Your agent will speak when the reply is ready.');
       this.request = new AbortController();
       const speaker = { name: this.options.speaker(), score: 1 };
       const selectedAgent = this.options.agent();
       const mode = this.options.memoryMode();
       const form = new FormData();
       form.set('agent', selectedAgent);
+      form.set('planning_round', this.options.planningRound?.() || '');
+      form.set('defer_memory', 'true');
       form.set('speaker', speaker.name);
       form.set('memory_mode', mode);
       form.set('memories', JSON.stringify(this.options.memories()));

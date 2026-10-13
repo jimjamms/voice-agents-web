@@ -31,7 +31,7 @@
     }
   }
   function refreshGoal() {
-    const { countries, cities, cityActivities = {}, budget, itinerary, finalized } = snapshot.choices;
+    const { countries, cities, cityActivities = {}, firstCityReviewed, budget, itinerary, finalized } = snapshot.choices;
     const covered = cities.filter(city => cityActivities[city]).length;
     const requirements = [
       ['country-count', countries.length >= 1, `Choose 1 country (${countries.length}/1)`],
@@ -45,8 +45,12 @@
       item.textContent = `${done ? '✓' : '○'} ${label}`;
       item.dataset.complete = String(done);
     }
+    document.querySelector('#goal-progress').textContent = `${requirements.filter(([, done]) => done).length} of 5 complete`;
     document.querySelector('#trip-goal-hint').textContent = snapshot.ready ? 'Your trip is ready. Continue to the form.' :
-      countries.length < 1 || cities.length < 2 ? 'Sage: choose your country and two cities.' :
+      countries.length < 1 || cities.length < 1 ? 'Sage: choose your country, first city, and an activity.' :
+      !cityActivities[cities[0]] ? `Sage: choose an activity in ${cities[0]}.` :
+      !firstCityReviewed ? 'Switch to Astra to check your first stop, timing, and budget.' :
+      cities.length < 2 ? 'Back to Sage: choose your second city and its activity.' :
       covered < cities.length ? `Sage: choose an activity in ${cities.filter(city => !cityActivities[city]).join(', ')}.` :
       !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review and approve your practical itinerary.';
     document.querySelector('#continue-review').hidden = !snapshot.ready;

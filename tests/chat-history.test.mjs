@@ -22,7 +22,7 @@ function setup(frameTools = {}) {
   const testWindow = { createTripCloud(value) { cloudOptions = value; return { async load() {} }; }, dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener(type, handler) { handlers[type] = handler; }, AgentMemory: { forget() { return true; } } };
   vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, Event, CustomEvent, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
     window: testWindow, ...frameTools });
-  return { get, options, transport, noteOptions, cloudOptions, emitted, windowEvent: type => handlers[type]?.(), event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
+  return { get, options, transport, noteOptions, cloudOptions, emitted, window: testWindow, windowEvent: type => handlers[type]?.(), event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
   const app = setup();
@@ -176,4 +176,32 @@ test('saved chat still receives one welcome when planning opens, and unlock is t
   app.windowEvent('trip-audio:unlock'); app.windowEvent('trip-planning:open'); app.windowEvent('trip-planning:open');
   assert.equal(unlocks, 1); assert.equal(welcomes, 1);
   assert.equal(app.options.history()[0].content, 'Existing trip question');
+});
+
+
+test('background memory does not delay the visible reply and saves to the original agent after switching', async () => {
+  let resolveMemory; const remembered = [], raw = [];
+  const app = setup({ fetch: () => new Promise(resolve => { resolveMemory = resolve; }) });
+  app.window.VOICE_DEMO_CONFIG = { apiBaseUrl: 'https://worker.test' };
+  app.get('access-code').value = 'demo'; app.change('speaker-name', 'Jenny');
+  app.window.AgentMemory.recordShared = (...args) => raw.push(args);
+  app.window.AgentMemory.remember = (...args) => remembered.push(args);
+  app.options.onTurn({ agent: 'sage', speaker: 'Jenny', mode: 'shared', transcript: 'Tokyo and Kyoto', reply: 'Which activities?', memoryDeferred: true });
+  app.options.onMessage('assistant', 'Which activities?');
+  assert.equal(raw.length, 1); assert.equal(remembered.length, 0);
+  assert.equal(app.options.history().at(-1).content, 'Which activities?');
+  app.click('switch-agent');
+  resolveMemory(Response.json({ fact: 'Jenny chose Tokyo and Kyoto.' }));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(remembered.length, 1); assert.equal(remembered[0][2], 'sage');
+  assert.equal(remembered[0][0], 'Jenny');
+});
+
+
+test('switch-back invitations highlight the next agent during the second discovery round', () => {
+  const app = setup(); app.click('astra');
+  app.options.onMessage('assistant', 'Your first stop fits your budget. Switch back to Sage to choose the second city.');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'true');
+  app.options.onMessage('assistant', 'Return to Sage to explore the next activity.');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'true');
 });

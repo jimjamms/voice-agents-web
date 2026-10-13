@@ -120,10 +120,30 @@ test('the form-return preference survives refresh and restores on a different de
 
 test('goal checklist shows the missing activity city and independent completion marks', () => {
   const page = setup(); page.get('speaker-name').value = 'Jenny';
-  page.event('trip-notes:updated', { key: 'jenny', notes: '', ready: false, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto'], activities: ['Food tour'], cityActivities: { Tokyo: 'Food tour' } } });
+  page.event('trip-notes:updated', { key: 'jenny', notes: '', ready: false, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto'], activities: ['Food tour'], cityActivities: { Tokyo: 'Food tour' }, firstCityReviewed: 'Tokyo' } });
   assert.equal(page.get('country-count').dataset.complete, 'true');
   assert.equal(page.get('city-count').dataset.complete, 'true');
   assert.equal(page.get('activity-count').dataset.complete, 'false');
   assert.match(page.get('activity-count').textContent, /1 activity per city \(1\/2 cities\)/);
   assert.match(page.get('trip-goal-hint').textContent, /Kyoto/);
+});
+
+
+test('next-step guidance alternates first Sage choices, Astra review, second Sage choices and final Astra plan', () => {
+  const page = setup(); page.get('speaker-name').value = 'Jenny';
+  const base = { countries: ['Japan'], cities: ['Tokyo'], activities: ['Food tour'], cityActivities: { Tokyo: 'Food tour' } };
+  const update = choices => page.event('trip-notes:updated', { key: 'jenny', notes: '', ready: false, choices });
+  update(base); assert.match(page.get('trip-goal-hint').textContent, /Switch to Astra.*first stop/);
+  update({ ...base, firstCityReviewed: 'Tokyo', budget: { amount: 2500, currency: 'USD', scope: 'per person' } });
+  assert.match(page.get('trip-goal-hint').textContent, /Back to Sage.*second city/);
+  update({ ...base, firstCityReviewed: 'Tokyo', cities: ['Tokyo', 'Kyoto'], cityActivities: { Tokyo: 'Food tour', Kyoto: 'Temple walk' }, budget: { amount: 2500, currency: 'USD', scope: 'per person' } });
+  assert.match(page.get('trip-goal-hint').textContent, /Astra.*approve/);
+  assert.match(page.get('goal-progress').textContent, /4 of 5 complete/);
+});
+
+test('the collapsible checklist lives before the workspace outside the notepad', () => {
+  const html = readFileSync(new URL('../docs/index.html', import.meta.url), 'utf8');
+  assert.ok(html.indexOf('planning-checklist') < html.indexOf('class="workspace"'));
+  assert.match(html, /planning-checklist[^]*?<details><summary>/);
+  assert.match(html, /trip-notepad" aria-labelledby="notes-heading"><div class="notes-head"/);
 });

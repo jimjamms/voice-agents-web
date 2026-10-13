@@ -35,6 +35,8 @@ export function normalizeChoices(value = { countries: [], cities: [], activities
       result.itinerary[field] = value.itinerary[field].trim();
     }
   }
+  result.firstCityReviewed = typeof value.firstCityReviewed === 'string' ?
+    result.cities.find(city => city.toLowerCase() === value.firstCityReviewed.trim().toLowerCase() && result.cityActivities[city]) || null : null;
   result.finalized = value.finalized === true;
   return result;
 }

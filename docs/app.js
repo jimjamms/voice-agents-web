@@ -74,7 +74,7 @@
   function highlightHandoff(reply) {
     const other = agent === 'sage' ? 'Astra' : 'Sage';
     const sentences = String(reply || '').split(/[.!?\n]+/);
-    const invitation = new RegExp(`\\b(?:switch(?:ing)?(?: over)? to|talk(?:ing)? (?:to|with)|speak(?:ing)? (?:to|with)|chat(?:ting)? (?:to|with)|ask|try|let|hand(?:ing)? (?:this |you )?(?:over )?to|recommend|suggest)\\b[^.!?]{0,65}\\b${other}\\b`, 'i');
+    const invitation = new RegExp(`\\b(?:switch(?:ing)?(?: back| over)? to|return(?:ing)? to|go(?:ing)? back to|talk(?:ing)? (?:to|with)|speak(?:ing)? (?:to|with)|chat(?:ting)? (?:to|with)|ask|try|let|hand(?:ing)? (?:this |you )?(?:over )?to|recommend|suggest)\\b[^.!?]{0,65}\\b${other}\\b`, 'i');
     const offer = new RegExp(`\\b${other}\\b[^.!?]{0,45}\\b(?:can help|could help|can finalize|can plan|can work|can check|is better|would be better|is best|would help)\\b`, 'i');
     const suggested = sentences.some(sentence =>
       !/\b(?:don't|do not|no need to|shouldn't|should not|needn't)\b/i.test(sentence) &&
@@ -90,6 +90,15 @@
       ...(speaker && { speaker: speaker.name, speaker_score: Math.round(speaker.score * 1000) / 1000 }) });
     return body;
   };
+  function planningRound() {
+    const choices = tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {};
+    const first = choices.cities?.[0];
+    if (!choices.countries?.length || !first || !choices.cityActivities?.[first]) return 'first-choice';
+    if (choices.finalized && choices.cities.length >= 2 && choices.cities.every(city => choices.cityActivities?.[city])) return 'final-plan';
+    if (!choices.firstCityReviewed) return 'first-review';
+    if (choices.cities.length < 2 || choices.cities.some(city => !choices.cityActivities?.[city])) return 'second-choice';
+    return 'final-plan';
+  }
   pipeline = window.createPipelineTransport({
     agent: () => agent, isSelected: () => engine === 'pipeline', isHandsFree: () => handsFree,
     history: () => history, code: () => codeInput.value.trim(),
@@ -97,6 +106,7 @@
     speaker: () => speakerName.value.trim() || 'Unknown', memoryMode: () => memoryMode.value,
     sharedTurns: () => memoryMode.value === 'shared' ? window.AgentMemory.recentShared?.(speakerName.value.trim()) || [] : [],
     memories: () => window.AgentMemory.entries(speakerName.value.trim(), memoryMode.value, agent),
+    planningRound,
     onTurn: saveTurn, onInterrupt: markInterrupted,
     playback, onStatus: setStatus, getStatus: () => status.textContent,
     onReplyStart: reply => {
@@ -129,6 +139,8 @@
   function syncControls() {
     document.querySelector('.conversation').dataset.agent = agent;
     document.querySelector('.trip-notepad').dataset.companion = agent;
+    const checklist = document.querySelector('.planning-checklist');
+    if (checklist) checklist.dataset.companion = agent;
     const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
     cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; card.dataset.speaking = String(card.dataset.agent === agent && (engine === 'pipeline' ? Boolean(pipeline.playing) : responseActive)); });
@@ -169,6 +181,7 @@
       speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
       agent_traits: turn.traits, interrupted: false, engine, ...turn });
     remoteLogger?.record(turns.at(-1));
+    if (turn.memoryDeferred && !turn.greeting) void extractTurnMemory(turn);
     if (turn.fact) {
       const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.fact);
       memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved.';
@@ -366,14 +379,20 @@
   async function rememberRealtime(reply) {
     const user = [...history].reverse().find(item => item.role === 'user');
     if (!user || !reply) return;
-    const memoryRevision = window.AgentMemory.revision?.(speakerName.value.trim()) || 0;
     const turn = { agent, speaker: speakerName.value.trim() || 'Unknown', mode: memoryMode.value, transcript: user.content, reply };
     saveTurn(turn);
+    await extractTurnMemory(turn);
+  }
+  async function extractTurnMemory(turn) {
+    const memoryRevision = window.AgentMemory.revision?.(turn.speaker) || 0;
+    const base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
+    const demoCode = codeInput.value.trim();
+    if (!base || !demoCode) return;
     if (turn.speaker.toLowerCase() === 'unknown' || deletedNames.has(turn.speaker.trim().toLowerCase())) return;
     try {
-      const response = await fetch(`${window.VOICE_DEMO_CONFIG.apiBaseUrl.replace(/\/$/, '')}/memory`, {
-        method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': codeInput.value.trim() },
-        body: JSON.stringify({ agent: turn.agent, speaker: turn.speaker, userText: turn.transcript.slice(0, 3500), reply: reply.slice(0, 3500) }),
+      const response = await fetch(`${base.replace(/\/$/, '')}/memory`, {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': demoCode },
+        body: JSON.stringify({ agent: turn.agent, speaker: turn.speaker, userText: turn.transcript.slice(0, 3500), reply: turn.reply.slice(0, 3500) }),
       });
       if (response.ok) {
         const { fact } = await response.json();

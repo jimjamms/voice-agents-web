@@ -44,6 +44,8 @@
         typeof budget.currency === 'string' && budget.currency.trim() && ['per person', 'whole trip'].includes(budget.scope) ? budget : null;
       result.itinerary = value.itinerary && ['timing', 'route', 'transport', 'lodging', 'costs'].every(
         field => typeof value.itinerary[field] === 'string' && value.itinerary[field].trim()) ? value.itinerary : null;
+      result.firstCityReviewed = typeof value.firstCityReviewed === 'string' ?
+        result.cities.find(city => city.toLowerCase() === value.firstCityReviewed.trim().toLowerCase() && result.cityActivities[city]) || null : null;
       result.finalized = value.finalized === true;
       return result;
     }

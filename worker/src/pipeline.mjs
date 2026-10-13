@@ -64,13 +64,16 @@ export async function pipelineTurn(request, env, cors) {
       try { sharedTurns = JSON.parse(rawSharedTurns); } catch {}
     }
     const recentContext = memoryMode === 'shared' ? sharedTurnContext(speaker, sharedTurns, agent.name) : '';
+    const rounds = { 'first-choice': 'Sage chooses the country, first city and its activity one question at a time.', 'first-review': 'Astra checks the first stop against budget and timing, then invites a return to Sage.', 'second-choice': 'Sage chooses the second city and its activity using the initial practical check, then invites Astra.', 'final-plan': 'Astra finalizes the full route and budget and asks for explicit approval.' };
+    const round = Object.hasOwn(rounds, form.get('planning_round')) ? rounds[form.get('planning_round')] : '';
+    const roundContext = round ? '\n\nCurrent planning round: ' + round + ' This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     let transcript = '', reply;
     if (greeting) {
       const returning = safeHistory(form.get('history')).length > 0;
-      reply = returning ? (name === 'sage' ? "Welcome back! It’s Sage. What would you like to explore for your trip today?" : "Welcome back. It’s Astra. What part of your itinerary would you like to work on?") : name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. What kind of trip sounds exciting to you?" : "Hi, I’m Astra. I’ll help turn your choices into a practical itinerary and budget. What would you like to finalize first?";
+      reply = returning ? (name === 'sage' ? "Welcome back! It’s Sage. What would you like to explore for your trip today?" : "Welcome back. It’s Astra. What part of your itinerary would you like to work on?") : name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. Which country would you like to visit?" : "Hi, I’m Astra. I’ll help check how your trip ideas fit your time and budget. What would you like to check first?";
     } else {
       const input = new FormData();
       input.set('file', audio, `turn.${format}`);
@@ -85,7 +88,7 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           model: env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra',
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
             { role: 'user', content: transcript }],
         }),
       })).json();

@@ -56,12 +56,14 @@ test('pipeline injects saved facts and extracts new ones with configured chat mo
   try {
     const fd = new FormData(); fd.set('agent', 'astra'); fd.set('speaker', 'Jenny');
     fd.set('memories', JSON.stringify([{ fact: 'Jenny likes games.', learned_by: 'Sage' }]));
+    fd.set('planning_round', 'first-review');
     fd.set('audio', new Blob(['audio'], { type: 'audio/webm' }), 'turn.webm');
     const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', VOICE_CHAT_MODEL: 'configured-model', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
     const response = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
     const data = await response.json();
     assert.equal(response.status, 200); assert.equal(data.fact, 'Jenny likes Hanabi.');
     const chat = JSON.parse(calls.find(call => call.url.endsWith('/chat/completions')).init.body);
+    assert.match(chat.messages[0].content, /Current planning round: Astra checks the first stop/);
     assert.equal(chat.model, 'configured-model'); assert.match(chat.messages[0].content, /Current memory mode: shared/); assert.match(chat.messages[1].content, /learned by Sage, not by you/);
     fd.set('memory_mode', 'isolated'); fd.set('memories', '[]');
     const isolatedResponse = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);

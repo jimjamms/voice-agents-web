@@ -176,3 +176,18 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 .setup-role:last-child strong{color:#293d31}
 .setup-role:last-child small,.setup-role:last-child .role-order{color:#36553f}
 .role-order{font-size:10px;font-weight:500;margin-left:6px;color:#94603c}
+
+/* Progress lives above the workspace, with details available on demand. */
+.planning-checklist{border:1px solid var(--note-border,#d3dccb);border-radius:12px;margin:0 0 22px;padding:14px 18px;background:var(--note-paper,#fffdf4)}
+.planning-checklist[data-companion="sage"]{--note-paper:#fff7ec;--note-header:#f8ecdc;--note-border:#dec6a7;--note-ink:#654c35;--note-accent:#94603c;--note-muted:#88735d}
+.planning-checklist[data-companion="astra"]{--note-paper:#f3f8ef;--note-header:#e9f0e3;--note-border:#b9ceb5;--note-ink:#36553f;--note-accent:#476e53;--note-muted:#73836b}
+.planning-checklist summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none}
+.planning-checklist summary::-webkit-details-marker{display:none}
+.planning-checklist summary::after{content:'⌄';margin-left:auto;color:var(--note-accent,#476e53)}
+.planning-checklist details[open] summary::after{content:'⌃'}
+#goal-progress{font-size:11px;color:var(--note-muted,#73836b)}
+.planning-checklist .goal-counts{grid-template-columns:repeat(5,minmax(0,1fr));margin:12px 0 0;font-size:11px}
+.planning-checklist #trip-goal-hint{margin-top:8px}
+.planning-checklist #continue-review{margin-top:10px;color:var(--note-accent,#476e53)}
+@media(max-width:850px){.planning-checklist .goal-counts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:500px){.planning-checklist .goal-counts{grid-template-columns:1fr}}
