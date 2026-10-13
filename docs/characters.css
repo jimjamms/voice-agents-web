@@ -1,0 +1,19 @@
+/* Original watercolor travel characters: Sage in vacation clothes, Astra in winter clothes. */
+.agent-options .agent-card{min-height:270px;padding:22px;isolation:isolate}
+.agent-portrait{position:absolute;right:-2px;bottom:-18px;width:180px;height:270px;object-fit:contain;object-position:center bottom;pointer-events:none;z-index:0;filter:drop-shadow(0 5px 8px #32483712)}
+.agent-options .agent-card strong{position:relative;margin-top:100px;z-index:1}
+.agent-options .agent-card small{position:relative;max-width:165px;margin:6px 0 0;z-index:1;font-size:11px}
+.agent-card .card-top{position:relative;z-index:2}
+.initial-option{display:grid;grid-template-columns:14px 52px minmax(0,1fr);align-items:center;gap:9px;padding:12px}
+.initial-option input{margin:0}
+.setup-portrait{width:52px;height:76px;object-fit:cover;object-position:center 15%;border-radius:12px;background:#ecd7b6}
+.initial-option:has(input[value="astra"]) .setup-portrait{background:#d7e4cf}
+.welcome-avatar{height:78px;width:78px;border-radius:50%;overflow:hidden;margin:0 auto 14px;background:#f0d5b6;border:1px solid #dec6a7}
+.welcome-avatar img{display:block;width:100%;height:116px;object-fit:cover;object-position:center top}
+.conversation[data-agent="astra"] .welcome-avatar{background:#d6e6d2;border-color:#b9ceb5}
+/* Let the chat fill spare height above the controls, rather than below them. */
+.conversation>.messages{flex:1 1 275px;max-height:none;min-height:275px;overflow-y:auto}
+.conversation>.controls,.conversation>.conversation-head{flex-shrink:0}
+@media(min-width:851px) and (max-width:1050px){.agent-portrait{width:145px;height:250px;right:-8px}.agent-options .agent-card small{max-width:135px}}
+@media(max-width:600px){.initial-option{grid-template-columns:13px 40px minmax(0,1fr);gap:7px;padding:10px 8px}.setup-portrait{width:40px;height:65px}.initial-option strong{font-size:13px}.initial-option small{font-size:9px}.agent-options .agent-card{min-height:250px;padding:20px}.agent-portrait{width:165px;height:250px}.agent-options .agent-card strong{margin-top:85px}.agent-options .agent-card small{max-width:170px}}
+@media(max-width:370px){.initial-options{grid-template-columns:1fr}.initial-option{grid-template-columns:14px 45px minmax(0,1fr)}.agent-portrait{width:145px}.agent-options .agent-card small{max-width:145px}}
