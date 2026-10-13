@@ -6,10 +6,7 @@
       this.options = options; this.queue = Promise.resolve(); this.revisions = new Map(); this.epochs = new Map();
       try { this.saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { this.saved = {}; }
       if (!this.saved || typeof this.saved !== 'object' || Array.isArray(this.saved)) this.saved = {};
-      options.textarea.addEventListener('input', () => {
-        const key = this.key(); this.bump(key);
-        this.saved[key] = options.textarea.value; this.persist(key);
-      });
+      options.textarea.readOnly = true;
       options.clear.addEventListener('click', () => {
         const key = this.key(); this.bump(key); this.epochs.set(key, (this.epochs.get(key) || 0) + 1);
         this.saved[key] = ''; options.textarea.value = ''; this.persist(key);
@@ -29,7 +26,7 @@
       try { localStorage.setItem(STORE, JSON.stringify(this.saved)); this.status('Saved in this browser.', key); }
       catch { this.status('Saved for this visit; browser storage is unavailable.', key); }
     }
-    refresh() { this.options.textarea.value = this.text(this.key()); this.status('Only the important trip details. You can edit them.'); }
+    refresh() { this.options.textarea.value = this.text(this.key()); this.status('Automatically updated with important trip details.'); }
     update(turn) {
       const key = this.key(turn.speaker || 'Unknown'); const epoch = this.epochs.get(key) || 0;
       const base = this.options.base(); const code = this.options.code();
@@ -51,7 +48,7 @@
           }
           this.saved[key] = result.notes; this.bump(key); this.persist(key);
           if (key === this.key()) this.options.textarea.value = result.notes;
-        } catch { this.status('Could not auto-update. You can still edit your notes.', key); }
+        } catch { this.status('Could not auto-update. Your saved notes are unchanged.', key); }
         finally { clearTimeout(timer); }
       });
       return this.queue;

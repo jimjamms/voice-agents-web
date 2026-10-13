@@ -11,7 +11,7 @@ function setup(storage = new Map(), fetcher = async () => Response.json({ notes:
   const context = { window: {}, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) }, fetch: fetcher, AbortController, setTimeout, clearTimeout };
   vm.runInNewContext(source, context);
   const notes = context.window.createTripNotes({ textarea, status, clear, copy, speaker: () => speaker, base: () => 'https://worker.test', code: () => 'test-code' });
-  return { notes, textarea, status, clear, context, name(value) { speaker = value; notes.refresh(); }, edit(value) { textarea.value = value; textarea.listeners.input(); } };
+  return { notes, textarea, status, clear, context, name(value) { speaker = value; notes.refresh(); }, edit(value) { textarea.value = value; notes.saved[notes.key()] = value; notes.bump(notes.key()); notes.persist(notes.key()); } };
 }
 const turn = { agent: 'sage', speaker: 'Jenny', transcript: 'I chose Kyoto.', reply: 'A four-day trip could work.' };
 test('notepad persists by speaker and combines both agent turns in order', async () => {
@@ -24,7 +24,7 @@ test('notepad persists by speaker and combines both agent turns in order', async
   reload.name('Other'); assert.equal(reload.textarea.value, '');
   reload.name('JENNY'); assert.equal(reload.textarea.value, app.textarea.value);
 });
-test('a manual edit during extraction is preserved', async () => {
+test('a newer saved version during extraction is preserved', async () => {
   let release, started;
   const ready = new Promise(resolve => { started = resolve; });
   const app = setup(new Map(), () => { started(); return new Promise(resolve => { release = resolve; }); });
@@ -72,4 +72,10 @@ test('notes extraction distinguishes suggestions from confirmed plans and valida
 test('notes endpoint rejects oversized notes', async () => {
   const response = await notesTurn(new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'Hi', reply: 'Hello', notes: 'x'.repeat(6001) }) }), {}, {});
   assert.equal(response.status, 400);
+});
+
+test('notepad is read-only and has no user edit listener', () => {
+  const app = setup();
+  assert.equal(app.textarea.readOnly, true);
+  assert.equal(app.textarea.listeners.input, undefined);
 });
