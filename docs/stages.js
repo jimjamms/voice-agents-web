@@ -61,7 +61,7 @@
     const start = document.querySelector('#start-planning');
     if (start.disabled) return;
     start.disabled = true;
-    const fields = [...form.querySelectorAll('input')];
+    const fields = [...form.querySelectorAll('input')].filter(field => !field.disabled);
     fields.forEach(field => { field.disabled = true; });
     const loginStatus = document.querySelector('#profile-login-status');
     try {

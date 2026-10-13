@@ -6,7 +6,8 @@ function setup(config = {}, storage = new Map()) {
   const items = new Map(), emitted = [], handlers = {}; let chosen = '';
   const get = id => { if (!items.has(id)) items.set(id, { hidden: false, value: '', checked: false, dataset: {}, listeners: {}, attrs: {}, classList: { toggle() {} }, addEventListener(type, fn) { this.listeners[type] = fn; }, setAttribute(key, value) { this.attrs[key] = value; }, removeAttribute(key) { delete this.attrs[key]; }, setCustomValidity(value) { this.error = value; }, dispatchEvent(event) { this.listeners[event.type]?.(event); }, focus() { this.focused = true; } }); return items.get(id); };
   const form = get('trip-setup'); form.dataset.companion = 'sage';
-  form.querySelectorAll = () => [get('speaker-name'), get('access-code')];
+  get('sage-radio').disabled = get('astra-radio').disabled = true;
+  form.querySelectorAll = () => [get('speaker-name'), get('access-code'), get('sage-radio'), get('astra-radio')];
   form.reportValidity = () => !get('speaker-name').error && !get('access-code').error;
   const document = { body: { dataset: { stage: 'setup' } }, querySelector(selector) {
     if (selector === '[data-agent].active') return { dataset: { agent: chosen || 'sage' } };
@@ -30,6 +31,8 @@ test('setup always opens Sage and focuses the planning heading', () => {
   assert.equal(page.get('planning-stage').hidden, false); assert.equal(page.get('traveler-title').textContent, 'Jenny’s trip');
   assert.equal(page.get('traveler-title').focused, true); assert.equal(page.get('access-code').value, 'demo');
   assert.deepEqual(page.emitted, ['trip-planning:open']);
+  assert.equal(page.get('sage-radio').disabled, true);
+  assert.equal(page.get('astra-radio').disabled, true);
 });
 test('Change setup from Astra preserves Sage setup and restarts with Sage', () => {
   const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo';

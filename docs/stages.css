@@ -158,5 +158,5 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 }
 @media(prefers-reduced-motion:reduce){#planning-stage .switch-agent-button:disabled::after{animation:none}}
 
-/* Setup introduces both roles; every planning session opens with Sage. */
-.setup-companion{cursor:default}
+/* The original companion cards introduce the roles; Sage always starts. */
+.initial-option:has(input:disabled){cursor:default}
