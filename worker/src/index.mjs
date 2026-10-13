@@ -1,4 +1,5 @@
 import agents from './agents.json' with { type: 'json' };
+import { saveLogs, exportLogs } from './logs.mjs';
 import { notesTurn } from './notes.mjs';
 import { memoryTurn } from './memory.mjs';
 import { pipelineTurn } from './pipeline.mjs';
@@ -7,8 +8,8 @@ const REALTIME = 'https://api.openai.com/v1/realtime/calls';
 const MAX_SDP_BYTES = 32_000;
 const corsFor = origin => ({
   'access-control-allow-origin': origin,
-  'access-control-allow-headers': 'content-type, x-demo-code',
-  'access-control-allow-methods': 'POST, OPTIONS',
+  'access-control-allow-headers': 'content-type, x-demo-code, authorization',
+  'access-control-allow-methods': 'GET, POST, OPTIONS',
   'cache-control': 'no-store',
   'vary': 'Origin',
 });
@@ -44,21 +45,27 @@ export default {
       return json({ status: 'ok', modes: ['realtime', 'pipeline'] }, 200, { 'cache-control': 'no-store' });
     }
     const allowedOrigin = env.PUBLIC_ORIGIN?.replace(/\/$/, '');
+    if (url.pathname === '/logs/export' && request.method === 'GET') {
+      const origin = request.headers.get('origin');
+      if (origin && origin !== allowedOrigin) return json({ error: 'Origin not allowed.' }, 403);
+      return exportLogs(request, env, origin ? corsFor(allowedOrigin) : {});
+    }
     if (!allowedOrigin || request.headers.get('origin') !== allowedOrigin) {
       return json({ error: 'Origin not allowed.' }, 403);
     }
     const cors = corsFor(allowedOrigin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (!['/session', '/turn', '/memory', '/notes'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
+    if (!['/session', '/turn', '/memory', '/notes', '/logs'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
     if (!env.OPENAI_API_KEY || !env.DEMO_ACCESS_CODE || !env.DEMO_RATE_LIMITER) {
       return json({ error: 'Voice service is not configured.' }, 503, cors);
     }
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: url.pathname === '/notes' ? `${ip}:notes` : ip });
+    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: ['/notes', '/logs'].includes(url.pathname) ? `${ip}:${url.pathname.slice(1)}` : ip });
     if (!success) return json({ error: 'Too many new sessions. Wait a minute and try again.' }, 429, cors);
     if (!validCode(request.headers.get('x-demo-code'), env.DEMO_ACCESS_CODE)) {
       return json({ error: 'Invalid demo access code.' }, 401, cors);
     }
+    if (url.pathname === '/logs') return saveLogs(request, env, cors);
     if (url.pathname === '/notes') return notesTurn(request, env, cors);
     if (url.pathname === '/memory') return memoryTurn(request, env, cors);
     if (url.pathname === '/turn') return pipelineTurn(request, env, cors);
