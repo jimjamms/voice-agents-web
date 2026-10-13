@@ -515,21 +515,11 @@
       const planning = document.querySelector('#planning-stage');
       const workspace = document.querySelector('.workspace');
       const chooser = document.querySelector('.chooser');
-      const controls = document.querySelector('.controls');
-      const record = document.querySelector('.record-row');
-      const textChat = document.querySelector('#text-chat');
-      const memoryControls = document.querySelector('#speaker-controls');
       if (isMobile) {
         document.querySelector('#mobile-trip-details').append(checklist, notes);
-        controls.insertBefore(record, controls.firstChild);
-        controls.insertBefore(textChat, record.nextSibling);
-        document.querySelector('#mobile-memory-settings').append(memoryControls);
       } else {
         planning.insertBefore(checklist, workspace);
         chooser.insertBefore(notes, document.querySelector('.agent-options'));
-        controls.insertBefore(record, document.querySelector('#disconnect'));
-        controls.insertBefore(textChat, record);
-        controls.insertBefore(memoryControls, document.querySelector('.mode-row'));
       }
       currentMobileLayout = isMobile;
     }
@@ -557,6 +547,12 @@
   });
   notesToggle.addEventListener('click', () => { mobileNotesOpen = !mobileNotesOpen; syncMobileNotes(); });
   mobileLayout?.addEventListener?.('change', syncMobileNotes);
+  // Keep primary conversation actions ahead of optional settings on both layouts.
+  const conversationControls = document.querySelector('.controls');
+  const recordRow = document.querySelector('.record-row');
+  conversationControls.insertBefore(recordRow, conversationControls.firstChild);
+  conversationControls.insertBefore(document.querySelector('#text-chat'), recordRow.nextSibling);
+  document.querySelector('#mobile-memory-settings').append(document.querySelector('#speaker-controls'));
   syncMobileNotes();
   syncControls();
   document.addEventListener('keydown', event => {

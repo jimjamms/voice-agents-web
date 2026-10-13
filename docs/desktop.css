@@ -1,0 +1,72 @@
+/* Desktop refinements only; phone and tablet layouts remain in mobile.css. */
+@media(min-width:851px){
+  .shell{max-width:1420px;padding-left:clamp(28px,4vw,60px);padding-right:clamp(28px,4vw,60px)}
+  body[data-stage="planning"] .topbar{height:72px}
+  body[data-stage="planning"] .stage-progress{max-width:640px;margin:20px auto 24px;justify-content:center;gap:18px;font-size:12px}
+  .stage-progress>span:not(.stage-line){padding:7px 10px;border-radius:8px}
+  .stage-progress>span[aria-current="step"]{background:#fffdf7;box-shadow:0 2px 8px #294d4010;font-weight:700}
+  .planning-toolbar{margin-bottom:18px}
+  .planning-toolbar h2{font-size:28px}
+  #change-setup{padding:10px 14px;border:1px solid var(--line);border-radius:9px;background:#fffdf7;font-size:12px}
+  .planning-checklist{padding:16px 18px;margin-bottom:24px}
+  .planning-checklist .goal-counts{gap:8px;font-size:12px}
+  .planning-checklist .goal-counts span{padding:10px 12px}
+  .planning-checklist summary:focus-visible{outline:2px solid var(--note-accent,#476e53);outline-offset:5px;border-radius:5px}
+  .planning-checklist #continue-review{display:inline-flex;align-items:center;min-height:40px;padding:10px 16px;border-radius:8px;background:var(--note-accent,#476e53);color:#fffdf7;font-weight:700}
+  .planning-checklist #continue-review:hover{filter:brightness(.94);text-decoration:none}
+  #planning-stage .workspace{grid-template-columns:minmax(300px,350px) minmax(0,1fr);gap:28px}
+  #planning-stage .chooser{gap:16px}
+  #planning-stage .notes-head{padding:14px 18px}
+  #planning-stage .notes-head h2{font-size:16px}
+  #planning-stage .notes-content{height:clamp(240px,32vh,340px);max-height:480px;padding:18px;font-size:14px;line-height:28px}
+  #planning-stage .trip-notepad>small{font-size:11px;padding:10px 18px;line-height:1.6}
+  #planning-stage .agent-options{gap:14px}
+  #planning-stage .agent-options .agent-card{min-height:220px;padding:22px}
+  #planning-stage .agent-card strong{font-size:32px;margin-top:54px;max-width:calc(100% - 146px)}
+  #planning-stage .agent-card small{max-width:calc(100% - 146px);font-size:12px;line-height:1.6}
+  #planning-stage .agent-card .agent-mascot{width:174px;height:184px;right:3px;top:23px}
+  #planning-stage .agent-card::after{width:92px;height:11px;right:41px;bottom:18px}
+  #planning-stage .switch-agent-button{min-height:48px;padding:14px 18px;font-size:13px;border-radius:10px}
+  .conversation-head{min-height:62px;height:auto;padding:12px 22px;font-size:14px}
+  #reset{font-size:12px}
+  .conversation>.messages{flex:0 0 auto;height:clamp(280px,40vh,460px);min-height:280px;max-height:none;padding:24px;gap:18px;overscroll-behavior-y:contain}
+  .message{max-width:88%;padding:13px 16px;font-size:15px;line-height:1.7}
+  .message .sender{font-size:10px;letter-spacing:.08em}
+  .controls{padding:18px 22px 16px}
+  .controls>.record-row{padding-top:0;margin-bottom:16px;gap:16px}
+  .record-button{min-height:48px;padding:14px 20px;font-size:14px}
+  .record-help>span{font-size:12px}
+  .record-help small{font-size:11px}
+  .text-chat{margin:0;padding-bottom:0;border-bottom:0}
+  #chat-text{font-size:15px;line-height:1.6;min-height:60px;max-height:160px}
+  #chat-text:focus-visible{outline:2px solid var(--chat-accent);outline-offset:2px}
+  #send-text{min-height:44px;padding:12px 20px;font-size:13px}
+  .text-chat-meta{font-size:11px}
+  #mobile-memory-settings{display:block;margin-top:14px;padding-top:4px;border-top:1px dashed var(--chat-border,var(--line));color:var(--chat-accent,var(--ink))}
+  #mobile-memory-settings summary{display:flex;align-items:center;justify-content:space-between;min-height:36px;cursor:pointer;font-size:12px;font-weight:600;list-style:none}
+  #mobile-memory-settings summary::-webkit-details-marker{display:none}
+  #mobile-memory-settings summary::after{content:'⌄';font-size:18px}
+  #mobile-memory-settings[open] summary::after{content:'⌃'}
+  #mobile-memory-settings summary:focus-visible{outline:2px solid var(--chat-accent);outline-offset:3px;border-radius:4px}
+  #mobile-memory-settings .speaker-controls{padding:6px 0 4px}
+  .memory-row{font-size:12px}
+  .memory-detail small{font-size:11px}
+  #planning-stage .footnote{display:grid;grid-template-columns:minmax(0,1fr) minmax(150px,240px);gap:4px 24px;align-items:center;padding:16px 20px;margin:24px 0}
+  #planning-stage .footnote p{grid-row:span 2;max-width:none;font-size:11px}
+  #planning-stage .footnote #cloud-status,#planning-stage .footnote #host-log-status{font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+  .setup-card{padding:30px 36px}
+  .setup-field input{min-height:46px;font-size:14px}
+  .setup-role{padding:18px 16px}
+  .setup-role small{font-size:12px}
+  .setup-data-note{font-size:11px}
+  .setup-next{min-height:48px;font-size:14px}
+}
+@media(min-width:851px) and (max-width:1050px){
+  #planning-stage .workspace{grid-template-columns:300px minmax(0,1fr);gap:20px}
+  #planning-stage .agent-card .agent-mascot{width:150px;height:166px;right:0;top:34px}
+  #planning-stage .agent-card strong,#planning-stage .agent-card small{max-width:calc(100% - 130px)}
+  #planning-stage .agent-card::after{width:82px;right:35px}
+  #planning-stage .footnote{grid-template-columns:minmax(0,1fr)}
+  #planning-stage .footnote p{grid-row:auto}
+  #planning-stage .footnote #cloud-status,#planning-stage .footnote #host-log-status{padding-left:35px}
+}
