@@ -33,3 +33,19 @@
 #planning-stage .agent-card .select-indicator{color:#fff4d9}
 #planning-stage .agent-card small{color:inherit;opacity:.9}
 #planning-stage .agent-card.active{box-shadow:0 0 0 3px #314b3520,0 10px 25px #18312720}
+
+/* Tint the whole card, including the portrait, with a translucent color layer. */
+#planning-stage .agent-card.sage{background:linear-gradient(150deg,#f2dfbb,#e5c194);border-color:#cbccb7;color:#243f3b}
+#planning-stage .agent-card.astra{background:linear-gradient(145deg,#deeadb,#b9cebf);border-color:#cbccb7;color:#243f3b}
+#planning-stage .agent-card::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;background:rgba(144,84,47,.16)}
+#planning-stage .agent-card.astra::after{background:rgba(31,87,65,.18)}
+#planning-stage .agent-card .select-indicator{color:#275d52}
+
+/* Closer portraits, with a soft fade protecting the text on the left. */
+#planning-stage .agent-portrait{width:285px;height:428px;top:10px;right:-38px;bottom:auto}
+#planning-stage .agent-card::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(242,223,187,.95) 0%,rgba(242,223,187,.83) 30%,rgba(242,223,187,.25) 57%,transparent 76%)}
+#planning-stage .agent-card.astra::before{background:linear-gradient(90deg,rgba(222,234,219,.95) 0%,rgba(222,234,219,.83) 30%,rgba(222,234,219,.25) 57%,transparent 76%)}
+#planning-stage .agent-card strong,#planning-stage .agent-card small{position:relative;z-index:2}
+@media(min-width:851px) and (max-width:1050px){#planning-stage .agent-portrait{width:265px;height:398px;right:-52px;top:12px}}
+@media(max-width:600px){#planning-stage .agent-portrait{width:275px;height:413px;right:-40px;top:8px}}
+@media(max-width:370px){#planning-stage .agent-portrait{width:255px;height:383px;right:-50px;top:10px}}

@@ -180,7 +180,7 @@
       return;
     }
     const empty = document.createElement('div'); empty.className = 'empty-state';
-    empty.innerHTML = `<div class="welcome-avatar" aria-hidden="true"><img src="assets/${agent}-character.png" alt=""></div><div class="destination-dots" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><p>Where would you like to go?</p><span>Tell ${agent === 'sage' ? 'Sage what kind of trip you have in mind.' : 'Astra your destination, dates, or chosen ideas.'}</span>`;
+    empty.innerHTML = `<div class="destination-dots" aria-hidden="true"><span></span><i></i><span></span><i></i><span></span></div><p>Where would you like to go?</p><span>Tell ${agent === 'sage' ? 'Sage what kind of trip you have in mind.' : 'Astra your destination, dates, or chosen ideas.'}</span>`;
     messages.append(empty);
   }
   function switchConversation() {
