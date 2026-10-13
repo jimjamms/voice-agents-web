@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../docs/app.js', import.meta.url), 'utf8');
 function setup(frameTools = {}) {
-  const elements = new Map(); let options, noteOptions, cloudOptions; let counter = 0; const emitted = [];
+  const elements = new Map(); let options, noteOptions, cloudOptions; let counter = 0; const emitted = []; const handlers = {};
   function element(id) {
     return { id, children: [], listeners: {}, value: id === 'memory-mode' ? 'shared' : '', disabled: false,
       dataset: {}, scrollTop: 0, scrollHeight: 100, classList: { toggle() {}, remove() {} },
@@ -19,10 +19,10 @@ function setup(frameTools = {}) {
   const document = { body: { dataset: { stage: 'planning' } }, querySelector: selector => get(selector.slice(1)), querySelectorAll: () => cards,
     createElement: () => element('new'), addEventListener() {} };
   const transport = { isLocked: () => false, stop() {}, busy: false, active: false };
-  const testWindow = { createTripCloud(value) { cloudOptions = value; return { async load() {} }; }, dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
+  const testWindow = { createTripCloud(value) { cloudOptions = value; return { async load() {} }; }, dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener(type, handler) { handlers[type] = handler; }, AgentMemory: { forget() { return true; } } };
   vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, Event, CustomEvent, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
     window: testWindow, ...frameTools });
-  return { get, options, transport, noteOptions, cloudOptions, emitted, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
+  return { get, options, transport, noteOptions, cloudOptions, emitted, windowEvent: type => handlers[type]?.(), event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
   const app = setup();
@@ -150,4 +150,15 @@ test('switching cannot cancel a recorded turn before its new shared information 
   app.transport.playing = true; app.options.onState(); assert.equal(app.get('switch-agent').disabled, false);
   app.transport.busy = false; app.transport.playing = false; app.options.onState();
   app.click('switch-agent'); assert.equal(app.get('conversation').dataset.agent, 'astra');
+});
+
+
+test('agents greet on first entry only and restored conversations do not repeat introductions', () => {
+  const app = setup(); const greetings = [];
+  app.transport.greet = () => { greetings.push(app.options.agent()); app.options.onMessage('assistant', 'Hello, let’s plan your trip.'); };
+  app.windowEvent('trip-planning:open');
+  assert.deepEqual(greetings, ['sage']);
+  app.click('switch-agent'); assert.deepEqual(greetings, ['sage', 'astra']);
+  app.click('switch-agent'); app.windowEvent('trip-planning:open');
+  assert.deepEqual(greetings, ['sage', 'astra']);
 });

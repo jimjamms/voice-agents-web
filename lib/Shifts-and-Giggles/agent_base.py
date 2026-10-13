@@ -80,6 +80,11 @@ import tempfile
 import threading
 import subprocess
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from getpass import getpass
+from urllib.parse import urlparse
+from travel_state import TravelState, WorkerClient, CloudError, name_id, trip_ready
+from travel_prompts import TRIP_COMPLETION_GOAL, FACT_PROMPT
 from xml.sax.saxutils import escape as xml_escape
 
 import numpy as np
@@ -171,10 +176,10 @@ TRAIT_DESCRIPTIONS = {
 }
 
 
-TRIP_PLANNING_GUIDANCE = "Help the user plan a trip collaboratively while keeping each agent's distinct goal. Give concise spoken replies focused on the next useful step. Make handoffs purposeful: explain the specific decision or result the other agent can help with. Follow the current memory-mode handoff instruction; provide a repeatable summary only when memories are isolated or unavailable. Offer a handoff when a stage is complete or the other agent's specialty is needed, not after every reply; do not force the user to switch or withhold a useful answer. Use remembered preferences and confirmed plans when available. Shared memory contains selected facts, not the complete other agent's conversation, and separate memory does not transfer facts between agents. Do not claim to have sent a brief, read the other chat, or automatically switched agents. If needed details are absent in shared mode, ask only for the specific missing details. In isolated or unavailable mode, ask for a brief summary if needed. Distinguish rough cost and travel-time estimates from verified details. You have no live browsing or booking tools: never claim to have checked current prices, schedules, opening hours, availability, entry rules, or completed a booking. Identify what the user should verify before finalizing."
+TRIP_PLANNING_GUIDANCE = "Help the user plan a trip collaboratively while keeping each agent's distinct goal. Give concise spoken replies focused on the next useful step. Make handoffs purposeful: explain the specific decision or result the other agent can help with. Follow the current memory-mode handoff instruction; provide a repeatable summary only when memories are isolated or unavailable. Offer a handoff when a stage is complete or the other agent's specialty is needed, not after every reply; do not force the user to switch or withhold a useful answer. Use remembered preferences and confirmed plans when available. Shared memory contains saved facts and recent shared exchanges, and separate memory does not transfer facts between agents. Do not claim to have read the entire other chat or automatically switched agents. Recent shared exchanges are available only in shared mode; attribute them honestly. If needed details are absent in shared mode, ask only for the specific missing details. In isolated or unavailable mode, ask for a brief summary if needed. Distinguish rough cost and travel-time estimates from verified details. You have no live browsing or booking tools: never claim to have checked current prices, schedules, opening hours, availability, entry rules, or completed a booking. Identify what the user should verify before finalizing."
 
 
-HANDOFF_INSTRUCTIONS = {'shared': 'Current memory mode: shared. When handing off, suggest switching to the other agent and state what it can help with. Do not give a message to repeat or copy, and do not ask the user to relay the entire trip brief. The receiving agent should use available saved facts and ask only for specific missing details. Shared memory contains selected facts, so do not claim the complete brief or chat was transferred.', 'isolated': 'Current memory mode: isolated. The agents do not share memories. When a handoff is useful, provide a short summary of confirmed trip details the user can repeat or copy to the other agent. Explain briefly that the other agent needs those details. The receiving agent must use its own conversation or memories and ask for a brief summary if needed.', 'disabled': 'Cross-agent memory is unavailable for this speaker. When a handoff is useful, offer a short summary of confirmed trip details the user can repeat or copy. Do not claim those details will be remembered or transferred automatically.'}
+HANDOFF_INSTRUCTIONS = {'shared': 'Current memory mode: shared. When handing off, suggest switching to the other agent and state what it can help with. Do not give a message to repeat or copy, and do not ask the user to relay the entire trip brief. The receiving agent should use available saved facts and ask only for specific missing details. Recent shared exchanges and saved facts are available automatically. Use the latest user corrections and do not ask for details already present. Do not claim access to the entire other chat.', 'isolated': 'Current memory mode: isolated. The agents do not share memories. When a handoff is useful, provide a short summary of confirmed trip details the user can repeat or copy to the other agent. Explain briefly that the other agent needs those details. The receiving agent must use its own conversation or memories and ask for a brief summary if needed.', 'disabled': 'Cross-agent memory is unavailable for this speaker. When a handoff is useful, offer a short summary of confirmed trip details the user can repeat or copy. Do not claim those details will be remembered or transferred automatically.'}
 
 
 def build_system_prompt(name: str, traits: dict, role_instructions: str = "") -> str:
@@ -191,11 +196,11 @@ length, energy, and how you react emotionally -- not just what you say, but
 how you say it.
 
 You are speaking out loud in a voice conversation, so:
-- Keep responses conversational and reasonably concise.
+- Keep normal replies to 1–3 short sentences, about 25–55 words. Ask at most one useful question per turn. Avoid repeating the user’s message, recapping known details, or adding long introductions. Offer at most two ideas at once. Use up to 120 words only when presenting the complete itinerary for approval or when the user explicitly requests detail; preserve all required planning checks.
 - Never use markdown, bullet points, numbered lists, or asterisks.
 - Stay in character at all times."""
     if role_instructions:
-        prompt += "\n\nTrip-planning role:\n" + role_instructions + "\n\n" + TRIP_PLANNING_GUIDANCE
+        prompt += "\n\nTrip-planning role:\n" + role_instructions + "\n\n" + TRIP_PLANNING_GUIDANCE + "\n\nTrip completion goal:\n" + TRIP_COMPLETION_GOAL
     return prompt
 
 
@@ -271,9 +276,7 @@ LOG_PATH = "conversation_log.jsonl"  # one JSON object per line, per turn --
                                        # for your coherence research.
 
 ENABLE_MEMORY = True
-MEMORIES_PATH = "memories.json"  # {speaker_name: [fact, fact, ...]} -- short,
-                                   # durable facts an agent has learned about
-                                   # each identified speaker, across sessions.
+MEMORIES_PATH = "memories.json"  # Legacy JSON import; new data lives in trip_state.sqlite3.
 MAX_MEMORIES_PER_SPEAKER = 20     # oldest facts drop off once a speaker's
                                    # array exceeds this length.
 
@@ -287,10 +290,9 @@ MAX_MEMORIES_PER_SPEAKER = 20     # oldest facts drop off once a speaker's
 #
 # Run the same scenario once in each mode to compare whether cross-agent
 # memory sharing makes repeated interactions more coherent/engaging.
-# NOTE: this only controls WHICH FILE each agent reads/writes -- it doesn't
-# yet decide what's worth sharing or how; that logic (extract_memory,
-# _prime_speaker_memory) is unchanged and still applies equally in both
-# modes. This is just the on/off plumbing to build that on top of next.
+# The selected mode now chooses a compartment in the shared SQLite trip store.
+# Legacy JSON files are imported once; fresh shared facts and recent exchanges
+# are read before every reply, even when Sage and Astra run in separate processes.
 MEMORY_SHARING_MODE = "shared"  # "shared" or "isolated"
 
 
@@ -339,6 +341,7 @@ class PersonalityVoiceAgent:
         self.traits = traits or self.TRAITS
         self.model = model
 
+        self.role_instructions = self.ROLE_INSTRUCTIONS
         self.system_prompt = build_system_prompt(self.name, self.traits, self.ROLE_INSTRUCTIONS)
         self.voice_style, self.style_degree = voice_style_from_traits(self.traits)
         self.rate_str, computed_pitch_str = prosody_from_traits(self.traits)
@@ -412,6 +415,9 @@ class PersonalityVoiceAgent:
                                                            # types their name
         self.memories_path = None   # resolved by _setup_memory(), see run()
         self.memories = {}          # loaded by _setup_memory(), see run()
+        self.state = TravelState()
+        self.stage = "setup"
+        self.handoff_suggested = False
         self._speakers_primed = set()  # speakers already given their memory
                                          # context in self.history this run
 
@@ -469,7 +475,7 @@ class PersonalityVoiceAgent:
         has had a chance to change memory_sharing_mode from its default."""
         self.memories_path = self._resolve_memories_path()
         self.memories = self._load_memories() if self.memory_enabled else {}
-        print(f"Memory file: {self.memories_path}")
+        print(f"Legacy memory import: {self.memories_path}")
 
     def choose_memory_sharing_mode(self):
         """Lets the user pick shared vs. isolated memory for this run,
@@ -508,125 +514,86 @@ class PersonalityVoiceAgent:
         with open(self.memories_path, "w", encoding="utf-8") as f:
             json.dump(self.memories, f, indent=2)
 
-    def remember(self, speaker_name: str, fact: str):
-        """Appends a fact to speaker_name's fact list (oldest entries drop
-        off past MAX_MEMORIES_PER_SPEAKER) and persists it.
-
-        In "shared" mode, the fact is tagged {"fact": ..., "learned_by":
-        self.name} -- the other agent needs to know WHO learned this,
-        since they're both reading the same file. In "isolated" mode,
-        it's just the plain fact string -- there's no "other agent" to
-        attribute it for, since this file is this agent's alone."""
-        if not speaker_name or speaker_name == "Unknown" or not fact:
-            return
-        entries = self.memories.setdefault(speaker_name, [])
-        if self.memory_sharing_mode == "shared":
-            entries.append({"fact": fact, "learned_by": self.name})
-        else:
-            entries.append(fact)
-        del entries[:-MAX_MEMORIES_PER_SPEAKER]
-        self._save_memories()
+    def remember(self, speaker_name: str, fact: str, revision=None):
+        if self.memory_enabled and speaker_name.lower() != "unknown" and fact:
+            self.state.remember(speaker_name, self.name, self.memory_sharing_mode, fact, expected_revision=revision)
 
     def _prime_speaker_memory(self, speaker_name: str):
-        """The first time speaker_name talks this session, injects
-        what's remembered about them into the running chat history so the
-        model can draw on past conversations. Facts learned by a
-        DIFFERENT agent (only possible in "shared" mode) are explicitly
-        attributed, so the model can reference them honestly instead of
-        acting like it personally learned them."""
-        if (not self.memory_enabled or speaker_name == "Unknown"
-                or speaker_name in self._speakers_primed):
-            return
-        self._speakers_primed.add(speaker_name)
-        entries = self.memories.get(speaker_name, [])
-        if not entries:
-            return
-
-        lines = []
-        any_cross_agent = False
-        for entry in entries:
-            if isinstance(entry, dict):
-                fact = entry["fact"]
-                learned_by = entry.get("learned_by")
-            else:
-                # Plain string: isolated-mode data (no other agent to
-                # attribute it to) or legacy data from before attribution
-                # existed. Either way, show it with no attribution note.
-                fact, learned_by = entry, None
-
-            if learned_by and learned_by != self.name:
-                any_cross_agent = True
-                lines.append(f"- (learned by {learned_by}, not by you) {fact}")
-            else:
-                lines.append(f"- {fact}")
-        bullet_list = "\n".join(lines)
-
-        note = ""
-        if any_cross_agent:
-            note = (
-                f"\n\nSome of these were learned by a DIFFERENT agent, not "
-                f"by you directly -- you may naturally reference them (e.g. "
-                f"something you heard about {speaker_name}), but don't "
-                f"claim you personally experienced that conversation."
-            )
-        self.history.append({
-            "role": "system",
-            "content": f"What you remember about {speaker_name} from "
-                       f"previous conversations:\n{bullet_list}{note}",
-        })
+        # Context is read fresh from SQLite for EVERY reply, including other processes.
+        # Keep this method for existing callers; never cache memory in chat history.
+        return
 
     def extract_memory(self, speaker_name: str, user_text: str, reply: str):
         """Asks the model whether this turn revealed a short, durable fact
         about speaker_name worth remembering later, and stores it if so."""
         if not self.memory_enabled or speaker_name == "Unknown":
             return
-        prompt = (
-            f"Below is one turn of a conversation with {speaker_name}.\n"
-            f"{speaker_name}: {user_text}\n"
-            f"{self.name}: {reply}\n\n"
-            f"Is there a short, durable fact about {speaker_name} worth "
-            "remembering for future conversations (e.g. plans, "
-            "preferences, relationships, important dates)? If yes, reply "
-            "with ONLY that fact in one short sentence. If not, reply "
-            "with exactly NONE."
-        )
+        revision = self.state.ensure(speaker_name)["memory_revision"]
         try:
             completion = self.openai_client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "system", "content": FACT_PROMPT},
+                          {"role": "user", "content": json.dumps({"speaker": speaker_name, "agent": self.name, "user": user_text, "reply": reply})}],
             )
             fact = completion.choices[0].message.content.strip()
         except Exception as e:
             print(f"(Memory extraction failed: {e})")
             return
         if fact and fact.upper() != "NONE":
-            self.remember(speaker_name, fact)
+            self.remember(speaker_name, fact, revision)
 
-    def set_speaker(self, name: str):
-        """Makes name the current speaker, creating their (empty) fact
-        list if they don't have one yet, and resetting the live
-        conversation to just the system prompt. Names match
-        case-insensitively, so "nayeli" picks up the existing "Nayeli" entry."""
-        for known in self.memories:
-            if known.lower() == name.lower():
-                name = known
-                break
-        self.speaker_name = name
-        if self.memory_enabled and name not in self.memories:
-            self.memories[name] = []
-            self._save_memories()
-        self.history = [{"role": "system", "content": self.system_prompt}]
+    def _restore_history(self):
+        saved = self.state.ensure(self.speaker_name)
+        bucket = self.state.bucket(self.name, self.memory_sharing_mode)
+        self.history = [{"role": "system", "content": self.system_prompt}] + saved["histories"].get(bucket, [])
+        self.session_id = saved["sessions"].get(bucket) or uuid.uuid4().hex
+
+    def _seed_legacy_memories(self, name):
+        if self.state.get(name):
+            return
+        self.state.ensure(name)
+        root = os.path.dirname(os.path.abspath(__file__))
+        base, extension = os.path.splitext(MEMORIES_PATH)
+        for compartment, filename in (("shared", MEMORIES_PATH), ("sage", f"{base}_sage{extension}"), ("astra", f"{base}_astra{extension}")):
+            candidates = [filename, os.path.join(root, filename)]
+            for path in candidates:
+                if not os.path.isfile(path):
+                    continue
+                try:
+                    with open(path, encoding="utf-8") as stream:
+                        old = json.load(stream)
+                    entries = next((entries for key, entries in old.items() if key.strip().lower() == name), [])
+                    if isinstance(entries, list):
+                        def seed(profile, _histories, _sessions):
+                            profile["memories"][compartment] = [entry for entry in entries[-20:]
+                                if isinstance(entry, str) or isinstance(entry, dict) and isinstance(entry.get("fact"), str)]
+                        self.state.mutate(name, seed)
+                    break
+                except (OSError, ValueError, AttributeError):
+                    continue
+
+    def set_speaker(self, name: str, reload=False):
+        key = name_id(name)
+        self._seed_legacy_memories(key)
+        self.state.activate(key, reload=reload)
+        self.speaker_name = key
+        self._restore_history()
+        self.stage = "planning"
+        self.handoff_suggested = False
+        print(f"\nName ID: {key}. Talking with {self.name}. Saved chats restored.")
 
     def ask_speaker_name(self):
-        """Asks who's talking, by typed name. Safe to skip by just pressing
-        Enter, which keeps the current speaker."""
-        known = list(self.memories.keys())
-        print(f"\nKnown names: {known if known else 'none yet'}")
-        name = input(
-            f"Type your name, or press Enter to stay as '{self.speaker_name}': "
-        ).strip()
-        if name:
-            self.set_speaker(name)
+        while True:
+            name = input(f"Name ID [{self.speaker_name if self.speaker_name != 'Unknown' else ''}]: ").strip()
+            if not name and self.speaker_name != "Unknown":
+                return
+            try:
+                self.set_speaker(name)
+                return
+            except (ValueError, CloudError) as exc:
+                print(str(exc))
+                if isinstance(exc, CloudError) and exc.status == 409:
+                    print("Use reload to replace local changes with the latest cloud trip.")
 
     # -- Research logging --------------------------------------------------
 
@@ -684,19 +651,19 @@ class PersonalityVoiceAgent:
     # -- LLM response -----------------------------------------------------
 
     def get_response(self, user_text: str) -> str:
-        self.history.append({"role": "user", "content": user_text})
-        # Note: gpt-6-astra (like other reasoning models) only supports the
-        # default temperature of 1 -- passing any other value is rejected
-        # with a 400 error, so we don't set it here.
-        completion = self.openai_client.chat.completions.create(
-            model=self.model,
-            messages=[self.history[0], {
-                "role": "system",
-                "content": HANDOFF_INSTRUCTIONS[self.memory_sharing_mode if self.memory_enabled and self.speaker_name.lower() != "unknown" else "disabled"],
-            }, *self.history[1:]],
-        )
-        reply = completion.choices[0].message.content.strip()
-        self.history.append({"role": "assistant", "content": reply})
+        self._restore_history()
+        mode = self.memory_sharing_mode if self.memory_enabled else "disabled"
+        messages = [self.history[0], {"role": "system", "content": HANDOFF_INSTRUCTIONS[mode]},
+                    *self.history[1:][-12:]]
+        context = self.state.context(self.speaker_name, self.name, self.memory_sharing_mode, self.memory_enabled)
+        if context:
+            messages.append({"role": "system", "content": context})
+        messages.append({"role": "user", "content": user_text[:3500]})
+        completion = self.openai_client.chat.completions.create(model=self.model, messages=messages)
+        reply = completion.choices[0].message.content.strip()[:3500]
+        if not reply:
+            raise ValueError("The agent returned an empty reply.")
+        self.history.extend([{"role": "user", "content": user_text[:3500]}, {"role": "assistant", "content": reply}])
         return reply
 
     # -- Text-to-speech (Azure, with emotional style) ----------------------
@@ -825,53 +792,201 @@ class PersonalityVoiceAgent:
             speaker_name = self.speaker_name
             print(f"You said [{speaker_name}]: {user_text}")
 
-            self._prime_speaker_memory(speaker_name)
-            reply = self.get_response(user_text)
-            print(f"{self.name}: {reply}")
-            self.extract_memory(speaker_name, user_text, reply)
-
-            finished = self.speak(reply)
-
-            self.log_turn(
-                speaker_name, user_text, reply,
-                extra={
-                    "turn_seconds": round(time.time() - turn_start, 3),
-                    "interrupted": not finished,
-                },
-            )
+            finished = self.process_text(user_text, speak=True, turn_start=turn_start)
 
             if finished:
                 return True
             # else: interrupted -- loop back and record immediately,
             # consuming no further prompt from the caller
 
-    # -- Main loop --------------------------------------------------------
+    # -- Travel planning controls and stages -------------------------------
+
+    def _sync(self):
+        try:
+            self.state.sync(self.speaker_name)
+            if self.state.cloud:
+                print("Trip and chats saved across devices.")
+        except CloudError as exc:
+            print(f"Cloud sync pending: {exc}. Local data is saved. Use reload after a conflict.")
+
+    def show_notes(self):
+        profile = self.state.ensure(self.speaker_name)["payload"]
+        choices = profile["choices"]
+        print("\nTrip notes & to-dos (read-only)")
+        print(profile["notes"] or "Your trip details and next steps will appear here.")
+        print(f"Country {len(choices['countries'])}/1+ | Cities {len(choices['cities'])}/3+ | "
+              f"Activities {len(choices['activities'])}/1–2 | "
+              f"Budget {'confirmed' if choices.get('budget') else 'pending'} | "
+              f"Plan {'finalized' if trip_ready(choices) else 'pending'}")
+
+    def show_form(self, automatic=False):
+        profile = self.state.ensure(self.speaker_name)["payload"]
+        if not trip_ready(profile["choices"]):
+            print("Finish your country, three cities, one or two activities, budget, and approved Astra itinerary first.")
+            return
+        if automatic and profile.get("reviewed"):
+            return
+        self.state.mark_reviewed(self.speaker_name)
+        self.stage = "review"
+        print("\nStage 3 · Complete your form")
+        self.show_notes()
+        url = os.getenv("GOOGLE_FORM_URL", "")
+        parsed = urlparse(url)
+        if (parsed.scheme == "https" and parsed.hostname in ("docs.google.com", "forms.gle")
+                and (parsed.hostname != "docs.google.com" or parsed.path.startswith("/forms/"))):
+            print(f"Google Form: {url}")
+        else:
+            print("The Google Form is coming soon. Your checklist is saved.")
+        print("Type back to continue planning; form returns here when you are ready.")
+        self._sync()
+
+    def switch_agent(self):
+        from sage import SageAgent
+        from astra import AstraAgent
+        cls = AstraAgent if self.name.lower() == "sage" else SageAgent
+        self.name, self.traits, self.role_instructions = cls.NAME, dict(cls.TRAITS), cls.ROLE_INSTRUCTIONS
+        self.system_prompt = build_system_prompt(self.name, self.traits, self.role_instructions)
+        self.voice_style, self.style_degree = voice_style_from_traits(self.traits)
+        self.rate_str, computed = prosody_from_traits(self.traits)
+        self.pitch_str = computed if cls.PITCH_OVERRIDE_ST is None else f"{cls.PITCH_OVERRIDE_ST:+}st"
+        self.azure_voice_name = os.getenv("AZURE_VOICE_NAME", cls.AZURE_VOICE_NAME)
+        self.tts_provider = os.getenv("TTS_PROVIDER", cls.TTS_PROVIDER).lower()
+        self.openai_voice = os.getenv("OPENAI_VOICE", cls.OPENAI_VOICE)
+        self.openai_tts_instructions = os.getenv("OPENAI_TTS_INSTRUCTIONS", cls.OPENAI_TTS_INSTRUCTIONS)
+        if self.tts_provider == "azure":
+            self.speech_config.speech_synthesis_voice_name = self.azure_voice_name
+        self._restore_history()
+        self.handoff_suggested = False
+        self.stage = "planning"
+        print(f"\nTalking with {self.name}. Previous chat restored.")
+        self.greet_first_visit()
+
+    def process_text(self, user_text, speak=False, turn_start=None):
+        import re
+        user_text = user_text.strip()[:3500]
+        if not user_text:
+            return True
+        turn_start = turn_start or time.time()
+        name, agent, mode = self.speaker_name, self.name, self.memory_sharing_mode
+        prior = self.state.prior(name, agent, mode, enabled=self.memory_enabled)
+        reply = self.get_response(user_text)
+        print(f"{agent}: {reply}")
+        turn = self.state.append_turn(name, agent, mode, user_text, reply, self.session_id,
+                                      remember_recent=self.memory_enabled, logging=ENABLE_LOGGING)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            memory_job = pool.submit(self.extract_memory, name, user_text, reply) if self.memory_enabled else None
+            notes_job = pool.submit(self.state.checklist, name, self.openai_client, self.model, agent, user_text, reply, prior)
+            finished = self.speak(reply) if speak else True
+            try:
+                notes_job.result()
+            except Exception as exc:
+                print(f"Checklist update failed; existing notes kept: {exc}")
+            if memory_job:
+                memory_job.result()
+        turn["interrupted"] = not finished
+        if ENABLE_LOGGING:
+            self.state.queue_log(turn)
+            self.log_turn(name, user_text, reply, extra={"turn_id": turn["turn_id"], "participant_id": turn["participant_id"],
+                "turn_seconds": round(time.time() - turn_start, 3), "interrupted": not finished})
+        other = "Astra" if agent.lower() == "sage" else "Sage"
+        self.handoff_suggested = any(re.search(rf"\b(?:switch(?: over)? to|talk to|talk with|ask|try|let|recommend|suggest)\b[^.!?]{{0,65}}\b{other}\b", sentence, re.I)
+            or re.search(rf"\b{other}\b[^.!?]{{0,45}}\b(?:can help|could help|can finalize|can check|is better)\b", sentence, re.I)
+            for sentence in re.split(r"[.!?\n]+", reply) if not re.search(r"\b(?:don't|do not|no need to|shouldn't)\b", sentence, re.I))
+        if self.handoff_suggested:
+            print(f"Switch suggested: type switch for {other}'s help.")
+        self.show_notes()
+        self._sync()
+        if finished:
+            self.show_form(automatic=True)
+        return finished
+
+    def greet_first_visit(self):
+        if any(item.get("role") == "assistant" for item in self.history):
+            return
+        reply = ("Hi, I’m Sage! I’ll help you choose destinations and fun activities. What kind of trip sounds exciting to you?"
+                 if self.name.lower() == "sage" else
+                 "Hi, I’m Astra. I’ll help turn your choices into a practical itinerary and budget. What would you like to finalize first?")
+        print(f"{self.name}: {reply}")
+        turn = self.state.append_turn(self.speaker_name, self.name, self.memory_sharing_mode, "", reply,
+                                      self.session_id, remember_recent=False, logging=ENABLE_LOGGING)
+        self._restore_history()
+        turn["interrupted"] = not self.speak(reply)
+        if ENABLE_LOGGING:
+            self.state.queue_log(turn)
+        self._sync()
 
     def run(self):
-        print(f"\n{self.name} is ready. Personality: {self.traits}")
-        print(f"Voice: {self.tts_provider}"
-              + (f" ({self.openai_voice})" if self.tts_provider == "openai"
-                 else (f"; style: {self.voice_style} (intensity {self.style_degree})"
-                       if self.tts_provider == "azure" else "")))
-
+        print(f"\n{self.name} · Trip planning")
         if self.memory_enabled:
             self.choose_memory_sharing_mode()
             self._setup_memory()
-
+        cloud_url = os.getenv("VOICE_DEMO_API_URL", "").strip()
+        if cloud_url:
+            code = os.getenv("VOICE_DEMO_CODE") or getpass("Website demo code: ")
+            self.state.cloud = WorkerClient(cloud_url, code, os.getenv("VOICE_DEMO_ORIGIN", "https://jimjamms.github.io"))
+            print("Cloud sync enabled. Anyone with the Name ID and demo code can open its trip.")
+        else:
+            print(f"Saved locally in {self.state.path}. Set VOICE_DEMO_API_URL for cross-device sync.")
         self.ask_speaker_name()
-
-        print("(Type 'name' to change who's talking, or 'quit' to exit.)")
+        self.greet_first_visit()
+        self.show_notes()
+        print("Commands: Enter to talk | text <message> | switch | notes | form | back | new | forget | clear | name | reload | quit")
         while True:
-            choice = input("\n[Enter] to talk, 'name', or 'quit': ").strip().lower()
-
-            if choice == "quit":
+            choice = input(f"\n{self.name} [{self.stage}] > ").strip()
+            command = choice.lower()
+            try:
+                if command == "quit":
+                    self._sync()
+                    break
+                if command == "name":
+                    self.ask_speaker_name()
+                    self.greet_first_visit()
+                    continue
+                if command == "reload":
+                    if input("Replace local changes with the saved cloud trip? Type reload: ").strip().lower() == "reload":
+                        self.set_speaker(self.speaker_name, reload=True)
+                    continue
+                if self.state.check_reset(self.speaker_name):
+                    self._restore_history()
+                    self.stage = "planning"
+                    print("The host reset this trip. The same ID is ready for a fresh trip.")
+                    self.show_notes()
+                    continue
+                if command == "switch":
+                    self.switch_agent()
+                elif command == "notes":
+                    self.show_notes()
+                elif command == "form":
+                    self.show_form()
+                elif command == "back":
+                    self.stage = "planning"
+                    # reviewed is persisted and is deliberately not cleared here.
+                elif command == "new":
+                    self.state.new_chat(self.speaker_name, self.name, self.memory_sharing_mode)
+                    self._restore_history()
+                    self._sync()
+                elif command == "forget":
+                    self.state.forget(self.speaker_name)
+                    self._sync()
+                    print("Saved memories cleared; the checklist and host transcript archive remain.")
+                elif command == "clear":
+                    self.state.clear_notes(self.speaker_name)
+                    self.show_notes()
+                    self._sync()
+                elif command.startswith("text "):
+                    self.stage = "planning"
+                    self.process_text(choice[5:])
+                elif not command:
+                    if self.stage == "review":
+                        self.stage = "planning"
+                    else:
+                        self.process_one_turn()
+                else:
+                    print("Use a listed command, or text followed by your message.")
+            except (CloudError, ValueError) as exc:
+                print(f"{exc} Local data is still saved.")
+            except KeyboardInterrupt:
                 break
-            if choice == "name":
-                self.ask_speaker_name()
-                continue
-
-            self.process_one_turn()
-
         print("Goodbye!")
 
 

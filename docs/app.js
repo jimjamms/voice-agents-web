@@ -158,8 +158,10 @@
       sharedTurns.slice(-4).flatMap(item => [
         { role: 'user', content: item.transcript, agent: item.agent }, { role: 'assistant', content: item.reply, agent: item.agent },
       ]) : history.slice(-8).map(item => ({ role: item.role, content: item.content, agent: turn.agent }));
-    window.AgentMemory.recordShared?.(turn.speaker, turn.mode, turn.agent, turn.transcript, turn.reply);
-    tripNotes?.update({ ...turn, priorConversation });
+    if (!turn.greeting) {
+      window.AgentMemory.recordShared?.(turn.speaker, turn.mode, turn.agent, turn.transcript, turn.reply);
+      tripNotes?.update({ ...turn, priorConversation });
+    }
     turns.push({ timestamp: new Date().toISOString(), session_id: sessionId,
       agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
       speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
@@ -294,11 +296,16 @@
   }
   tapMode.addEventListener('click', () => chooseMode(false));
   handsfreeMode.addEventListener('click', () => chooseMode(true));
+  function greetFirstVisit() {
+    if (engine === 'pipeline' && document.body.dataset.stage === 'planning' && !history.length) pipeline.greet?.();
+  }
+  window.addEventListener('trip-planning:open', greetFirstVisit);
   cards.forEach(card => card.addEventListener('click', () => {
     if (connected || connecting || pipeline.isLocked() || enrolling) return;
     if (agent !== card.dataset.agent) { agent = card.dataset.agent; switchConversation(); }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
+    greetFirstVisit();
   }));
   switchAgent.addEventListener('click', () => {
     if (switchAgent.disabled || enrolling) return;

@@ -242,6 +242,10 @@
       } else this.ambient = Math.max(.002, this.ambient * .97 + rms * .03);
       if (this.recording && now - this.startedAt >= 30000) this.finishRecording();
     }
+    async greet() {
+      if (this.isLocked()) return;
+      await this.submit(null, ++this.generation);
+    }
     async submit(blob, generation) {
       this.busy = true; this.notify();
       this.request = new AbortController();
@@ -255,8 +259,9 @@
       form.set('memories', JSON.stringify(this.options.memories()));
       form.set('shared_turns', JSON.stringify(mode === 'shared' ? this.options.sharedTurns?.() || [] : []));
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
-      const extension = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
-      form.set('audio', blob, `turn.${extension}`);
+      if (!blob) form.set('greeting', 'true');
+      const extension = blob?.type.includes('mp4') ? 'm4a' : blob?.type.includes('ogg') ? 'ogg' : 'webm';
+      if (blob) form.set('audio', blob, `turn.${extension}`);
       let shouldResume = false;
       try {
         const base = this.options.base();

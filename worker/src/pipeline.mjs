@@ -44,11 +44,12 @@ export async function pipelineTurn(request, env, cors) {
     const name = form.get('agent');
     const agent = Object.hasOwn(pipelineAgents, name) ? pipelineAgents[name] : null;
     const audio = form.get('audio');
+    const greeting = form.get('greeting') === 'true';
     if (!agent) return json({ error: 'Unknown agent.' }, 400, cors);
-    if (!(audio instanceof Blob) || !audio.size || audio.size > MAX_AUDIO_BYTES)
+    if (!greeting && (!(audio instanceof Blob) || !audio.size || audio.size > MAX_AUDIO_BYTES))
       return json({ error: 'Recording is missing or too large.' }, 400, cors);
-    const format = formats.get(audio.type.split(';')[0]);
-    if (!format) return json({ error: 'Unsupported recording format.' }, 415, cors);
+    const format = greeting ? null : formats.get(audio.type.split(';')[0]);
+    if (!greeting && !format) return json({ error: 'Unsupported recording format.' }, 415, cors);
     const speaker = String(form.get('speaker') || 'Unknown').trim().slice(0, 40) || 'Unknown';
     let memories = [];
     const rawMemories = form.get('memories');
@@ -65,32 +66,37 @@ export async function pipelineTurn(request, env, cors) {
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
-    const input = new FormData();
-    input.set('file', audio, `turn.${format}`);
-    input.set('model', 'whisper-1');
-    input.set('language', 'en');
-    const transcription = await (await upstream('/audio/transcriptions', {
-      method: 'POST', headers: authorization, body: input,
-    })).json();
-    const transcript = String(transcription.text || '').trim().slice(0, MAX_TEXT);
-    if (!transcript) return json({ error: 'I could not hear anything. Try speaking again.' }, 422, cors);
-    const chat = await (await upstream('/chat/completions', {
-      method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: env.PIPELINE_CHAT_MODEL || 'gpt-4.1-mini',
-        messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
-          { role: 'user', content: transcript }],
-      }),
-    })).json();
-    const reply = String(chat.choices?.[0]?.message?.content || '').trim().slice(0, 3500);
-    if (!reply) throw new Error('Empty model reply.');
-    const factPromise = extractFact(env, agent.name, speaker, transcript, reply);
+    let transcript = '', reply;
+    if (greeting) {
+      reply = name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. What kind of trip sounds exciting to you?" : "Hi, I’m Astra. I’ll help turn your choices into a practical itinerary and budget. What would you like to finalize first?";
+    } else {
+      const input = new FormData();
+      input.set('file', audio, `turn.${format}`);
+      input.set('model', 'whisper-1');
+      input.set('language', 'en');
+      const transcription = await (await upstream('/audio/transcriptions', {
+        method: 'POST', headers: authorization, body: input,
+      })).json();
+      transcript = String(transcription.text || '').trim().slice(0, MAX_TEXT);
+      if (!transcript) return json({ error: 'I could not hear anything. Try speaking again.' }, 422, cors);
+      const chat = await (await upstream('/chat/completions', {
+        method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: env.PIPELINE_CHAT_MODEL || 'gpt-4.1-mini',
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
+            { role: 'user', content: transcript }],
+        }),
+      })).json();
+      reply = String(chat.choices?.[0]?.message?.content || '').trim().slice(0, 3500);
+      if (!reply) throw new Error('Empty model reply.');
+    }
+    const factPromise = greeting ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
     const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: agent.voice,
         instructions: agent.instructions, input: reply, response_format: 'mp3' }),
     });
-    return json({ transcript, reply, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
+    return json({ transcript, reply, greeting, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
   } catch (error) {
     console.error('Pipeline turn failed:', error);
     return json({ error: 'Could not complete this turn. Check API billing and try again.' }, 502, cors);

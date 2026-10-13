@@ -77,6 +77,7 @@
     name.dispatchEvent(new Event('change', { bubbles: true }));
     document.querySelector('[data-agent="sage"]').click();
     title.textContent = `${name.value}’s trip`; step('planning'); title.focus();
+    window.dispatchEvent(new Event('trip-planning:open'));
   });
   document.querySelector('#change-setup').addEventListener('click', () => {
     window.dispatchEvent(new Event('trip-setup:open'));

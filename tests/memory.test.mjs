@@ -152,3 +152,26 @@ test('recorded handoff uses recent shared details even when extraction fails; is
     assert.ok(!JSON.stringify(chats[1]).includes('2500 USD'));
   } finally { globalThis.fetch = original; }
 });
+
+
+test('first greeting uses only TTS, selected voice, no fake user transcript or memory extraction', async () => {
+  const original = globalThis.fetch; const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    return new Response(new Uint8Array([1, 2]));
+  };
+  try {
+    const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
+    for (const agent of ['sage', 'astra']) {
+      const fd = new FormData(); fd.set('agent', agent); fd.set('greeting', 'true');
+      const response = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
+      const data = await response.json();
+      assert.equal(response.status, 200); assert.equal(data.greeting, true);
+      assert.equal(data.transcript, ''); assert.equal(data.fact, null);
+      assert.match(data.reply, agent === 'sage' ? /I’m Sage/ : /I’m Astra/);
+      assert.ok(data.reply.split(/\s+/).length < 35);
+      assert.equal(calls.at(-1).body.voice, agent === 'sage' ? 'marin' : 'cedar');
+    }
+    assert.equal(calls.length, 2); assert.ok(calls.every(call => call.url.endsWith('/audio/speech')));
+  } finally { globalThis.fetch = original; }
+});
