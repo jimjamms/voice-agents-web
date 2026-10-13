@@ -34,12 +34,12 @@
     if (!name || name !== confirm) { deleteStatus.textContent = 'Type the same name ID in both fields.'; return; }
     if (!trip && !logs) { deleteStatus.textContent = 'Select the data to delete.'; return; }
     const scope = [trip && 'memories and trip notes', logs && 'chat logs'].filter(Boolean).join(' and ');
-    if (!window.confirm(`Permanently delete ${scope} for "${name}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete ${scope} for "${name}"? This disables the selected cloud storage for this ID and cannot be undone.`)) return;
     deleteButton.disabled = button.disabled = true; deleteStatus.textContent = 'Deleting…';
     try {
       const response = await fetch(`${base.replace(/\/$/, '')}/logs/delete`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify({ name, confirm, trip, logs }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not delete data.');
-      deleteStatus.textContent = `Deleted ${data.profilesDeleted} saved trip profile(s) and ${data.turnsDeleted} chat turn(s) for ${name}.`;
+      deleteStatus.textContent = `Deleted ${data.profilesDeleted} saved trip profile(s) and ${data.turnsDeleted} chat turn(s) for ${name}. Future uploads of the selected data are blocked for this ID.`;
       document.querySelector('#delete-confirm').value = '';
     } catch (error) { deleteStatus.textContent = error.message || 'Could not delete data.'; }
     finally { deleteButton.disabled = button.disabled = false; keyInput.value = ''; }

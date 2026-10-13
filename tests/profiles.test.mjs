@@ -4,11 +4,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { profileRequest } from '../worker/src/profiles.mjs';
-import { deleteUserData } from '../worker/src/logs.mjs';
+import { deleteUserData, saveLogs } from '../worker/src/logs.mjs';
 import worker from '../worker/src/index.mjs';
 const profile = { notes: 'Japan trip', choices: { countries: ['Japan'], cities: ['Tokyo'], activities: ['Hiking'] }, memories: { shared: [{ fact: 'Prefers trains', learned_by: 'Astra' }], sage: ['Likes hiking'], astra: ['Budget conscious'] } };
 function database() {
-  const db = new DatabaseSync(':memory:');
+  const db = new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../worker/migrations/0003_deleted_name_ids.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../worker/migrations/0002_trip_profiles.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../worker/migrations/0001_chat_logs.sql', import.meta.url), 'utf8'));
   return { db, async batch(statements) { db.exec('BEGIN'); try { const results = []; for (const statement of statements) results.push(await statement.run()); db.exec('COMMIT'); return results; } catch (error) { db.exec('ROLLBACK'); throw error; } }, prepare(sql) { return { bind(...params) { return {
@@ -87,5 +87,21 @@ test('host deletion removes only the requested name and selected data categories
   const second = await (await remove(true, true)).json(); assert.equal(second.profilesDeleted, 1); assert.equal(second.turnsDeleted, 0);
   assert.equal(db.db.prepare('SELECT name_id FROM trip_profiles').get().name_id, 'jenny-other');
   assert.equal(db.db.prepare('SELECT speaker_lower FROM chat_turns').get().speaker_lower, 'jenny-other');
+  db.db.close();
+});
+
+test('remote deletion blocks cached profile recreation and queued log uploads from open devices', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'private-key' };
+  await profileRequest(post({ action: 'save', name: 'Jenny', version: 0, profile }), env, {});
+  const deletion = new Request('https://worker.test/logs/delete', { method: 'POST', headers: { authorization: 'Bearer private-key', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Jenny', confirm: 'Jenny', trip: true, logs: true }) });
+  assert.equal((await deleteUserData(deletion, env, {})).status, 200);
+  assert.equal((await profileRequest(post({ action: 'load', name: 'JENNY' }), env, {})).status, 410);
+  for (const version of [0, 1]) assert.equal((await profileRequest(post({ action: 'save', name: 'jenny', version, profile }), env, {})).status, 410);
+  const turn = { turn_id: 'queued-turn', participant_id: 'browser-1', session_id: 'session-1', timestamp: '2026-10-13T05:00:00Z', agent: 'sage', engine: 'pipeline', memory_sharing_mode: 'shared', speaker: 'JENNY', user_text: 'Old queued message', agent_reply: 'Old reply', interrupted: false };
+  const upload = turns => new Request('https://worker.test/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ turns }) });
+  const result = await (await saveLogs(upload([turn, { ...turn, turn_id: 'other-turn', speaker: 'Other' }]), env, {})).json();
+  assert.deepEqual(result.discarded, ['queued-turn']);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM trip_profiles').get().n, 0);
+  assert.equal(db.db.prepare('SELECT speaker_lower FROM chat_turns').get().speaker_lower, 'other');
   db.db.close();
 });

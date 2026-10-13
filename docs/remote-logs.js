@@ -39,7 +39,7 @@
         if(!response.ok||!Array.isArray(result.saved)){retry=response.status!==401;throw new Error();}
         const saved=new Set(result.saved);
         this.queue=this.queue.filter(item=>!saved.has(item.turn_id)||snapshots.get(item.turn_id)!==JSON.stringify(item));
-        this.persist();this.status(this.queue.length?'Chat upload pending…':'Chat saved for the host.');
+        this.persist();this.status(result.discarded?.length ? 'Chat storage is disabled for a deleted name ID.' : this.queue.length?'Chat upload pending…':'Chat saved for the host.');
       } catch {this.status('Chat upload pending. It will retry when connected.');retry=true;}
       finally {
         clearTimeout(timeout);this.running=false;

@@ -11,7 +11,7 @@
           body: JSON.stringify(body), signal: controller.signal,
         });
         const data = await response.json();
-        if (!response.ok) { const error = new Error(data.error || 'Could not sync your trip.'); error.conflict = response.status === 409; throw error; }
+        if (!response.ok) { const error = new Error(data.error || 'Could not sync your trip.'); error.conflict = response.status === 409 || response.status === 410; throw error; }
         return data;
       } finally { clearTimeout(timeout); }
     }
