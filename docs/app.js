@@ -499,11 +499,12 @@
       setTimeout(() => { if (connected) { send('input_audio_buffer.commit'); send('response.create'); } }, 160);
     }
   });
-  window.addEventListener('trip-review:open', () => { tripCompletionPending = false; pipeline.stop(); endSession(); });
-  window.addEventListener('trip-setup:open', () => { pipeline.stop(); endSession('Ready when you are'); });
+  window.addEventListener('trip-review:open', () => { mobileTripOpen = false; syncMobileNotes(); tripCompletionPending = false; pipeline.stop(); endSession(); });
+  window.addEventListener('trip-setup:open', () => { mobileTripOpen = false; syncMobileNotes(); pipeline.stop(); endSession('Ready when you are'); });
   const notesToggle = document.querySelector('#toggle-trip-notes');
   const mobileLayout = window.matchMedia?.('(max-width:850px)');
   let mobileNotesOpen = false;
+  let mobileTripOpen = false;
   let currentMobileLayout = false;
   function syncMobileNotes() {
     const isMobile = Boolean(mobileLayout?.matches);
@@ -517,18 +518,26 @@
       const controls = document.querySelector('.controls');
       const record = document.querySelector('.record-row');
       const textChat = document.querySelector('#text-chat');
+      const memoryControls = document.querySelector('#speaker-controls');
       if (isMobile) {
         document.querySelector('#mobile-trip-details').append(checklist, notes);
         controls.insertBefore(record, controls.firstChild);
         controls.insertBefore(textChat, record.nextSibling);
+        document.querySelector('#mobile-memory-settings').append(memoryControls);
       } else {
         planning.insertBefore(checklist, workspace);
         chooser.insertBefore(notes, document.querySelector('.agent-options'));
         controls.insertBefore(record, document.querySelector('#disconnect'));
         controls.insertBefore(textChat, record);
+        controls.insertBefore(memoryControls, document.querySelector('.mode-row'));
       }
       currentMobileLayout = isMobile;
     }
+    document.querySelector('.workspace').hidden = isMobile && mobileTripOpen;
+    document.querySelector('#mobile-trip-details').hidden = !isMobile || !mobileTripOpen;
+    document.querySelector('.mobile-start-guide').hidden = isMobile && mobileTripOpen;
+    document.querySelector('#mobile-chat-view').setAttribute('aria-pressed', String(!mobileTripOpen));
+    document.querySelector('#mobile-details-view').setAttribute('aria-pressed', String(mobileTripOpen));
     const expanded = !mobileLayout?.matches || mobileNotesOpen;
     document.querySelector('.trip-notepad').dataset.mobileExpanded = String(expanded);
     document.querySelector('#trip-notes-display').hidden = !expanded;
@@ -536,6 +545,16 @@
     notesToggle.setAttribute('aria-expanded', String(expanded));
     notesToggle.textContent = expanded ? 'Hide notes ⌃' : 'Show notes ⌄';
   }
+  document.querySelector('#mobile-chat-view').addEventListener('click', () => {
+    mobileTripOpen = false;
+    syncMobileNotes();
+  });
+  document.querySelector('#mobile-details-view').addEventListener('click', () => {
+    mobileTripOpen = true;
+    mobileNotesOpen = true;
+    document.querySelector('.planning-checklist details').open = true;
+    syncMobileNotes();
+  });
   notesToggle.addEventListener('click', () => { mobileNotesOpen = !mobileNotesOpen; syncMobileNotes(); });
   mobileLayout?.addEventListener?.('change', syncMobileNotes);
   syncMobileNotes();
