@@ -80,6 +80,7 @@
       !/\b(?:don't|do not|no need to|shouldn't|should not|needn't)\b/i.test(sentence) &&
       (invitation.test(sentence) || offer.test(sentence)));
     switchAgent.dataset.suggested = String(suggested);
+    switchAgent.setAttribute('aria-label', `${suggested ? 'Suggested next: ' : ''}Switch to ${other}`);
   }
   const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
@@ -146,7 +147,9 @@
     cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; card.dataset.speaking = String(card.dataset.agent === agent && (engine === 'pipeline' ? Boolean(pipeline.playing) : responseActive)); });
     document.querySelector('.agent-options').dataset.companion = agent;
     switchAgent.disabled = enrolling || (engine === 'pipeline' && (pipeline.connecting || (pipeline.busy && !pipeline.playing)));
-    switchAgent.setAttribute('aria-label', `Switch to ${agent === 'sage' ? 'Astra' : 'Sage'}`);
+    const switchLabel = `Switch to ${agent === 'sage' ? 'Astra' : 'Sage'}`;
+    document.querySelector('#switch-agent-label').textContent = switchLabel;
+    switchAgent.setAttribute('aria-label', `${switchAgent.dataset.suggested === 'true' ? 'Suggested next: ' : ''}${switchLabel}`);
     if (engine === 'pipeline') {
       tapMode.disabled = handsfreeMode.disabled = locked;
       disconnectButton.hidden = true;

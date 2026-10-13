@@ -8,9 +8,9 @@
   <meta name="description" content="Plan your next trip with Sage for ideas and Astra for practical itineraries.">
   <link rel="stylesheet" href="styles.css?v=travel-background-4">
   <link rel="stylesheet" href="notes.css?v=bold-headings-2">
-  <link rel="stylesheet" href="stages.css?v=3">
+  <link rel="stylesheet" href="stages.css?v=handoff-highlight-4">
   <link rel="stylesheet" href="characters.css?v=flat-animals-2">
-  <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js?v=bold-headings-2" defer></script><script src="pipeline.js" defer></script><script src="remote-logs.js" defer></script><script src="cloud.js" defer></script><script src="app.js" defer></script><script src="stages.js?v=bold-headings-2" defer></script>
+  <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js?v=bold-headings-2" defer></script><script src="pipeline.js" defer></script><script src="remote-logs.js" defer></script><script src="cloud.js" defer></script><script src="app.js?v=handoff-highlight-4" defer></script><script src="stages.js?v=bold-headings-2" defer></script>
 </head>
 <body data-stage="setup">
   <div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -64,7 +64,7 @@
         <div class="agent-options" role="group" aria-label="Choose an agent">
           <button class="agent-card active sage" type="button" data-agent="sage" aria-pressed="true"><span class="card-top">CHOOSE YOUR TRIP <span class="select-indicator">●</span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><img class="agent-mascot" src="assets/sage-animal.png?v=2" alt="" width="200" height="220" decoding="async"><strong>Sage<span class="arrow">↗</span></strong><small>Find your destination and must-do experiences.</small></button>
           <button class="agent-card astra" type="button" data-agent="astra" aria-pressed="false" hidden><span class="card-top">CHECK YOUR PLAN <span class="select-indicator">○</span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><img class="agent-mascot" src="assets/astra-animal.png" alt="" width="200" height="220" decoding="async"><strong>Astra<span class="arrow">↗</span></strong><small>Check each stop, then finalize your itinerary and budget.</small></button>
-          <button id="switch-agent" class="switch-agent-button" type="button" aria-label="Switch to Astra">Switch agent <span aria-hidden="true">⇄</span></button>
+          <button id="switch-agent" class="switch-agent-button" type="button" aria-label="Switch to Astra"><strong id="switch-agent-label">Switch to Astra</strong><span aria-hidden="true">⇄</span></button>
         </div>
 
         </div>

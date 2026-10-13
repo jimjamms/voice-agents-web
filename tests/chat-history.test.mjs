@@ -205,3 +205,17 @@ test('switch-back invitations highlight the next agent during the second discove
   app.options.onMessage('assistant', 'Return to Sage to explore the next activity.');
   assert.equal(app.get('switch-agent').dataset.suggested, 'true');
 });
+
+
+test('switch label names the target agent and follows switching while recommendation clears normally', () => {
+  const app = setup();
+  assert.equal(app.get('switch-agent-label').textContent, 'Switch to Astra');
+  assert.notEqual(app.get('switch-agent').dataset.suggested, 'true');
+  app.options.onMessage('assistant', 'Switch to Astra to check the first city’s budget.');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'true');
+  app.click('switch-agent');
+  assert.equal(app.get('switch-agent-label').textContent, 'Switch to Sage');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'false');
+  app.options.onMessage('assistant', 'Switch back to Sage to choose the next city.');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'true');
+});

@@ -40,3 +40,17 @@ test('passes only selected agent prompt, history roles and voice to OpenAI', asy
     assert.ok(!JSON.stringify(data).includes('server-only-key'));
   } finally { globalThis.fetch = original; }
 });
+
+
+test('both pipeline and optional realtime agents receive travel scope, brief redirects and clear role boundaries', async () => {
+  const { default: realtime } = await import('../worker/src/agents.json', { with: { type: 'json' } });
+  for (const name of ['sage', 'astra']) {
+    for (const instructions of [agentSettings[name].prompt, realtime[name].instructions]) {
+      assert.match(instructions, /If a request is clearly unrelated to the trip, do not answer the unrelated task/);
+      assert.match(instructions, /If the request is ambiguous, ask one short question/);
+      assert.match(instructions, /answer the relevant travel portion/);
+      assert.match(instructions, /Do not force an agent switch just because the user is off-topic/);
+      assert.match(instructions, /one or two short sentences/);
+    }
+  }
+});
