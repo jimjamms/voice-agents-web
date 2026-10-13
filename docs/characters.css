@@ -17,3 +17,10 @@
 @media(min-width:851px) and (max-width:1050px){.agent-portrait{width:145px;height:250px;right:-8px}.agent-options .agent-card small{max-width:135px}}
 @media(max-width:600px){.initial-option{grid-template-columns:13px 40px minmax(0,1fr);gap:7px;padding:10px 8px}.setup-portrait{width:40px;height:65px}.initial-option strong{font-size:13px}.initial-option small{font-size:9px}.agent-options .agent-card{min-height:250px;padding:20px}.agent-portrait{width:165px;height:250px}.agent-options .agent-card strong{margin-top:85px}.agent-options .agent-card small{max-width:170px}}
 @media(max-width:370px){.initial-options{grid-template-columns:1fr}.initial-option{grid-template-columns:14px 45px minmax(0,1fr)}.agent-portrait{width:145px}.agent-options .agent-card small{max-width:145px}}
+
+/* Text-only choices in setup; closer, softer character portraits in planning. */
+.initial-option{grid-template-columns:14px minmax(0,1fr);gap:10px;padding:16px 13px}
+#planning-stage .agent-portrait{width:230px;height:345px;top:24px;bottom:auto;right:-25px;object-fit:contain;object-position:center top;filter:brightness(.9) drop-shadow(0 5px 8px #32483712)}
+@media(min-width:851px) and (max-width:1050px){#planning-stage .agent-portrait{width:210px;height:315px;right:-36px;top:28px}}
+@media(max-width:600px){.initial-option{grid-template-columns:13px minmax(0,1fr);padding:13px 10px}#planning-stage .agent-portrait{width:220px;height:330px;top:22px;right:-24px}}
+@media(max-width:370px){.initial-options{grid-template-columns:1fr 1fr}#planning-stage .agent-portrait{width:205px;height:308px;right:-32px;top:23px}.initial-option small{font-size:9px}}

@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="styles.css?v=travel-background-4">
   <link rel="stylesheet" href="notes.css?v=1">
   <link rel="stylesheet" href="stages.css?v=2">
-  <link rel="stylesheet" href="characters.css?v=1">
+  <link rel="stylesheet" href="characters.css?v=2">
   <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js" defer></script><script src="pipeline.js" defer></script><script src="app.js" defer></script><script src="stages.js" defer></script>
 </head>
 <body data-stage="setup">
@@ -45,8 +45,8 @@
           <h2 id="setup-heading">Let’s get you ready.</h2>
           <div class="setup-field"><label for="speaker-name">Your name</label><input id="speaker-name" type="text" maxlength="40" placeholder="Enter your name" autocomplete="given-name" required></div>
           <fieldset class="initial-agent"><legend>Who would you like to start with?</legend><div class="initial-options">
-            <label class="initial-option"><input type="radio" name="initial-agent" value="sage" checked><img class="setup-portrait" src="assets/sage-character.png" alt="" width="1024" height="1536"><span><strong>Sage</strong><small>Explore destinations and ideas</small></span></label>
-            <label class="initial-option"><input type="radio" name="initial-agent" value="astra"><img class="setup-portrait" src="assets/astra-character.png" alt="" width="1024" height="1536"><span><strong>Astra</strong><small>Build a practical itinerary</small></span></label>
+            <label class="initial-option"><input type="radio" name="initial-agent" value="sage" checked><span><strong>Sage</strong><small>Explore destinations and ideas</small></span></label>
+            <label class="initial-option"><input type="radio" name="initial-agent" value="astra"><span><strong>Astra</strong><small>Build a practical itinerary</small></span></label>
           </div></fieldset>
           <div class="setup-field"><label for="access-code">Demo code</label><input id="access-code" type="password" placeholder="Enter the code from your host" autocomplete="off" spellcheck="false" required></div>
           <button id="start-planning" class="setup-next" type="submit">Start planning <span aria-hidden="true">↗</span></button>
