@@ -1,6 +1,6 @@
 import { profileRequest } from './profiles.mjs';
 import agents from './agents.json' with { type: 'json' };
-import { saveLogs, exportLogs } from './logs.mjs';
+import { saveLogs, exportLogs, deleteUserData } from './logs.mjs';
 import { notesTurn } from './notes.mjs';
 import { memoryTurn } from './memory.mjs';
 import { pipelineTurn } from './pipeline.mjs';
@@ -46,10 +46,10 @@ export default {
       return json({ status: 'ok', modes: ['realtime', 'pipeline'] }, 200, { 'cache-control': 'no-store' });
     }
     const allowedOrigin = env.PUBLIC_ORIGIN?.replace(/\/$/, '');
-    if (url.pathname === '/logs/export' && request.method === 'GET') {
+    if ((url.pathname === '/logs/export' && request.method === 'GET') || (url.pathname === '/logs/delete' && request.method === 'POST')) {
       const origin = request.headers.get('origin');
       if (origin && origin !== allowedOrigin) return json({ error: 'Origin not allowed.' }, 403);
-      return exportLogs(request, env, origin ? corsFor(allowedOrigin) : {});
+      return url.pathname === '/logs/delete' ? deleteUserData(request, env, origin ? corsFor(allowedOrigin) : {}) : exportLogs(request, env, origin ? corsFor(allowedOrigin) : {});
     }
     if (!allowedOrigin || request.headers.get('origin') !== allowedOrigin) {
       return json({ error: 'Origin not allowed.' }, 403);

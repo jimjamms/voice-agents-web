@@ -64,9 +64,9 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
 
 #cloud-status{font-size:10px;line-height:1.6;color:#63756d;max-width:440px}
 
-/* Matching, brighter scenery on the planning and host pages. */
-.scene-background{filter:brightness(1);background:#e4ede2}
-.scene-background .journey-art{position:absolute;bottom:0;left:0;width:100%;height:clamp(380px,48vw,740px);opacity:.75}
-.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 34%,#f4f1e99c 76%,#f4f1e966 100%)}
-@media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}}
+/* Matching scenery at the original background brightness. */
+.scene-background{filter:brightness(.9);background:#e4ede2}
+.scene-background .journey-art{position:absolute;bottom:0;left:0;width:100%;height:clamp(380px,48vw,740px);opacity:1}
+.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 20%,#f4f1e980 46%,#f4f1e928 76%,#f4f1e938 100%)}
+@media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9e8 23%,#f4f1e966 65%,#f4f1e93d 100%)}}
 

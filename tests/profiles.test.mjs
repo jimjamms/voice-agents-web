@@ -4,12 +4,14 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { profileRequest } from '../worker/src/profiles.mjs';
+import { deleteUserData } from '../worker/src/logs.mjs';
 import worker from '../worker/src/index.mjs';
 const profile = { notes: 'Japan trip', choices: { countries: ['Japan'], cities: ['Tokyo'], activities: ['Hiking'] }, memories: { shared: [{ fact: 'Prefers trains', learned_by: 'Astra' }], sage: ['Likes hiking'], astra: ['Budget conscious'] } };
 function database() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../worker/migrations/0002_trip_profiles.sql', import.meta.url), 'utf8'));
-  return { db, prepare(sql) { return { bind(...params) { return {
+  db.exec(readFileSync(new URL('../worker/migrations/0001_chat_logs.sql', import.meta.url), 'utf8'));
+  return { db, async batch(statements) { db.exec('BEGIN'); try { const results = []; for (const statement of statements) results.push(await statement.run()); db.exec('COMMIT'); return results; } catch (error) { db.exec('ROLLBACK'); throw error; } }, prepare(sql) { return { bind(...params) { return {
     async first() { return db.prepare(sql).get(...params); },
     async run() { const result = db.prepare(sql).run(...params); return { meta: { changes: result.changes } }; },
   }; } }; } };
@@ -61,4 +63,29 @@ test('failed initial load cannot upload a stale local profile; conflicts stop si
   await assert.rejects(failed.cloud.load('Jenny')); failed.window.onTripProfileChange('jenny'); await failed.cloud.flush(); assert.equal(calls, 1);
   const app = client(async (_url, init) => { const body = JSON.parse(init.body); return body.action === 'load' ? Response.json({ version: 1, profile }) : Response.json({ error: 'Changed on another device' }, { status: 409 }); });
   await app.cloud.load('Jenny'); app.window.onTripProfileChange('jenny'); await app.cloud.flush(); assert.match(app.status.textContent, /another device/);
+});
+
+test('host deletion requires the private key and explicit name confirmation', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'private-key', PUBLIC_ORIGIN: 'https://example.github.io' };
+  const request = (key, body, origin = env.PUBLIC_ORIGIN) => new Request('https://worker.test/logs/delete', { method: 'POST', headers: { origin, authorization: `Bearer ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const body = { name: 'Jenny', confirm: 'Jenny', trip: true, logs: true };
+  assert.equal((await worker.fetch(request('demo-code', body), env)).status, 401);
+  assert.equal((await worker.fetch(request('private-key', body, 'https://wrong.test'), env)).status, 403);
+  assert.equal((await worker.fetch(request('private-key', { ...body, confirm: 'Other' }), env)).status, 400);
+  assert.equal((await worker.fetch(request('private-key', { ...body, trip: false, logs: false }), env)).status, 400);
+  db.db.close();
+});
+test('host deletion removes only the requested name and selected data categories', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'private-key' };
+  for (const name of ['jenny', 'jenny-other']) {
+    await profileRequest(post({ action: 'save', name, version: 0, profile }), env, {});
+    db.db.prepare('INSERT INTO chat_turns(turn_id,participant_id,session_id,speaker_lower,timestamp,payload) VALUES(?,?,?,?,?,?)').run(name, 'p', 's', name, '2026-10-13T00:00:00Z', '{}');
+  }
+  const remove = (trip, logs) => deleteUserData(new Request('https://worker.test/logs/delete', { method: 'POST', headers: { authorization: 'Bearer private-key', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'JENNY', confirm: 'JENNY', trip, logs }) }), env, {});
+  const first = await (await remove(false, true)).json(); assert.equal(first.turnsDeleted, 1); assert.equal(first.profilesDeleted, 0);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM trip_profiles').get().n, 2);
+  const second = await (await remove(true, true)).json(); assert.equal(second.profilesDeleted, 1); assert.equal(second.turnsDeleted, 0);
+  assert.equal(db.db.prepare('SELECT name_id FROM trip_profiles').get().name_id, 'jenny-other');
+  assert.equal(db.db.prepare('SELECT speaker_lower FROM chat_turns').get().speaker_lower, 'jenny-other');
+  db.db.close();
 });

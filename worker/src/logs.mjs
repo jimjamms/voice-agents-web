@@ -28,7 +28,7 @@ export async function saveLogs(request, env, cors) {
     return json({ saved: turns.map(turn => turn.turn_id) }, 200, cors);
   } catch { return json({ error: 'Could not save chat logs. Try again.' }, 503, cors); }
 }
-function validKey(given, expected) {
+export function validKey(given, expected) {
   if (!given || !expected || given.length !== expected.length) return false;
   let mismatch = 0; for (let i=0;i<given.length;i++) mismatch |= given.charCodeAt(i)^expected.charCodeAt(i);
   return mismatch === 0;
@@ -50,4 +50,25 @@ export async function exportLogs(request, env, cors) {
     const page=results.slice(0,500);
     return json({ turns: page.map(row=>({ ...JSON.parse(row.payload), interrupted: Boolean(row.interrupted), received_at: row.received_at })), nextCursor: results.length>500 ? page.at(-1).id : null },200,cors);
   } catch { return json({ error: 'Could not export logs.' },503,cors); }
+}
+
+export async function deleteUserData(request, env, cors) {
+  if (!env.LOG_ADMIN_KEY || !env.LOG_DB) return json({ error: 'Host data management is not configured.' }, 503, cors);
+  if (!validKey(request.headers.get('authorization')?.replace(/^Bearer /, ''), env.LOG_ADMIN_KEY)) return json({ error: 'Invalid host key.' }, 401, cors);
+  if (!(request.headers.get('content-type') || '').startsWith('application/json')) return json({ error: 'Expected JSON.' }, 415, cors);
+  const raw = await request.text();
+  if (raw.length > 1000) return json({ error: 'Request too large.' }, 413, cors);
+  let data;
+  try { data = JSON.parse(raw); } catch { return json({ error: 'Invalid JSON.' }, 400, cors); }
+  if (!data || typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 40 ||
+      data.confirm !== data.name.trim() || typeof data.trip !== 'boolean' || typeof data.logs !== 'boolean' || (!data.trip && !data.logs))
+    return json({ error: 'Enter and confirm one name ID, and select data to delete.' }, 400, cors);
+  const name = data.name.trim().toLowerCase(), statements = [];
+  if (data.trip) statements.push(env.LOG_DB.prepare('DELETE FROM trip_profiles WHERE name_id = ?').bind(name));
+  if (data.logs) statements.push(env.LOG_DB.prepare('DELETE FROM chat_turns WHERE speaker_lower = ?').bind(name));
+  try {
+    const result = await env.LOG_DB.batch(statements);
+    let index = 0;
+    return json({ name, profilesDeleted: data.trip ? result[index++].meta.changes : 0, turnsDeleted: data.logs ? result[index].meta.changes : 0 }, 200, cors);
+  } catch { return json({ error: 'Could not delete data. Check the database migrations and try again.' }, 503, cors); }
 }

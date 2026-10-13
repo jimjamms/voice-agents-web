@@ -28,21 +28,31 @@
     input{width:100%;min-height:48px;padding:12px 14px;border:1px solid #cdd7c1;border-radius:9px;color:#294b3b;background:#fffdf8;transition:border-color .15s,box-shadow .15s}input::placeholder{color:#889080;opacity:1}
     input:focus{outline:none;border-color:#63815a;box-shadow:0 0 0 3px #63815a20}.field small{display:block;font-size:10px;line-height:1.6;color:#7a856f;margin-top:8px}
     button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:15px 18px;border:1px solid #d9ae81;border-radius:9px;background:#e7b98b;color:#493324;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s}button:hover{background:#dca674}button:disabled{opacity:.65;cursor:wait}
-    button:focus-visible,a:focus-visible{outline:3px solid #94603c;outline-offset:4px}#export-status{font-size:11px;line-height:1.7;color:#62745b;overflow-wrap:anywhere;margin:18px 0 0;min-height:38px;padding-left:13px;border-left:2px solid #c9d7bc}
+    button:focus-visible,a:focus-visible{outline:3px solid #94603c;outline-offset:4px}#export-status{font-size:11px;line-height:1.7;color:#62745b;overflow-wrap:anywhere;margin:18px 0 0;min-height:38px;padding:11px 13px;border:1px solid #dce3d1;border-radius:9px;background:#f1f5e9}
     footer{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #bccdbb;padding:22px 0;font-size:10px;color:#5c7356}
     @media(max-width:650px){.shell{padding:0 20px}.topbar{height:72px}.brand{font-size:10px}.back{font-size:11px}main{padding:35px 0 45px}.host-card{grid-template-columns:1fr}.archive{padding:22px 25px;border-right:0;border-bottom:1px solid #c3d2b8;gap:0}.archive svg{display:none}.archive h2{font-size:18px}.archive-tag{margin-bottom:7px}.export-panel{padding:25px}.journey-art{width:165%;left:-32.5%;height:55vh}footer{flex-wrap:wrap}}
     @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-/* Matching, brighter scenery on the planning and host pages. */
-.scene-background{filter:brightness(1);background:#e4ede2}
-.scene-background .journey-art{position:absolute;bottom:0;left:0;width:100%;height:clamp(380px,48vw,740px);opacity:.75}
-.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 34%,#f4f1e99c 76%,#f4f1e966 100%)}
-@media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}}
+/* Matching scenery at the original background brightness. */
+.scene-background{filter:brightness(.9);background:#e4ede2}
+.scene-background .journey-art{position:absolute;bottom:0;left:0;width:100%;height:clamp(380px,48vw,740px);opacity:1}
+.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 20%,#f4f1e980 46%,#f4f1e928 76%,#f4f1e938 100%)}
+@media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9e8 23%,#f4f1e966 65%,#f4f1e93d 100%)}}
 /* Restore the original planning site's header and footer. */
 .topbar{height:85px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #bccdbb;font-size:10px;letter-spacing:.16em;gap:12px}
 .brand{font-weight:800;display:flex;align-items:center;gap:12px;font-size:inherit;letter-spacing:inherit}
 .brand-mark{color:#275d52;display:flex}.brand svg{width:24px;height:24px;color:#275d52}
 footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.12em;color:#516a5a}
 @media(max-width:600px){.topbar{height:68px}}
+
+    .delete-card{max-width:930px;margin-top:24px;padding:28px 32px;background:#fffaf1;border:1px solid #ddcabc;border-radius:16px;box-shadow:0 10px 30px #294d400b}
+    .delete-card h2{font:800 20px Manrope,sans-serif;letter-spacing:-.03em;margin:0 0 10px}
+    .delete-card p{font-size:12px;line-height:1.7;color:#786c60;margin:0 0 20px}
+    .delete-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.delete-options{display:flex;flex-wrap:wrap;gap:18px;border:0;padding:0;margin:0 0 20px}
+    .delete-options legend{font-size:12px;font-weight:700;margin-bottom:12px}.delete-options label{display:flex;align-items:center;gap:8px;margin:0;font-weight:500}
+    .delete-options input{width:16px;min-height:16px;height:16px;padding:0;accent-color:#94603c}
+    #delete-user{background:#f1ded0;border-color:#d8b49a;color:#804b33;max-width:300px}#delete-user:hover{background:#e9cbb7}
+    #delete-status{margin:16px 0 0;overflow-wrap:anywhere}
+    @media(max-width:650px){.delete-card{padding:25px}.delete-grid{grid-template-columns:1fr;gap:0}#delete-user{max-width:none}}
   </style>
 </head>
 <body>
@@ -90,8 +100,19 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
             <div class="field"><label for="log-speaker">Tester name <span>optional</span></label><input id="log-speaker" type="text" maxlength="40" placeholder="Leave blank for everyone" aria-describedby="name-help"><small id="name-help">Names match regardless of capitalization.</small></div>
             <button id="export-logs" type="submit"><span>Download JSON</span><span aria-hidden="true">↓</span></button>
           </form>
-          <p id="export-status" role="status" aria-live="polite">Your host key is used for this export and isn’t saved in the browser.</p>
+          <p id="export-status" role="status" aria-live="polite">Your key isn’t stored and is cleared after each export.</p>
         </div>
+      </section>
+
+      <section class="delete-card" aria-labelledby="delete-heading">
+        <h2 id="delete-heading">Delete tester data</h2>
+        <p>Uses the private host key entered above. Deletion is permanent. Close the tester’s open tabs and clear their browser copies first; cached profiles or pending uploads can restore deleted data.</p>
+        <form id="user-delete">
+          <div class="delete-grid"><div class="field"><label for="delete-name">Name ID</label><input id="delete-name" type="text" maxlength="40" placeholder="Exact tester name ID" autocomplete="off" required></div><div class="field"><label for="delete-confirm">Type the ID again to confirm</label><input id="delete-confirm" type="text" maxlength="40" autocomplete="off" required></div></div>
+          <fieldset class="delete-options"><legend>Data to delete</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>
+          <button id="delete-user" type="submit"><span>Delete selected data</span><span aria-hidden="true">×</span></button>
+          <p id="delete-status" role="status" aria-live="polite"></p>
+        </form>
       </section>
     </main>
     <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>
