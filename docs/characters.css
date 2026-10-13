@@ -1,6 +1,6 @@
 /* Simple travel mascots drawn in the same flat style as the landscape. */
 #planning-stage .agent-options .agent-card{height:auto;min-height:260px;padding:24px;isolation:isolate;display:flex;flex-direction:column;align-items:flex-start;border-radius:14px;overflow:hidden;color:#243f3b}
-#planning-stage .agent-card.sage{background:linear-gradient(150deg,#fffaf0,#f2eadc);border-color:#decdb5}
+#planning-stage .agent-card.sage{background:linear-gradient(150deg,#f2e5d4,#d4c7b6);border-color:#decdb5}
 #planning-stage .agent-card.astra{background:linear-gradient(145deg,#deeadb,#b9cebf);border-color:#b7cbb8}
 #planning-stage .agent-card::before,#planning-stage .agent-card::after{content:none}
 #planning-stage .agent-card .card-top{position:relative;width:100%;padding:0;z-index:2;font-size:9px;letter-spacing:.13em;background:transparent;color:#526346}
@@ -23,7 +23,7 @@
 @media(max-width:600px){#planning-stage .agent-card .card-landscape{height:65px}}
 
 /* Sage's card follows her warm sunshine palette. */
-#planning-stage .agent-card.sage{color:#69482f;border-color:#decdb5;background:linear-gradient(150deg,#fffaf0,#f2eadc)}
+#planning-stage .agent-card.sage{color:#69482f;border-color:#decdb5;background:linear-gradient(150deg,#f2e5d4,#d4c7b6)}
 #planning-stage .agent-card.sage .card-top{color:#89613e}
 #planning-stage .agent-card.sage .select-indicator{color:#a66f3d}
 #planning-stage .agent-card.sage strong{color:#69482f}
