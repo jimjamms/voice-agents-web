@@ -70,10 +70,3 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
 .scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 34%,#f4f1e99c 76%,#f4f1e966 100%)}
 @media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}}
 
-/* Header and footer use the host desk's typography and spacing. */
-.topbar{height:88px;border-bottom:1px solid #cbd4c4;gap:16px}
-.brand{gap:10px;text-decoration:none;font-size:12px;font-weight:800;letter-spacing:.1em}
-.brand svg{width:25px;height:25px;color:#52755a}
-footer{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #bccdbb;padding:22px 0;font-size:10px;color:#5c7356;letter-spacing:normal}
-body[data-stage="setup"] footer{max-width:none;margin:0}
-@media(max-width:650px){.topbar{height:72px}.brand{font-size:10px}footer{flex-wrap:wrap}}
