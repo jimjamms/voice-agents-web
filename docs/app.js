@@ -504,7 +504,30 @@
   const notesToggle = document.querySelector('#toggle-trip-notes');
   const mobileLayout = window.matchMedia?.('(max-width:850px)');
   let mobileNotesOpen = false;
+  let currentMobileLayout = false;
   function syncMobileNotes() {
+    const isMobile = Boolean(mobileLayout?.matches);
+    if (isMobile !== currentMobileLayout) {
+      const checklist = document.querySelector('.planning-checklist');
+      const notes = document.querySelector('.trip-notepad');
+      const planning = document.querySelector('#planning-stage');
+      const workspace = document.querySelector('.workspace');
+      const chooser = document.querySelector('.chooser');
+      const controls = document.querySelector('.controls');
+      const record = document.querySelector('.record-row');
+      const textChat = document.querySelector('#text-chat');
+      if (isMobile) {
+        document.querySelector('#mobile-trip-details').append(checklist, notes);
+        controls.insertBefore(record, controls.firstChild);
+        controls.insertBefore(textChat, record.nextSibling);
+      } else {
+        planning.insertBefore(checklist, workspace);
+        chooser.insertBefore(notes, document.querySelector('.agent-options'));
+        controls.insertBefore(record, document.querySelector('#disconnect'));
+        controls.insertBefore(textChat, record);
+      }
+      currentMobileLayout = isMobile;
+    }
     const expanded = !mobileLayout?.matches || mobileNotesOpen;
     document.querySelector('.trip-notepad').dataset.mobileExpanded = String(expanded);
     document.querySelector('#trip-notes-display').hidden = !expanded;

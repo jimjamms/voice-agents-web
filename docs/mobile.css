@@ -1,5 +1,5 @@
 /* Desktop keeps the existing layout. Notes disclosure is only shown below 850px. */
-#toggle-trip-notes{display:none}
+#toggle-trip-notes,.mobile-start-guide,#mobile-trip-details{display:none}
 @media(max-width:850px){
   .shell{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
   .topbar{height:64px;gap:10px}
@@ -20,7 +20,10 @@
   .planning-toolbar{flex-wrap:nowrap;gap:8px;margin-bottom:12px}
   .planning-toolbar h2{flex:1;min-width:0;font-size:20px}
   #change-setup{flex-shrink:0;min-height:44px;padding:8px;font-size:12px}
-  .planning-checklist{padding:12px;margin-bottom:16px}
+  .mobile-start-guide{display:block;margin:0 0 14px;padding:12px 14px;background:#fffdf7;border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:12px;line-height:1.6}
+  .mobile-start-guide strong{display:block;margin-bottom:4px;font-size:14px}
+  #mobile-trip-details{display:flex;flex-direction:column;gap:12px;margin-top:18px}
+  .planning-checklist{padding:12px;margin-bottom:0}
   .planning-checklist #trip-goal-hint{font-size:12px;line-height:1.6}
   .workspace{grid-template-columns:minmax(0,1fr);gap:16px}
   #planning-stage .chooser{display:flex;gap:12px;width:100%}
@@ -45,9 +48,11 @@
   .conversation-head{height:auto;min-height:54px;padding:8px 14px;font-size:12px;gap:8px}
   .conversation-head>div{min-width:0;overflow-wrap:anywhere}
   #reset{min-height:44px;flex-shrink:0;font-size:12px}
-  .conversation>.messages{flex:0 1 auto;min-height:200px;max-height:min(48svh,360px);padding:16px 14px;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+  .conversation>.messages{flex:0 1 auto;min-height:140px;max-height:min(35svh,260px);padding:16px 14px;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
   .message{max-width:94%;font-size:15px;padding:11px 13px}
   .controls{padding:14px}
+  .controls>.record-row{margin-bottom:14px}
+  .controls>.speaker-controls{margin-top:14px;padding-top:12px;border-top:1px dashed var(--chat-border,var(--line))}
   .memory-row{flex-wrap:wrap;gap:8px}
   .memory-switch button,.mode-switch button{min-height:44px;font-size:12px}
   .memory-detail{gap:4px}
