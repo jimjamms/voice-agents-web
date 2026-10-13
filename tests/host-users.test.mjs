@@ -3,17 +3,19 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 function page(fetcher, confirm = () => true) {
-  const elements = new Map(), calls = [];
+  const elements = new Map(), calls = [], downloads = [], blobs = [];
+  class TestURL extends URL { static createObjectURL(blob) { blobs.push(blob); return "blob:memory-download"; } static revokeObjectURL() {} }
   const node = () => ({ value: '', textContent: '', children: [], listeners: {}, attrs: {}, disabled: false, hidden: false,
     addEventListener(type, handler) { this.listeners[type] = handler; }, setAttribute(key, value) { this.attrs[key] = value; },
+    click() { downloads.push({ filename: this.download, href: this.href }); },
     append(...items) { this.children.push(...items); }, replaceChildren() { this.children = []; }, focus() { this.focused = true; } });
   const get = id => { if (!elements.has(id)) elements.set(id, node()); return elements.get(id); };
   vm.runInNewContext(readFileSync(new URL('../docs/host-logs.js', import.meta.url), 'utf8'), {
-    document: { querySelector: selector => get(selector.slice(1)), createElement: node }, URL,
+    document: { querySelector: selector => get(selector.slice(1)), createElement: node }, URL: TestURL, Blob, setTimeout: () => 1,
     window: { VOICE_DEMO_CONFIG: { apiBaseUrl: 'https://worker.test' }, confirm },
     fetch: async (url, init) => { calls.push({ url: String(url), init }); return fetcher(url, init); },
   });
-  return { get, calls, async load() { get('user-list-form').listeners.submit({ preventDefault() {} }); await new Promise(resolve => setImmediate(resolve)); },
+  return { get, calls, downloads, blobs, async memories() { get("export-memories").listeners.click(); await new Promise(resolve => setImmediate(resolve)); }, async rowMemories(index = 0) { get("users-rows").children[index].children[4].children[1].listeners.click(); await new Promise(resolve => setImmediate(resolve)); }, async load() { get('user-list-form').listeners.submit({ preventDefault() {} }); await new Promise(resolve => setImmediate(resolve)); },
     async more() { get('users-more').listeners.click(); await new Promise(resolve => setImmediate(resolve)); },
     async remove(index = 0) { get('users-rows').children[index].children[0].children[0].children[1].listeners.click(); await new Promise(resolve => setImmediate(resolve)); } };
 }
@@ -69,4 +71,25 @@ test('host markup places deletion choices with the list and removes ID typing fi
   assert.equal(html.includes('id="delete-name"'), false); assert.equal(html.includes('id="delete-confirm"'), false);
   assert.equal(html.includes('id="user-delete"'), false);
   assert.match(html, /Data to delete with each user’s Delete button/);
+});
+
+
+test('host downloads one user’s synced memory JSON from its row, retaining separate compartments and clearing the key', async () => {
+  const memories = { shared: [], sage: ['Sage memory'], astra: ['Astra memory'], recentShared: [] };
+  const app = page(async url => String(url).includes('/memories/export') ? Response.json({ profiles: [{ name_id: 'jenny', memories }], nextCursor: null }) : Response.json({ users: [{ nameId: 'jenny', chatTurns: 3, tripStatus: 'Saved trip' }], total: 1, nextCursor: null }));
+  app.get('host-key').value = 'host-only'; await app.load(); app.get('host-key').value = 'host-only'; await app.rowMemories();
+  assert.equal(new URL(app.calls[1].url).searchParams.get('speaker'), 'jenny');
+  assert.equal(app.calls[1].init.headers.authorization, 'Bearer host-only');
+  assert.equal(app.downloads.length, 1); assert.match(app.downloads[0].filename, /^agent-memories-jenny-/);
+  const payload = JSON.parse(await app.blobs[0].text()); assert.deepEqual(payload.profiles[0].memories, memories);
+  assert.equal(app.get('host-key').value, '');
+});
+test('all-user memory export follows every page and local-only users do not receive fabricated memory files', async () => {
+  let count = 0;
+  const app = page(async () => Response.json(count++ === 0 ? { profiles: [{ name_id: 'alex', memories: { shared: [] } }], nextCursor: 'alex' } : { profiles: [{ name_id: 'jenny', memories: { shared: [] } }], nextCursor: null }));
+  app.get('host-key').value = 'host-only'; await app.memories();
+  assert.equal(new URL(app.calls[1].url).searchParams.get('cursor'), 'alex');
+  const payload = JSON.parse(await app.blobs[0].text()); assert.equal(payload.profiles.length, 2); assert.equal(payload.name_id_filter, null);
+  const missing = page(async () => Response.json({ profiles: [], nextCursor: null })); missing.get('host-key').value = 'host-only'; await missing.memories();
+  assert.equal(missing.downloads.length, 0); assert.match(missing.get('export-status').textContent, /cloud sync enabled/); assert.equal(missing.get('host-key').value, '');
 });

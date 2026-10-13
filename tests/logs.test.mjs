@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { saveLogs, exportLogs, cleanTurn, listUsers } from '../worker/src/logs.mjs';
+import { saveLogs, exportLogs, cleanTurn, listUsers, exportMemories } from '../worker/src/logs.mjs';
 import worker from '../worker/src/index.mjs';
 const turn = { turn_id:'turn-1',participant_id:'participant-1',session_id:'session-1',timestamp:'2026-10-13T05:00:00Z',agent:'sage',engine:'pipeline',memory_sharing_mode:'shared',speaker:'Jenny',user_text:'I chose Kyoto.',agent_reply:'We can plan your trip.',interrupted:false };
 function database() {
@@ -99,4 +99,35 @@ test('typed input provenance is retained in the host JSON log', async () => {
   await saveLogs(post([{ ...turn, input_mode: 'text' }]), env, {});
   const data = await (await exportLogs(admin(), env, {})).json();
   assert.equal(data.turns[0].input_mode, 'text'); assert.equal(data.turns[0].user_text, turn.user_text); db.db.close();
+});
+
+
+const memoryRequest = (query = '', key = 'host-only', origin) => new Request('https://worker.test/memories/export' + query, { headers: { authorization: `Bearer ${key}`, ...(origin ? { origin } : {}) } });
+test('host memory export preserves distinct compartments and excludes trip notes and private profile extras', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'host-only' };
+  const memories = { shared: [{ fact: 'Shared country choice', learned_by: 'Sage' }], sage: ['Sage-only preference'], astra: ['Astra-only constraint'], recentShared: [{ agent: 'sage', transcript: 'Japan', reply: 'Great', at: '2026-10-13T20:00:00Z' }] };
+  db.db.prepare('INSERT INTO trip_profiles(name_id,payload) VALUES(?,?)').run('jenny', JSON.stringify({ notes: 'NOTEPAD MUST STAY OUT', choices: { countries: ['Japan'] }, memories, unrelated: 'PRIVATE PROFILE EXTRA' }));
+  const response = await exportMemories(memoryRequest('?speaker=JENNY'), env, {}), data = await response.json();
+  assert.equal(response.status, 200); assert.equal(data.profiles.length, 1); assert.equal(data.profiles[0].name_id, 'jenny');
+  assert.deepEqual(data.profiles[0].memories, memories); assert.equal(data.nextCursor, null);
+  assert.ok(Number.isFinite(Date.parse(data.profiles[0].updated_at)));
+  assert.equal(JSON.stringify(data).includes('NOTEPAD MUST STAY OUT'), false); assert.equal(JSON.stringify(data).includes('PRIVATE PROFILE EXTRA'), false);
+  db.db.prepare('UPDATE trip_profiles SET payload=? WHERE name_id=?').run(JSON.stringify({ memories: { shared: [], sage: [], astra: [] } }), 'jenny');
+  const reset = await (await exportMemories(memoryRequest(), env, {})).json();
+  assert.deepEqual(reset.profiles[0].memories, { shared: [], sage: [], astra: [], recentShared: [] }); db.db.close();
+});
+test('memory export requires the host key, enforces origin and supports complete cursor pagination', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'host-only', PUBLIC_ORIGIN: 'https://example.github.io' };
+  const insert = db.db.prepare('INSERT INTO trip_profiles(name_id,payload) VALUES(?,?)');
+  for (const name of ['alex', 'jenny']) insert.run(name, JSON.stringify({ memories: { sage: [name + ' fact'] } }));
+  assert.equal((await worker.fetch(memoryRequest('', 'demo-code', env.PUBLIC_ORIGIN), env)).status, 401);
+  assert.equal((await worker.fetch(memoryRequest('', 'host-only', 'https://other.test'), env)).status, 403);
+  const response = await worker.fetch(memoryRequest('?limit=1', 'host-only', env.PUBLIC_ORIGIN), env);
+  const first = await response.json(); assert.equal(response.status, 200); assert.equal(first.profiles[0].name_id, 'alex'); assert.equal(first.nextCursor, 'alex');
+  assert.equal(response.headers.get('cache-control'), 'no-store'); assert.equal(response.headers.get('access-control-allow-origin'), env.PUBLIC_ORIGIN);
+  const second = await (await exportMemories(memoryRequest('?limit=1&cursor=alex'), env, {})).json();
+  assert.equal(second.profiles[0].name_id, 'jenny'); assert.equal(second.nextCursor, null);
+  assert.equal((await exportMemories(memoryRequest('?limit=51'), env, {})).status, 400);
+  const missing = await (await exportMemories(memoryRequest('?speaker=local-only'), env, {})).json(); assert.equal(missing.profiles.length, 0);
+  db.db.close();
 });

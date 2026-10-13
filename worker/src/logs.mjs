@@ -114,3 +114,28 @@ export async function listUsers(request, env, cors) {
     return json({ users, total: Number(results[0]?.total_count || 0), nextCursor: results.length > limit ? page.at(-1).name_id : null }, 200, cors);
   } catch { return json({ error: 'Could not load users. Check the database migrations and try again.' }, 503, cors); }
 }
+
+export async function exportMemories(request, env, cors) {
+  if (!env.LOG_ADMIN_KEY) return json({ error: 'Host memory export is not configured.' }, 503, cors);
+  if (!validKey(request.headers.get('authorization')?.replace(/^Bearer /, ''), env.LOG_ADMIN_KEY)) return json({ error: 'Invalid host key.' }, 401, cors);
+  if (!env.LOG_DB) return json({ error: 'Memory storage is not configured.' }, 503, cors);
+  const url = new URL(request.url);
+  const speaker = (url.searchParams.get('speaker') || '').trim().toLowerCase();
+  const cursor = (url.searchParams.get('cursor') || '').trim().toLowerCase();
+  const limit = Number(url.searchParams.get('limit') || 50);
+  if (speaker.length > 40 || cursor.length > 40 || !Number.isInteger(limit) || limit < 1 || limit > 50) return json({ error: 'Invalid memory filter.' }, 400, cors);
+  try {
+    let sql = "SELECT name_id, payload, version, strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) AS updated_at FROM trip_profiles WHERE name_id > ?";
+    const params = [cursor];
+    if (speaker) { sql += ' AND name_id = ?'; params.push(speaker); }
+    sql += ' ORDER BY name_id LIMIT ?'; params.push(limit + 1);
+    const { results } = await env.LOG_DB.prepare(sql).bind(...params).all();
+    const page = results.slice(0, limit);
+    const profiles = page.map(row => {
+      const profile = JSON.parse(row.payload);
+      const memories = Object.fromEntries(['shared', 'sage', 'astra', 'recentShared'].map(bucket => [bucket, Array.isArray(profile.memories?.[bucket]) ? profile.memories[bucket] : []]));
+      return { name_id: row.name_id, updated_at: row.updated_at, version: Number(row.version), memories };
+    });
+    return json({ profiles, nextCursor: results.length > limit ? page.at(-1).name_id : null }, 200, cors);
+  } catch { return json({ error: 'Could not export memories. Check the saved profiles and try again.' }, 503, cors); }
+}

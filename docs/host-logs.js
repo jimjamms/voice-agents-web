@@ -2,8 +2,9 @@
   const form=document.querySelector('#log-export'),button=document.querySelector('#export-logs'),status=document.querySelector('#export-status');
   const userForm = document.querySelector('#user-list-form'), userButton = document.querySelector('#load-users');
   const userRows = document.querySelector('#users-rows'), userStatus = document.querySelector('#users-status'), moreUsers = document.querySelector('#users-more');
+  const memoryButton = document.querySelector('#export-memories');
   const deleteStatus = document.querySelector('#delete-status');
-  let users = [], nextUser = null, userSearch = '', userTotal = 0, deleting = false, rowDeleteButtons = [];
+  let users = [], nextUser = null, userSearch = '', userTotal = 0, deleting = false, rowActionButtons = [];
 
   form.addEventListener('submit',async event=>{
     event.preventDefault(); if(button.disabled)return;
@@ -29,6 +30,40 @@
     } catch(error){status.textContent=error.message||'Could not download logs.';}
     finally {setHostBusy(false);document.querySelector('#host-key').value='';}
   });
+  async function downloadMemories(speaker = '') {
+    if (button.disabled || memoryButton.disabled || deleting) return;
+    const keyInput = document.querySelector('#host-key'), key = keyInput.value.trim(), base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
+    if (!key || !base) { status.textContent = 'Enter your private host key above to download memories.'; keyInput.focus(); return; }
+    setHostBusy(true);
+    try {
+      const profiles = [], cursors = new Set(); let cursor = '', size = 0;
+      for (let page = 0; page < 100; page++) {
+        status.textContent = `Downloading memories… ${profiles.length} users collected.`;
+        const url = new URL(`${base.replace(/\/$/, '')}/memories/export`);
+        if (speaker) url.searchParams.set('speaker', speaker);
+        if (cursor) url.searchParams.set('cursor', cursor);
+        const response = await fetch(url, { headers: { authorization: `Bearer ${key}` } });
+        const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Memory export failed.');
+        if (!Array.isArray(data.profiles)) throw new Error('Invalid memory export.');
+        size += JSON.stringify(data.profiles).length;
+        if (size > 25_000_000) throw new Error('Memory export is too large. Choose one Name ID to download.');
+        profiles.push(...data.profiles);
+        if (data.nextCursor === null) break;
+        if (typeof data.nextCursor !== 'string' || !data.nextCursor || cursors.has(data.nextCursor) || page === 99) throw new Error('Memory export is too large. Choose one Name ID to download.');
+        cursors.add(data.nextCursor); cursor = data.nextCursor;
+      }
+      if (!profiles.length) { status.textContent = 'No synced memory profile found. Terminal agents must have cloud sync enabled before their local memories appear here.'; return; }
+      const payload = { schema_version: 1, exported_at: new Date().toISOString(), name_id_filter: speaker || null, source: 'Synced Name ID profiles', profiles };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a'), url = URL.createObjectURL(blob);
+      const suffix = speaker ? speaker.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40) : 'all-users';
+      link.href = url; link.download = `agent-memories-${suffix}-${new Date().toISOString().slice(0, 10)}.json`; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      status.textContent = `Downloaded memories for ${profiles.length} user(s), with shared, Sage, and Astra memories kept separate.`;
+    } catch (error) { status.textContent = error.message || 'Could not download memories.'; }
+    finally { setHostBusy(false); keyInput.value = ''; }
+  }
+  memoryButton.addEventListener('click', () => { void downloadMemories(document.querySelector('#log-speaker').value.trim()); });
   async function deleteUser(name) {
     if (deleting || button.disabled || userButton.disabled) return;
     const keyInput = document.querySelector('#host-key'), key = keyInput.value.trim(), base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
@@ -53,11 +88,11 @@
     finally { deleting = false; setHostBusy(false); keyInput.value = ''; }
   }
   function setHostBusy(busy) {
-    button.disabled = userButton.disabled = moreUsers.disabled = busy;
-    rowDeleteButtons.forEach(control => { control.disabled = busy; });
+    button.disabled = memoryButton.disabled = userButton.disabled = moreUsers.disabled = busy;
+    rowActionButtons.forEach(control => { control.disabled = busy; });
   }
   function renderUsers() {
-    userRows.replaceChildren(); rowDeleteButtons = [];
+    userRows.replaceChildren(); rowActionButtons = [];
     if (!users.length) {
       const row = document.createElement('tr'), cell = document.createElement('td'); cell.colSpan = 5;
       cell.textContent = 'No saved users match this search.'; row.append(cell); userRows.append(row); return;
@@ -74,7 +109,7 @@
           wrap.className = 'user-name-actions'; name.className = 'user-name'; name.textContent = String(value);
           remove.type = 'button'; remove.className = 'user-delete-button'; remove.textContent = 'Delete';
           remove.disabled = deleting; remove.setAttribute('aria-label', `Delete selected data for ${user.nameId}`);
-          remove.addEventListener('click', () => { void deleteUser(user.nameId); }); rowDeleteButtons.push(remove);
+          remove.addEventListener('click', () => { void deleteUser(user.nameId); }); rowActionButtons.push(remove);
           wrap.append(name, remove); cell.append(wrap);
         } else cell.textContent = String(value);
         row.append(cell);
@@ -85,7 +120,11 @@
         document.querySelector('#log-speaker').value = user.nameId;
         userStatus.textContent = `Selected ${user.nameId}. The export name filter is filled.`;
       });
-      actions.append(use); row.append(actions); userRows.append(row);
+      const memory = document.createElement('button'); memory.type = 'button'; memory.className = 'user-use'; memory.textContent = 'Memories';
+      memory.setAttribute('aria-label', `Download memories for ${user.nameId}`);
+      memory.addEventListener('click', () => { void downloadMemories(user.nameId); });
+      rowActionButtons.push(use, memory);
+      actions.className = 'user-downloads'; actions.append(use, memory); row.append(actions); userRows.append(row);
     }
   }
   async function loadUsers(append = false) {
