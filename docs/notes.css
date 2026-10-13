@@ -11,3 +11,14 @@
 .trip-notepad[data-companion] textarea::placeholder{color:var(--note-muted)}
 .trip-notepad[data-companion] textarea:focus{outline-color:var(--note-accent)}
 .trip-notepad[data-companion]>small{background:var(--note-header);color:var(--note-muted)}
+
+/* Keep the ruled paper attached to the text, including its padding and scroll. */
+.trip-notepad textarea,
+.trip-notepad[data-companion] textarea{
+  line-height:28px;
+  background-color:var(--note-paper,#fffdf4);
+  background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 27px,var(--note-line,#e9eddf) 27px,var(--note-line,#e9eddf) 28px);
+  background-size:100% 28px;
+  background-origin:content-box;
+  background-attachment:local;
+}

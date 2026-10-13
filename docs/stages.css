@@ -57,3 +57,17 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
 .conversation[data-agent="sage"] .record-help small,
 .conversation[data-agent="sage"] .engine-description,
 .conversation[data-agent="sage"] .empty-state span{color:#856246}
+
+/* A softly tinted travel-map backdrop keeps the chat distinct from its controls. */
+.conversation[data-agent="sage"]{--chat-backdrop:#faead5;--chat-map-line:#bf93621a;--chat-glow:#fffaf0}
+.conversation[data-agent="astra"]{--chat-backdrop:#e5efdf;--chat-map-line:#7291651a;--chat-glow:#f7fbf2}
+.conversation[data-agent] .messages{
+  background-color:var(--chat-backdrop);
+  background-image:radial-gradient(ellipse at 15% 0%,var(--chat-glow),transparent 65%),
+    repeating-radial-gradient(ellipse at 100% 100%,transparent 0,transparent 44px,var(--chat-map-line) 45px,var(--chat-map-line) 46px,transparent 47px,transparent 78px);
+}
+
+/* A quiet companion-colored cue when a reply recommends a handoff. */
+.switch-agent-button[data-suggested="true"]{border-color:#b7804a;box-shadow:0 0 0 3px #c8955e22,0 4px 12px #9a643514;background:#eacba5;transition:background .2s,border-color .2s,box-shadow .2s}
+.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{border-color:#719467;box-shadow:0 0 0 3px #71946722,0 4px 12px #476e5314;background:#cdddbe}
+@media(prefers-reduced-motion:reduce){.switch-agent-button[data-suggested="true"]{transition:none}}

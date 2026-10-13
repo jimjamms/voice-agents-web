@@ -66,9 +66,20 @@
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
     return body;
   };
+  function highlightHandoff(reply) {
+    const other = agent === 'sage' ? 'Astra' : 'Sage';
+    const sentences = String(reply || '').split(/[.!?\n]+/);
+    const invitation = new RegExp(`\\b(?:switch(?:ing)?(?: over)? to|talk(?:ing)? (?:to|with)|speak(?:ing)? (?:to|with)|chat(?:ting)? (?:to|with)|ask|try|let|hand(?:ing)? (?:this |you )?(?:over )?to|recommend|suggest)\\b[^.!?]{0,65}\\b${other}\\b`, 'i');
+    const offer = new RegExp(`\\b${other}\\b[^.!?]{0,45}\\b(?:can help|could help|can finalize|can plan|can work|can check|is better|would be better|is best|would help)\\b`, 'i');
+    const suggested = sentences.some(sentence =>
+      !/\b(?:don't|do not|no need to|shouldn't|should not|needn't)\b/i.test(sentence) &&
+      (invitation.test(sentence) || offer.test(sentence)));
+    switchAgent.dataset.suggested = String(suggested);
+  }
   const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
+    if (role === 'assistant') highlightHandoff(text);
     const body = renderMessage(role, text, speaker);
     history.push({ role, content: text, at: new Date().toISOString(),
       ...(speaker && { speaker: speaker.name, speaker_score: Math.round(speaker.score * 1000) / 1000 }) });
@@ -202,6 +213,7 @@
     messages.append(empty);
   }
   function switchConversation() {
+    switchAgent.dataset.suggested = 'false';
     conversations.set(activeConversationKey, { history, sessionId, scrollTop: messages.scrollTop });
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
     activeConversationKey = conversationKey();
@@ -211,6 +223,7 @@
     renderConversation(saved?.scrollTop);
   }
   function reset() {
+    switchAgent.dataset.suggested = 'false';
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
     history = []; sessionId = crypto.randomUUID();
     activeConversationKey = conversationKey();
@@ -244,11 +257,6 @@
   });
   document.querySelector('#reset').addEventListener('click', reset);
   disconnectButton.addEventListener('click', () => endSession());
-  document.querySelector('#download').addEventListener('click', () => {
-    if (!history.length) { setStatus('There’s no conversation to download yet.'); return; }
-    const url = URL.createObjectURL(new Blob([JSON.stringify({ agent, engine, speaker: speakerName.value.trim() || 'Unknown', memory_sharing_mode: memoryMode.value, messages: history, turns }, null, 2)], { type: 'application/json' }));
-    const a = document.createElement('a'); a.href = url; a.download = `${agent}-conversation.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-  });
   const transcripts = new Map();
   function handleEvent(event) {
     switch (event.type) {
@@ -281,6 +289,7 @@
           history.push({ role: 'assistant', content: reply, at: new Date().toISOString() });
         } else if (reply) addMessage('assistant', reply);
         transcripts.delete(id);
+        highlightHandoff(reply);
         rememberRealtime(reply);
         break;
       }

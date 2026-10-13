@@ -98,3 +98,20 @@ test('automatic completion waits until the current audio reply finishes', () => 
   app.transport.playing = false; app.options.onState();
   assert.ok(app.emitted.includes('trip-goal:complete'));
 });
+
+test('handoff cue follows recommendations, clears on switching, and ignores mentions and negation', () => {
+  const app = setup();
+  for (const reply of ['Switch to Astra to finalize the budget.', 'Astra can help with the route.', 'I recommend talking with Astra next.']) {
+    app.options.onMessage('assistant', reply);
+    assert.equal(app.get('switch-agent').dataset.suggested, 'true');
+  }
+  for (const reply of ['Astra and I have different personalities.', "You do not need to switch to Astra yet.", 'Let us explore Japan.']) {
+    app.options.onMessage('assistant', reply);
+    assert.equal(app.get('switch-agent').dataset.suggested, 'false');
+  }
+  app.options.onMessage('assistant', 'Talk to Astra for logistics.'); app.click('switch-agent');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'false');
+  app.options.onMessage('assistant', 'Sage can help you choose activities.');
+  assert.equal(app.get('switch-agent').dataset.suggested, 'true');
+  app.click('reset'); assert.equal(app.get('switch-agent').dataset.suggested, 'false');
+});

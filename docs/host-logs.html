@@ -1,1 +1,92 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Host chat logs · Sage & Astra</title><link rel="stylesheet" href="styles.css"><script src="config.js" defer></script><script src="host-logs.js" defer></script><style>.host-card{max-width:650px;margin:40px auto;padding:28px;background:#fffdf5;border:1px solid #c8d5bd;border-radius:16px}.host-card h1{font-size:32px;margin-bottom:12px}.host-card p{font-size:13px;color:#63756d;line-height:1.7}.host-card label{display:block;font-size:12px;font-weight:700;margin:20px 0 8px}.host-card input{width:100%;padding:12px;border:1px solid #c8d5bd;border-radius:8px;color:#243f3b;background:#fff}.host-card button{margin-top:23px}#export-status{margin-top:17px;overflow-wrap:anywhere}</style></head><body><main class="shell"><section class="host-card"><h1>Chat logs</h1><p>Download transcripts saved by remote testers. Leave the name blank to export everyone.</p><form id="log-export"><label for="host-key">Private host key</label><input id="host-key" type="password" autocomplete="off" required><label for="log-speaker">Tester name (optional)</label><input id="log-speaker" type="text" maxlength="40"><button id="export-logs" type="submit" class="record-button">Download JSON ↓</button></form><p id="export-status" role="status">Your host key is used only for this export and is not saved in the browser.</p></section></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f4f1e9">
+  <title>Chat logs · Sage & Astra</title>
+  <script src="config.js" defer></script>
+  <script src="host-logs.js" defer></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+    :root{font-family:'DM Sans',sans-serif;color:#294b3b;background:#f4f1e9;font-synthesis:none}
+    *{box-sizing:border-box}body{margin:0;min-width:320px;min-height:100svh}button,input{font:inherit}a{color:inherit}
+    .scene-background{position:fixed;inset:0;z-index:-1;overflow:hidden;background:#e4ede2;pointer-events:none}
+    .journey-art{position:absolute;bottom:0;width:100%;height:65vh;object-fit:cover;opacity:.85}
+    .scene-wash{position:absolute;inset:0;background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9e8 34%,#f4f1e977 76%,#f4f1e938)}
+    .shell{max-width:1100px;margin:auto;padding:0 32px}
+    .topbar{height:88px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #cbd4c4;gap:16px}
+    .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-size:12px;font-weight:800;letter-spacing:.1em}
+    .brand svg{width:25px;height:25px;color:#52755a}.back{font-size:12px;color:#61765f;text-decoration:none}.back:hover{text-decoration:underline}
+    main{padding:64px 0 80px}.intro{margin-bottom:27px}.eyebrow{font-size:10px;font-weight:800;letter-spacing:.2em;color:#94603c;margin:0 0 14px}
+    h1{font:800 clamp(32px,5vw,48px)/1.15 Manrope,sans-serif;letter-spacing:-.05em;margin:0 0 12px}.intro p:last-child{font-size:14px;line-height:1.7;color:#657361;margin:0}
+    .host-card{display:grid;grid-template-columns:.8fr 1.2fr;max-width:930px;background:#fffaf1;border:1px solid #cad4bf;border-radius:20px;overflow:hidden;box-shadow:0 20px 55px #294d401a}
+    .archive{background:linear-gradient(145deg,#e5efdb,#cfdfc6);padding:38px 32px;display:flex;flex-direction:column;justify-content:space-between;gap:40px;border-right:1px solid #c3d2b8}
+    .archive svg{width:100%;max-width:230px;margin:0 auto;display:block}.archive h2{font:800 22px Manrope,sans-serif;letter-spacing:-.04em;margin:0 0 10px}.archive p{font-size:12px;line-height:1.8;color:#5c7356;margin:0}.archive-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:.16em;margin-bottom:12px;color:#66805e}
+    .export-panel{padding:38px}.export-panel h2{font:800 20px Manrope,sans-serif;letter-spacing:-.03em;margin:0 0 6px}.export-panel>p{font-size:12px;line-height:1.7;color:#74816b;margin:0 0 25px}
+    label{display:block;font-size:12px;font-weight:700;margin:0 0 9px}label span{font-weight:400;color:#7a856f;font-size:11px}.field{margin-bottom:21px}
+    input{width:100%;min-height:48px;padding:12px 14px;border:1px solid #cdd7c1;border-radius:9px;color:#294b3b;background:#fffdf8;transition:border-color .15s,box-shadow .15s}input::placeholder{color:#889080;opacity:1}
+    input:focus{outline:none;border-color:#63815a;box-shadow:0 0 0 3px #63815a20}.field small{display:block;font-size:10px;line-height:1.6;color:#7a856f;margin-top:8px}
+    button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:15px 18px;border:1px solid #d9ae81;border-radius:9px;background:#e7b98b;color:#493324;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s}button:hover{background:#dca674}button:disabled{opacity:.65;cursor:wait}
+    button:focus-visible,a:focus-visible{outline:3px solid #94603c;outline-offset:4px}#export-status{font-size:11px;line-height:1.7;color:#62745b;overflow-wrap:anywhere;margin:18px 0 0;min-height:38px;padding-left:13px;border-left:2px solid #c9d7bc}
+    footer{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #bccdbb;padding:22px 0;font-size:10px;color:#5c7356}
+    @media(max-width:650px){.shell{padding:0 20px}.topbar{height:72px}.brand{font-size:10px}.back{font-size:11px}main{padding:35px 0 45px}.host-card{grid-template-columns:1fr}.archive{padding:22px 25px;border-right:0;border-bottom:1px solid #c3d2b8;gap:0}.archive svg{display:none}.archive h2{font-size:18px}.archive-tag{margin-bottom:7px}.export-panel{padding:25px}.journey-art{width:165%;left:-32.5%;height:55vh}footer{flex-wrap:wrap}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  </style>
+</head>
+<body>
+<div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+<defs><linearGradient id="journey-sky" x2="0" y2="1"><stop stop-color="#dfeee5"/><stop offset="1" stop-color="#f7ead0"/></linearGradient><linearGradient id="journey-sea" x2="0" y2="1"><stop stop-color="#9cc8bb"/><stop offset="1" stop-color="#548d7e"/></linearGradient></defs>
+<rect width="1120" height="260" rx="0" fill="url(#journey-sky)"/>
+<circle cx="853" cy="76" r="37" fill="#e6b66e"/><circle cx="853" cy="76" r="48" fill="none" stroke="#e6b66e" opacity=".3"/>
+<g fill="#fffdf3" opacity=".85"><path d="M47 56h96a17 17 0 0 0-18-16 26 26 0 0 0-49-2 20 20 0 0 0-29 18Z"/><path d="M362 42h81a13 13 0 0 0-16-12 22 22 0 0 0-42-2 16 16 0 0 0-23 14Z"/><path d="M954 48h114a17 17 0 0 0-22-16 28 28 0 0 0-52-4 20 20 0 0 0-40 20Z"/></g>
+<path d="m0 188 102-100 78 77 85-139 137 164 79-97 115 121v46H0Z" fill="#9daf95"/>
+<path d="m190 147 75-121 100 120-66-33-27 19-32-24Z" fill="#f5f3e5"/>
+<path d="m27 260 171-115 108 99 87-128 151 144Z" fill="#608a73"/>
+<path d="m319 224 74-108 74 89-46-22-26 14-19-28Z" fill="#dae5cc"/>
+<path d="M0 225q129-53 265 0t273-1q105-43 194-12l388-43v91H0Z" fill="#bfd0a5"/>
+<path d="M451 260q140-77 299-102t370-9v111Z" fill="url(#journey-sea)"/>
+<path d="M0 244q109-41 221-9t246-10q114-39 186-45l-61 27q-98 14-148 53H0Z" fill="#e9d4a8"/>
+<path d="M455 250q94-40 190-43M637 231q131-53 282-45M818 239q97-31 220-31" fill="none" stroke="#dce9d5" stroke-width="2" opacity=".65"/>
+<path d="M911 193q25-22 62-20t70 19q-39 10-77 8Z" fill="#eddbb3"/>
+<g fill="none" stroke="#426d54" stroke-width="3" stroke-linecap="round"><path d="m974 185 4-42"/><path d="M977 147q-16-18-32-8m32 8q19-20 37-10m-37 10q-22-1-28 14m28-14q19-3 28 12"/></g>
+<g fill="#365f4b"><path d="m40 218 10-29 10 29h-7v16h-6v-16Z"/><path d="m75 220 13-40 13 40h-10v17h-6v-17Z"/><path d="m124 215 10-30 10 30h-7v18h-6v-18Z"/></g>
+<g transform="translate(703 170)"><path d="M0 39h31L20 1Z" fill="#fff8e7"/><path d="M24 39h17L24 15Z" fill="#d2aa79"/><path d="M-5 44h51l-12 11H5Z" fill="#355e50"/></g>
+<path d="M150 91C190 55 347 54 463 86S645 112 667 57c11-28-25-29-31-9-7 24 31 44 85 37l40-12" fill="none" stroke="#6a8c76" stroke-width="2" stroke-dasharray="5 7" opacity=".8"/>
+<g transform="translate(770 70) rotate(-16)"><path d="m-20 1 37-12-10 24-7-10-20-2Z" fill="#fffdf2" stroke="#365c4e" stroke-width="1.5"/><path d="m0 3 17-14" fill="none" stroke="#365c4e" stroke-width="1.5"/></g>
+<g transform="translate(536 51)"><circle r="17" fill="#fffdf2" stroke="#b7c7b1"/><path d="m-6 6 3-10 9-3-3 10Z" fill="#57816b"/></g>
+</svg><div class="scene-wash"></div></div>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="Sage and Astra home"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 11 18-8-6 18-4-7-8-3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m11 14 10-11" stroke="currentColor" stroke-width="1.5"/></svg>SAGE & ASTRA</a>
+      <a class="back" href="index.html">← Back to trip planning</a>
+    </header>
+    <main>
+      <div class="intro"><p class="eyebrow">HOST DESK</p><h1>Conversation archive</h1><p>Bring your travelers’ conversations together.</p></div>
+      <section class="host-card" aria-label="Download chat logs">
+        <aside class="archive">
+          <svg viewBox="0 0 240 190" fill="none" aria-hidden="true">
+            <circle cx="186" cy="40" r="23" fill="#e7b98b"/><path d="m12 145 48-60 30 36 42-71 89 95" fill="#b3c9a4"/><path d="m100 104 32-54 33 54-21-10-12 11-10-15Z" fill="#f9f6e9"/>
+            <rect x="43" y="36" width="112" height="131" rx="10" transform="rotate(-8 43 36)" fill="#adc399"/>
+            <rect x="62" y="27" width="112" height="139" rx="10" fill="#fffaf0" stroke="#8ba17a" stroke-width="1.5"/>
+            <path d="M83 57h56M83 70h70M83 118h70M83 131h50" stroke="#c8d2b7" stroke-width="3" stroke-linecap="round"/>
+            <path d="M84 93h18l9-13 14 21 12-10h16" stroke="#779268" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="163" cy="147" r="27" fill="#e7b98b" stroke="#fffaf0" stroke-width="4"/><path d="M163 135v23m-8-8 8 8 8-8" stroke="#69482f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div><span class="archive-tag">SAVED ALONG THE WAY</span><h2>Every journey, in words.</h2><p>Export saved transcripts from both agents in one JSON file. Text only; no audio recordings.</p></div>
+        </aside>
+        <div class="export-panel">
+          <h2>Download chat logs</h2><p>Use your private host key to access the archive.</p>
+          <form id="log-export">
+            <div class="field"><label for="host-key">Private host key</label><input id="host-key" type="password" autocomplete="off" placeholder="Enter your host key" required aria-describedby="key-help"><small id="key-help">Your LOG_ADMIN_KEY, separate from the demo code.</small></div>
+            <div class="field"><label for="log-speaker">Tester name <span>optional</span></label><input id="log-speaker" type="text" maxlength="40" placeholder="Leave blank for everyone" aria-describedby="name-help"><small id="name-help">Names match regardless of capitalization.</small></div>
+            <button id="export-logs" type="submit"><span>Download JSON</span><span aria-hidden="true">↓</span></button>
+          </form>
+          <p id="export-status" role="status" aria-live="polite">Your host key is used for this export and isn’t saved in the browser.</p>
+        </div>
+      </section>
+    </main>
+    <footer><span>Sage & Astra · Travel companions</span><span>Private host access</span></footer>
+  </div>
+</body>
+</html>
