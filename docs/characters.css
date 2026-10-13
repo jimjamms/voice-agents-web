@@ -37,11 +37,13 @@
 /* Preserve the transparent animal artwork proportions inside the existing cards. */
 #planning-stage .agent-mascot{object-fit:contain}
 
-/* Reserve a real column for each mascot, keeping it beside the card copy. */
-#planning-stage .agent-options .agent-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(124px,.95fr);grid-template-rows:auto 1fr auto;column-gap:12px;row-gap:8px;align-items:start}
-#planning-stage .agent-card .card-top{grid-column:1 / -1;grid-row:1}
-#planning-stage .agent-card .agent-mascot{position:relative;grid-column:2;grid-row:2 / 4;justify-self:center;align-self:center;top:auto;right:auto;width:100%;max-width:170px;height:190px;object-fit:contain;object-position:center;z-index:0}
-#planning-stage .agent-card strong{grid-column:1;grid-row:2;align-self:end;margin:0;font-size:32px}
-#planning-stage .agent-card small{grid-column:1;grid-row:3;max-width:none;margin:0;font-size:12px;line-height:1.65}
-@media(max-width:600px){#planning-stage .agent-card strong{font-size:30px}#planning-stage .agent-card .agent-mascot{height:178px}#planning-stage .agent-card small{font-size:11px}}
-@media(max-width:400px){#planning-stage .agent-options .agent-card{column-gap:9px;grid-template-columns:minmax(0,1fr) minmax(116px,.95fr)}#planning-stage .agent-card strong{font-size:26px}#planning-stage .agent-card .arrow{font-size:16px;margin-left:5px}#planning-stage .agent-card .agent-mascot{height:168px}}
+/* Larger floating mascots; names and descriptions retain their original layout. */
+#planning-stage .agent-card .agent-mascot{position:absolute;right:-14px;top:25px;width:210px;height:220px;object-fit:contain;object-position:center;z-index:0}
+#planning-stage .agent-card::after{content:"";position:absolute;right:30px;bottom:21px;width:108px;height:12px;border-radius:50%;background:#57736126;filter:blur(2px);pointer-events:none;z-index:0;animation:mascot-ground-shadow 6s ease-in-out infinite}
+#planning-stage .agent-card.sage::after{background:#9a643529}
+#planning-stage .agent-card.astra::after{animation-duration:7s}
+@keyframes mascot-ground-shadow{0%,100%{transform:scaleX(1);opacity:.85}50%{transform:scaleX(.86);opacity:.55}}
+@media(min-width:851px) and (max-width:1050px){#planning-stage .agent-card .agent-mascot{width:185px;height:204px;right:-18px;top:36px}#planning-stage .agent-card small{max-width:125px}#planning-stage .agent-card::after{width:96px;right:24px;bottom:23px}}
+@media(max-width:600px){#planning-stage .agent-card .agent-mascot{width:210px;height:220px;right:-8px;top:19px}#planning-stage .agent-card::after{right:34px;bottom:17px}}
+@media(max-width:400px){#planning-stage .agent-card .agent-mascot{width:185px;height:204px;right:-14px;top:29px}#planning-stage .agent-card small{max-width:125px}#planning-stage .agent-card::after{width:96px;right:25px;bottom:19px}}
+@media(prefers-reduced-motion:reduce){#planning-stage .agent-card::after{animation:none}}
