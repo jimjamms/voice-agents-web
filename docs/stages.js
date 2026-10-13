@@ -8,6 +8,8 @@
   const title = document.querySelector('#traveler-title');
   const radios = [...form.querySelectorAll('input[name="initial-agent"]')];
   const steps = [document.querySelector('#setup-step'), document.querySelector('#planning-step'), document.querySelector('#review-step')];
+  const reviewedTrips = new Set();
+  const tripKey = () => name.value.trim().toLowerCase() || 'unknown';
   let snapshot = { notes: '', ready: false, choices: { countries: [], cities: [], activities: [] } };
   function step(next) {
     setup.hidden = next !== 'setup'; planning.hidden = next !== 'planning'; review.hidden = next !== 'review';
@@ -36,6 +38,7 @@
     window.dispatchEvent(new Event('trip-review:open'));
     document.querySelector('#completed-notes').value = snapshot.notes;
     document.querySelector('#completed-notepad').dataset.companion = document.querySelector('[data-agent].active')?.dataset.agent || 'sage';
+    reviewedTrips.add(tripKey());
     step('review'); document.querySelector('#review-heading').focus();
   }
   for (const input of [name, code]) input.addEventListener('input', () => input.setCustomValidity(''));
@@ -81,11 +84,14 @@
   });
   window.addEventListener('trip-profile:deleted', event => {
     if (name.value.trim().toLowerCase() !== event.detail.name) return;
+    reviewedTrips.delete(event.detail.name);
     document.querySelector('#profile-login-status').textContent = event.detail.message;
     document.querySelector('#completed-notes').value = '';
     step('setup'); name.focus();
   });
-  window.addEventListener('trip-goal:complete', openReview);
+  window.addEventListener('trip-goal:complete', () => {
+    if (!reviewedTrips.has(tripKey())) openReview();
+  });
   document.querySelector('#continue-review').addEventListener('click', openReview);
   document.querySelector('#back-to-planning').addEventListener('click', () => { step('planning'); title.focus(); });
   document.querySelector('#copy-completed-notes').addEventListener('click', async () => {

@@ -77,3 +77,20 @@ test('a deleted active name ID returns to setup and clears the completed notepad
   assert.equal(page.document.body.dataset.stage, 'setup'); assert.equal(page.get('planning-stage').hidden, true);
   assert.equal(page.get('completed-notes').value, ''); assert.match(page.get('profile-login-status').textContent, /deleted/);
 });
+
+test('after returning from the form, agent replies never force another automatic redirect', () => {
+  const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
+  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days' }, finalized: true };
+  const update = (ready, notes) => page.event('trip-notes:updated', { key: 'jenny', notes, ready, choices });
+  update(true, 'Complete trip'); page.event('trip-goal:complete');
+  assert.equal(page.document.body.dataset.stage, 'review');
+  page.get('back-to-planning').listeners.click();
+  update(true, 'Trip with clarification'); page.event('trip-goal:complete');
+  assert.equal(page.document.body.dataset.stage, 'planning');
+  update(false, 'Revised trip awaiting approval'); update(true, 'Revised approved trip'); page.event('trip-goal:complete');
+  assert.equal(page.document.body.dataset.stage, 'planning');
+  assert.equal(page.get('continue-review').hidden, false);
+  page.get('continue-review').listeners.click();
+  assert.equal(page.document.body.dataset.stage, 'review');
+  assert.equal(page.get('completed-notes').value, 'Revised approved trip');
+});

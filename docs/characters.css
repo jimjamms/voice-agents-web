@@ -33,3 +33,6 @@
 #planning-stage .agent-card.sage .agent-mascot{filter:drop-shadow(0 5px 5px #aa783b20)}
 #planning-stage .agent-card.sage .far-hill{fill:#c89560}
 #planning-stage .agent-card.sage .near-hill{fill:#ab794e}
+
+/* Preserve the transparent animal artwork proportions inside the existing cards. */
+#planning-stage .agent-mascot{object-fit:contain}
