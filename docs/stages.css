@@ -57,11 +57,11 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
 .conversation[data-agent="sage"] .engine-description,
 .conversation[data-agent="sage"] .empty-state span{color:#856246}
 
-/* A clear companion-colored cue appears only when a reply recommends a handoff. */
-.switch-agent-button[data-suggested="true"]{border-color:#94603c;box-shadow:0 0 0 3px #c8955e66,0 6px 18px #9a64352e;background:#e7b98b;transition:background .2s,border-color .2s,box-shadow .2s}
-.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{border-color:#476e53;box-shadow:0 0 0 3px #71946766,0 6px 18px #476e532e;background:#b6ceb0}
-.switch-agent-button[data-suggested="true"]{--handoff-glow:#c8955e;animation:handoff-pulse 1.9s ease-in-out infinite}
-.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{--handoff-glow:#719467}
+/* Recommended switches use the destination companion’s colors. */
+.switch-agent-button[data-suggested="true"]{border-color:#476e53;color:#355941;box-shadow:0 0 0 3px #71946766,0 6px 18px #476e532e;background:#b6ceb0;transition:background .2s,border-color .2s,box-shadow .2s}
+.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{border-color:#94603c;color:#69492f;box-shadow:0 0 0 3px #c8955e66,0 6px 18px #9a64352e;background:#e7b98b}
+.switch-agent-button[data-suggested="true"]{--handoff-glow:#719467;animation:handoff-pulse 1.9s ease-in-out infinite}
+.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{--handoff-glow:#c8955e}
 @keyframes handoff-pulse{
   0%,100%{transform:translateY(0);box-shadow:0 0 0 3px color-mix(in srgb,var(--handoff-glow) 35%,transparent),0 6px 16px color-mix(in srgb,var(--handoff-glow) 22%,transparent)}
   50%{transform:translateY(-2px);box-shadow:0 0 0 7px color-mix(in srgb,var(--handoff-glow) 45%,transparent),0 8px 24px color-mix(in srgb,var(--handoff-glow) 30%,transparent)}
@@ -194,5 +194,5 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 
 .switch-agent-button{position:relative}
 .switch-agent-button strong{font:inherit}
-.switch-agent-button[data-suggested="true"]:not(:disabled)::before{content:'Suggested next';position:absolute;top:-11px;left:12px;padding:3px 9px;border-radius:20px;background:#94603c;color:#fffaf2;font-size:10px;font-weight:700;line-height:1.4;box-shadow:0 2px 5px #69482f25;pointer-events:none}
-.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]:not(:disabled)::before{background:#476e53}
+.switch-agent-button[data-suggested="true"]:not(:disabled)::before{content:'Suggested next';position:absolute;top:-11px;left:12px;padding:3px 9px;border-radius:20px;background:#476e53;color:#fffaf2;font-size:10px;font-weight:700;line-height:1.4;box-shadow:0 2px 5px #36553f25;pointer-events:none}
+.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]:not(:disabled)::before{background:#94603c;box-shadow:0 2px 5px #69482f25}
