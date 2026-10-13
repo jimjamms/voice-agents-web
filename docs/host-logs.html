@@ -106,7 +106,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 
       <section class="delete-card" aria-labelledby="delete-heading">
         <h2 id="delete-heading">Delete tester data</h2>
-        <p>Uses the private host key entered above. Deleted data cannot be uploaded again under this ID, even from an open tab. Selected cloud storage is disabled for this ID; use a new ID to start again. Text already on the tester’s device cannot be erased remotely.</p>
+        <p>Uses the private host key entered above. The selected saved data is erased. The tester can reuse the same name ID for a fresh trip. Older trip saves and queued logs are prevented from restoring the erased data.</p>
         <form id="user-delete">
           <div class="delete-grid"><div class="field"><label for="delete-name">Name ID</label><input id="delete-name" type="text" maxlength="40" placeholder="Exact tester name ID" autocomplete="off" required></div><div class="field"><label for="delete-confirm">Type the ID again to confirm</label><input id="delete-confirm" type="text" maxlength="40" autocomplete="off" required></div></div>
           <fieldset class="delete-options"><legend>Data to delete</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>

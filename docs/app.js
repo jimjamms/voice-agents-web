@@ -29,6 +29,7 @@
   const memoryDescription = document.querySelector('#memory-description');
   const memoryStatus = document.querySelector('#memory-status');
   const turns = [];
+  const deletedNames = new Set();
   let sessionId = crypto.randomUUID();
   let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   const conversations = new Map();
@@ -105,8 +106,16 @@
     status: document.querySelector('#cloud-status'),
     snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name) }),
     apply: (name, profile) => { window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); },
+    onDeleted: (name, message) => {
+      deletedNames.add(name); remoteLogger?.forget(name);
+      for (const key of conversations.keys()) if (JSON.parse(key)[0] === name) conversations.delete(key);
+      if (speakerName.value.trim().toLowerCase() !== name) return;
+      tripCompletionPending = false; reset();
+      document.querySelector('#completed-notes').value = '';
+      window.dispatchEvent(new CustomEvent('trip-profile:deleted', { detail: { name, message } }));
+    },
   });
-  window.restoreTripProfile = async name => { await tripNotes?.queue; await tripCloud?.load(name); };
+  window.restoreTripProfile = async name => { await tripNotes?.queue; await tripCloud?.load(name); deletedNames.delete(name.trim().toLowerCase()); };
   function maybeCompleteTrip() {
     if (!tripCompletionPending || pipeline?.busy || pipeline?.playing || pipeline?.recording || connecting || recording || responseActive) return;
     tripCompletionPending = false;
@@ -139,6 +148,7 @@
     const last = turns.at(-1); if (last) { last.interrupted = true; remoteLogger?.record(last); }
   }
   function saveTurn(turn) {
+    if (deletedNames.has(turn.speaker?.trim().toLowerCase())) return;
     tripNotes?.update(turn);
     turns.push({ timestamp: new Date().toISOString(), session_id: sessionId,
       agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
@@ -316,7 +326,7 @@
     const generation = sessionId;
     const turn = { agent, speaker: speakerName.value.trim() || 'Unknown', mode: memoryMode.value, transcript: user.content, reply };
     saveTurn(turn);
-    if (turn.speaker.toLowerCase() === 'unknown') return;
+    if (turn.speaker.toLowerCase() === 'unknown' || deletedNames.has(turn.speaker.trim().toLowerCase())) return;
     try {
       const response = await fetch(`${window.VOICE_DEMO_CONFIG.apiBaseUrl.replace(/\/$/, '')}/memory`, {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': codeInput.value.trim() },

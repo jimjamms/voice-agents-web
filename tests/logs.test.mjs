@@ -7,7 +7,7 @@ import { saveLogs, exportLogs, cleanTurn } from '../worker/src/logs.mjs';
 import worker from '../worker/src/index.mjs';
 const turn = { turn_id:'turn-1',participant_id:'participant-1',session_id:'session-1',timestamp:'2026-10-13T05:00:00Z',agent:'sage',engine:'pipeline',memory_sharing_mode:'shared',speaker:'Jenny',user_text:'I chose Kyoto.',agent_reply:'We can plan your trip.',interrupted:false };
 function database() {
-  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../worker/migrations/0003_deleted_name_ids.sql', import.meta.url), 'utf8'));db.exec(readFileSync(new URL('../worker/migrations/0001_chat_logs.sql',import.meta.url),'utf8'));
+  const db=new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../worker/migrations/0003_deleted_name_ids.sql', import.meta.url), 'utf8'));db.exec(readFileSync(new URL('../worker/migrations/0001_chat_logs.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../worker/migrations/0002_trip_profiles.sql',import.meta.url),'utf8'));db.exec(readFileSync(new URL('../worker/migrations/0004_reusable_name_ids.sql',import.meta.url),'utf8'));
   const prepare=sql=>({bind(...params){return {run(){return db.prepare(sql).run(...params)},async all(){return {results:db.prepare(sql).all(...params)}}}}});
   return {db,prepare,async batch(statements){return statements.map(statement=>statement.run())}};
 }

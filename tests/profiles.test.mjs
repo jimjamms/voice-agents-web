@@ -11,6 +11,7 @@ function database() {
   const db = new DatabaseSync(':memory:');db.exec(readFileSync(new URL('../worker/migrations/0003_deleted_name_ids.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../worker/migrations/0002_trip_profiles.sql', import.meta.url), 'utf8'));
   db.exec(readFileSync(new URL('../worker/migrations/0001_chat_logs.sql', import.meta.url), 'utf8'));
+  db.exec(readFileSync(new URL('../worker/migrations/0004_reusable_name_ids.sql', import.meta.url), 'utf8'));
   return { db, async batch(statements) { db.exec('BEGIN'); try { const results = []; for (const statement of statements) results.push(await statement.run()); db.exec('COMMIT'); return results; } catch (error) { db.exec('ROLLBACK'); throw error; } }, prepare(sql) { return { bind(...params) { return {
     async first() { return db.prepare(sql).get(...params); },
     async run() { const result = db.prepare(sql).run(...params); return { meta: { changes: result.changes } }; },
@@ -85,7 +86,8 @@ test('host deletion removes only the requested name and selected data categories
   const first = await (await remove(false, true)).json(); assert.equal(first.turnsDeleted, 1); assert.equal(first.profilesDeleted, 0);
   assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM trip_profiles').get().n, 2);
   const second = await (await remove(true, true)).json(); assert.equal(second.profilesDeleted, 1); assert.equal(second.turnsDeleted, 0);
-  assert.equal(db.db.prepare('SELECT name_id FROM trip_profiles').get().name_id, 'jenny-other');
+  assert.equal(db.db.prepare("SELECT payload FROM trip_profiles WHERE name_id = 'jenny'").get().payload.includes('Japan trip'), false);
+  assert.equal(db.db.prepare("SELECT name_id FROM trip_profiles WHERE name_id = 'jenny-other'").get().name_id, 'jenny-other');
   assert.equal(db.db.prepare('SELECT speaker_lower FROM chat_turns').get().speaker_lower, 'jenny-other');
   db.db.close();
 });
@@ -95,13 +97,65 @@ test('remote deletion blocks cached profile recreation and queued log uploads fr
   await profileRequest(post({ action: 'save', name: 'Jenny', version: 0, profile }), env, {});
   const deletion = new Request('https://worker.test/logs/delete', { method: 'POST', headers: { authorization: 'Bearer private-key', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Jenny', confirm: 'Jenny', trip: true, logs: true }) });
   assert.equal((await deleteUserData(deletion, env, {})).status, 200);
-  assert.equal((await profileRequest(post({ action: 'load', name: 'JENNY' }), env, {})).status, 410);
-  for (const version of [0, 1]) assert.equal((await profileRequest(post({ action: 'save', name: 'jenny', version, profile }), env, {})).status, 410);
+  const reset = await (await profileRequest(post({ action: 'load', name: 'JENNY' }), env, {})).json();
+  assert.equal(reset.profile.notes, ''); assert.equal(reset.generation, 1);
+  for (const version of [0, 1]) assert.equal((await profileRequest(post({ action: 'save', name: 'jenny', version, profile }), env, {})).status, 409);
   const turn = { turn_id: 'queued-turn', participant_id: 'browser-1', session_id: 'session-1', timestamp: '2026-10-13T05:00:00Z', agent: 'sage', engine: 'pipeline', memory_sharing_mode: 'shared', speaker: 'JENNY', user_text: 'Old queued message', agent_reply: 'Old reply', interrupted: false };
   const upload = turns => new Request('https://worker.test/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ turns }) });
   const result = await (await saveLogs(upload([turn, { ...turn, turn_id: 'other-turn', speaker: 'Other' }]), env, {})).json();
   assert.deepEqual(result.discarded, ['queued-turn']);
-  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM trip_profiles').get().n, 0);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM trip_profiles').get().n, 1);
   assert.equal(db.db.prepare('SELECT speaker_lower FROM chat_turns').get().speaker_lower, 'other');
   db.db.close();
+});
+
+test('an open client clears local notes and memories when a deletion check returns 410', async () => {
+  let deleted = false, saves = 0;
+  const app = client(async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.action === 'save') { saves++; return Response.json({ version: body.version + 1 }); }
+    if (body.action === 'status') return deleted ? Response.json({ error: 'The host deleted this ID.' }, { status: 410 }) : Response.json({ active: true });
+    return Response.json({ version: 1, profile });
+  });
+  await app.cloud.load('Jenny'); deleted = true;
+  await app.cloud.checkDeletion();
+  assert.equal(app.applied().value.notes, '');
+  assert.equal(app.applied().value.memories.shared.length, 0);
+  assert.equal(app.applied().value.choices.countries.length, 0);
+  app.window.onTripProfileChange('jenny'); await app.cloud.flush(); assert.equal(saves, 0);
+});
+test('a network failure during a deletion check preserves the local trip', async () => {
+  const app = client(async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.action === 'status') throw new Error('Offline');
+    return Response.json({ version: 1, profile });
+  });
+  await app.cloud.load('Jenny'); await app.cloud.checkDeletion();
+  assert.equal(app.applied().value.notes, 'Japan trip');
+});
+
+test('the same ID can start a fresh trip after deletion without restoring old notes', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'private-key' };
+  await profileRequest(post({ action: 'save', name: 'Jenny', version: 0, profile }), env, {});
+  await deleteUserData(new Request('https://worker.test/logs/delete', { method: 'POST', headers: { authorization: 'Bearer private-key', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'Jenny', confirm: 'Jenny', trip: true, logs: true }) }), env, {});
+  const loaded = await (await profileRequest(post({ action: 'load', name: 'Jenny' }), env, {})).json();
+  assert.equal(loaded.profile.notes, ''); assert.equal(loaded.profile.memories.sage.length, 0);
+  assert.equal((await profileRequest(post({ action: 'save', name: 'Jenny', version: loaded.version, profile: { ...loaded.profile, notes: 'Fresh Italy trip' } }), env, {})).status, 200);
+  assert.equal((await (await profileRequest(post({ action: 'load', name: 'Jenny' }), env, {})).json()).profile.notes, 'Fresh Italy trip');
+  const turn = { turn_id: 'fresh-turn', participant_id: 'browser-1', session_id: 'fresh-session', timestamp: new Date(Date.now() + 60000).toISOString(), agent: 'sage', engine: 'pipeline', memory_sharing_mode: 'shared', speaker: 'Jenny', user_text: 'New trip', agent_reply: 'Welcome back', interrupted: false };
+  const response = await saveLogs(new Request('https://worker.test/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ turns: [turn] }) }), env, {});
+  assert.deepEqual((await response.json()).discarded, []);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM chat_turns').get().n, 1);
+  db.db.close();
+});
+test('reset detection clears an open client and the same ID can be loaded again', async () => {
+  let generation = 0;
+  const app = client(async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.action === 'status') return Response.json({ active: true, generation });
+    return Response.json({ version: generation + 1, generation, profile: generation ? { ...profile, notes: '', memories: { shared: [], sage: [], astra: [] } } : profile });
+  });
+  await app.cloud.load('Jenny'); generation = 1; await app.cloud.checkDeletion();
+  assert.equal(app.applied().value.notes, ''); assert.match(app.status.textContent, /same name ID/);
+  await app.cloud.load('Jenny'); assert.match(app.status.textContent, /loaded/); assert.equal(app.applied().value.notes, '');
 });

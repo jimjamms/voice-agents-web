@@ -69,3 +69,11 @@ test('budget and approval remain visible requirements and revisions return to pl
   page.event('trip-notes:updated', { key: 'jenny', notes: 'Revised trip', choices: { ...completed, finalized: false }, ready: false });
   assert.equal(page.get('review-stage').hidden, true); assert.equal(page.get('planning-stage').hidden, false);
 });
+
+test('a deleted active name ID returns to setup and clears the completed notepad', () => {
+  const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
+  page.get('completed-notes').value = 'Old trip';
+  page.event('trip-profile:deleted', { name: 'jenny', message: 'The host deleted this ID.' });
+  assert.equal(page.document.body.dataset.stage, 'setup'); assert.equal(page.get('planning-stage').hidden, true);
+  assert.equal(page.get('completed-notes').value, ''); assert.match(page.get('profile-login-status').textContent, /deleted/);
+});

@@ -22,9 +22,9 @@ export async function saveLogs(request, env, cors) {
   catch { return json({ error: 'Invalid chat log batch.' }, 400, cors); }
   try {
     const results = await env.LOG_DB.batch(turns.map(turn => env.LOG_DB.prepare(`INSERT INTO chat_turns (turn_id, participant_id, session_id, speaker_lower, timestamp, payload, interrupted)
-      SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM deleted_name_ids WHERE name_id = ? AND logs_blocked = 1) ON CONFLICT(turn_id) DO UPDATE SET interrupted=MAX(chat_turns.interrupted,excluded.interrupted)
+      SELECT ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM deleted_name_ids WHERE name_id = ? AND logs_blocked = 1 AND julianday(?) <= julianday(deleted_at)) ON CONFLICT(turn_id) DO UPDATE SET interrupted=MAX(chat_turns.interrupted,excluded.interrupted)
       WHERE chat_turns.participant_id=excluded.participant_id AND chat_turns.session_id=excluded.session_id`).bind(
-        turn.turn_id, turn.participant_id, turn.session_id, turn.speaker.toLowerCase(), turn.timestamp, JSON.stringify(turn), turn.interrupted ? 1 : 0, turn.speaker.toLowerCase())));
+        turn.turn_id, turn.participant_id, turn.session_id, turn.speaker.toLowerCase(), turn.timestamp, JSON.stringify(turn), turn.interrupted ? 1 : 0, turn.speaker.toLowerCase(), turn.timestamp)));
     return json({ saved: turns.map(turn => turn.turn_id), discarded: turns.filter((_turn, i) => (results[i].meta?.changes ?? results[i].changes) === 0).map(turn => turn.turn_id) }, 200, cors);
   } catch { return json({ error: 'Could not save chat logs. Try again.' }, 503, cors); }
 }
@@ -63,9 +63,14 @@ export async function deleteUserData(request, env, cors) {
   if (!data || typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 40 ||
       data.confirm !== data.name.trim() || typeof data.trip !== 'boolean' || typeof data.logs !== 'boolean' || (!data.trip && !data.logs))
     return json({ error: 'Enter and confirm one name ID, and select data to delete.' }, 400, cors);
-  const name = data.name.trim().toLowerCase(), statements = [env.LOG_DB.prepare(`INSERT INTO deleted_name_ids(name_id, trip_blocked, logs_blocked) VALUES(?, ?, ?)
-    ON CONFLICT(name_id) DO UPDATE SET trip_blocked = MAX(deleted_name_ids.trip_blocked, excluded.trip_blocked), logs_blocked = MAX(deleted_name_ids.logs_blocked, excluded.logs_blocked), deleted_at = CURRENT_TIMESTAMP`).bind(name, data.trip ? 1 : 0, data.logs ? 1 : 0)];
-  if (data.trip) statements.push(env.LOG_DB.prepare('DELETE FROM trip_profiles WHERE name_id = ?').bind(name));
+  const name = data.name.trim().toLowerCase();
+  const empty = JSON.stringify({ notes: '', choices: { countries: [], cities: [], activities: [], budget: null, itinerary: null, finalized: false }, memories: { shared: [], sage: [], astra: [] } });
+  const statements = [env.LOG_DB.prepare(`INSERT INTO deleted_name_ids(name_id, trip_blocked, logs_blocked, generation, deleted_at) VALUES(?, 0, ?, ?, ?)
+    ON CONFLICT(name_id) DO UPDATE SET trip_blocked = 0, logs_blocked = MAX(deleted_name_ids.logs_blocked, excluded.logs_blocked),
+    generation = deleted_name_ids.generation + excluded.generation,
+    deleted_at = CASE WHEN excluded.logs_blocked = 1 THEN excluded.deleted_at ELSE deleted_name_ids.deleted_at END`).bind(name, data.logs ? 1 : 0, data.trip ? 1 : 0, new Date().toISOString())];
+  if (data.trip) statements.push(env.LOG_DB.prepare(`INSERT INTO trip_profiles(name_id, payload, version) VALUES(?, ?, 1)
+    ON CONFLICT(name_id) DO UPDATE SET payload = excluded.payload, version = trip_profiles.version + 1, updated_at = CURRENT_TIMESTAMP`).bind(name, empty));
   if (data.logs) statements.push(env.LOG_DB.prepare('DELETE FROM chat_turns WHERE speaker_lower = ?').bind(name));
   try {
     const result = await env.LOG_DB.batch(statements);

@@ -11,6 +11,10 @@
     }
     status(text) { if(this.options.status) this.options.status.textContent=text; }
     persist() { try { localStorage.setItem(OUTBOX,JSON.stringify(this.queue)); } catch { this.status('Chat upload pending; keep this tab open.'); } }
+    forget(name) {
+      this.queue = this.queue.filter(turn => turn.speaker.trim().toLowerCase() !== name);
+      this.persist();
+    }
     record(turn) {
       turn.turn_id ||= crypto.randomUUID(); turn.participant_id ||= this.client;
       const value={ turn_id:turn.turn_id, participant_id:turn.participant_id, session_id:turn.session_id, timestamp:turn.timestamp,
@@ -39,7 +43,7 @@
         if(!response.ok||!Array.isArray(result.saved)){retry=response.status!==401;throw new Error();}
         const saved=new Set(result.saved);
         this.queue=this.queue.filter(item=>!saved.has(item.turn_id)||snapshots.get(item.turn_id)!==JSON.stringify(item));
-        this.persist();this.status(result.discarded?.length ? 'Chat storage is disabled for a deleted name ID.' : this.queue.length?'Chat upload pending…':'Chat saved for the host.');
+        this.persist();this.status(result.discarded?.length ? 'Older chat uploads were discarded after host deletion.' : this.queue.length?'Chat upload pending…':'Chat saved for the host.');
       } catch {this.status('Chat upload pending. It will retry when connected.');retry=true;}
       finally {
         clearTimeout(timeout);this.running=false;

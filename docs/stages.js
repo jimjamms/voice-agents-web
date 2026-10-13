@@ -79,6 +79,12 @@
       if (!snapshot.ready) { step('planning'); title.focus(); }
     }
   });
+  window.addEventListener('trip-profile:deleted', event => {
+    if (name.value.trim().toLowerCase() !== event.detail.name) return;
+    document.querySelector('#profile-login-status').textContent = event.detail.message;
+    document.querySelector('#completed-notes').value = '';
+    step('setup'); name.focus();
+  });
   window.addEventListener('trip-goal:complete', openReview);
   document.querySelector('#continue-review').addEventListener('click', openReview);
   document.querySelector('#back-to-planning').addEventListener('click', () => { step('planning'); title.focus(); });
