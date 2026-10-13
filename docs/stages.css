@@ -157,3 +157,6 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
   45%{background-position:0 8px,10px 8px,20px 2px}
 }
 @media(prefers-reduced-motion:reduce){#planning-stage .switch-agent-button:disabled::after{animation:none}}
+
+/* Setup introduces both roles; every planning session opens with Sage. */
+.setup-companion{cursor:default}

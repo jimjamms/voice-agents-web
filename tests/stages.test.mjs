@@ -5,8 +5,8 @@ import { readFileSync } from 'node:fs';
 function setup(config = {}, storage = new Map()) {
   const items = new Map(), emitted = [], handlers = {}; let chosen = '';
   const get = id => { if (!items.has(id)) items.set(id, { hidden: false, value: '', checked: false, dataset: {}, listeners: {}, attrs: {}, classList: { toggle() {} }, addEventListener(type, fn) { this.listeners[type] = fn; }, setAttribute(key, value) { this.attrs[key] = value; }, removeAttribute(key) { delete this.attrs[key]; }, setCustomValidity(value) { this.error = value; }, dispatchEvent(event) { this.listeners[event.type]?.(event); }, focus() { this.focused = true; } }); return items.get(id); };
-  const sage = get('sage-radio'), astra = get('astra-radio'); sage.value = 'sage'; sage.checked = true; astra.value = 'astra';
-  const form = get('trip-setup'); form.querySelectorAll = () => [sage, astra];
+  const form = get('trip-setup'); form.dataset.companion = 'sage';
+  form.querySelectorAll = () => [get('speaker-name'), get('access-code')];
   form.reportValidity = () => !get('speaker-name').error && !get('access-code').error;
   const document = { body: { dataset: { stage: 'setup' } }, querySelector(selector) {
     if (selector === '[data-agent].active') return { dataset: { agent: chosen || 'sage' } };
@@ -15,7 +15,7 @@ function setup(config = {}, storage = new Map()) {
   } };
   get('planning-stage').hidden = true;
   vm.runInNewContext(readFileSync(new URL('../docs/stages.js', import.meta.url), 'utf8'), { document, Event, URL, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) }, window: { VOICE_DEMO_CONFIG: config, addEventListener(type, fn) { handlers[type] = fn; }, dispatchEvent(event) { emitted.push(event.type); handlers[event.type]?.(event); } } });
-  return { get, sage, astra, document, emitted, event(type, detail) { handlers[type]?.({ type, detail }); }, chosen: () => chosen, submit() { form.listeners.submit({ preventDefault() {} }); } };
+  return { get, document, emitted, event(type, detail) { handlers[type]?.({ type, detail }); }, chosen: () => chosen, submit() { form.listeners.submit({ preventDefault() {} }); } };
 }
 test('setup requires name and demo code before revealing planning', () => {
   const page = setup(); page.get('speaker-name').value = '  '; page.get('access-code').value = 'demo'; page.submit();
@@ -23,21 +23,23 @@ test('setup requires name and demo code before revealing planning', () => {
   page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = ' '; page.submit();
   assert.equal(page.get('planning-stage').hidden, true);
 });
-test('setup opens the selected agent and focuses the planning heading', () => {
+test('setup always opens Sage and focuses the planning heading', () => {
   const page = setup(); page.get('speaker-name').value = ' Jenny '; page.get('access-code').value = ' demo ';
-  page.sage.checked = false; page.astra.checked = true; page.submit();
-  assert.equal(page.chosen(), 'astra'); assert.equal(page.get('setup-stage').hidden, true);
+  page.document.querySelector('[data-agent="astra"]').click(); page.submit();
+  assert.equal(page.chosen(), 'sage'); assert.equal(page.get('setup-stage').hidden, true);
   assert.equal(page.get('planning-stage').hidden, false); assert.equal(page.get('traveler-title').textContent, 'Jenny’s trip');
   assert.equal(page.get('traveler-title').focused, true); assert.equal(page.get('access-code').value, 'demo');
   assert.deepEqual(page.emitted, []);
 });
-test('Change setup requests voice shutdown and restores selected agent', () => {
+test('Change setup from Astra preserves Sage setup and restarts with Sage', () => {
   const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo';
-  page.sage.checked = false; page.astra.checked = true; page.submit();
+  page.document.querySelector('[data-agent="astra"]').click(); page.submit();
+  page.document.querySelector('[data-agent="astra"]').click();
   page.get('change-setup').listeners.click();
   assert.deepEqual(page.emitted, ['trip-setup:open']); assert.equal(page.get('planning-stage').hidden, true);
-  assert.equal(page.get('setup-stage').hidden, false); assert.equal(page.astra.checked, true);
+  assert.equal(page.get('setup-stage').hidden, false); assert.equal(page.get('trip-setup').dataset.companion, 'sage');
   assert.equal(page.get('speaker-name').focused, true);
+  page.submit(); assert.equal(page.chosen(), 'sage');
 });
 
 test('stage three requires completed choices and displays the completed notes', () => {

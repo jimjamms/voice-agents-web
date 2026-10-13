@@ -6,7 +6,6 @@
   const name = document.querySelector('#speaker-name');
   const code = document.querySelector('#access-code');
   const title = document.querySelector('#traveler-title');
-  const radios = [...form.querySelectorAll('input[name="initial-agent"]')];
   const steps = [document.querySelector('#setup-step'), document.querySelector('#planning-step'), document.querySelector('#review-step')];
   const REVIEW_STORE = 'sage-astra-reviewed-trips-v1';
   let storedReviews = {};
@@ -55,7 +54,6 @@
     step('review'); document.querySelector('#review-heading').focus();
   }
   for (const input of [name, code]) input.addEventListener('input', () => input.setCustomValidity(''));
-  for (const radio of radios) radio.addEventListener('change', () => { if (radio.checked) form.dataset.companion = radio.value; });
   form.addEventListener('submit', async event => {
     event.preventDefault(); name.value = name.value.trim(); code.value = code.value.trim();
     name.setCustomValidity(name.value ? '' : 'Enter your name.'); code.setCustomValidity(code.value ? '' : 'Enter your demo code.');
@@ -76,16 +74,13 @@
       }
     } catch (error) { loginStatus.textContent = error.message; return; }
     finally { start.disabled = false; fields.forEach(field => { field.disabled = false; }); }
-    const selected = radios.find(radio => radio.checked)?.value || 'sage';
     name.dispatchEvent(new Event('change', { bubbles: true }));
-    document.querySelector(`[data-agent="${selected}"]`).click();
+    document.querySelector('[data-agent="sage"]').click();
     title.textContent = `${name.value}’s trip`; step('planning'); title.focus();
   });
   document.querySelector('#change-setup').addEventListener('click', () => {
     window.dispatchEvent(new Event('trip-setup:open'));
-    const current = document.querySelector('[data-agent].active')?.dataset.agent || 'sage';
-    for (const radio of radios) radio.checked = radio.value === current;
-    form.dataset.companion = current; step('setup'); name.focus();
+    form.dataset.companion = 'sage'; step('setup'); name.focus();
   });
   window.addEventListener('trip-notes:updated', event => {
     if (event.detail.key !== (name.value.trim().toLowerCase() || 'unknown')) return;
