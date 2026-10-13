@@ -146,6 +146,7 @@
   function syncControls() {
     document.querySelector('.conversation').dataset.agent = agent;
     document.querySelector('.trip-notepad').dataset.companion = agent;
+    document.querySelector('.trip-planner').dataset.companion = agent;
     const checklist = document.querySelector('.planning-checklist');
     if (checklist) checklist.dataset.companion = agent;
     const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
@@ -501,26 +502,26 @@
   });
   window.addEventListener('trip-review:open', () => { mobileTripOpen = false; syncMobileNotes(); tripCompletionPending = false; pipeline.stop(); endSession(); });
   window.addEventListener('trip-setup:open', () => { mobileTripOpen = false; syncMobileNotes(); pipeline.stop(); endSession('Ready when you are'); });
-  const notesToggle = document.querySelector('#toggle-trip-notes');
   const mobileLayout = window.matchMedia?.('(max-width:850px)');
-  let mobileNotesOpen = false;
   let mobileTripOpen = false;
   let currentMobileLayout = false;
+  let plannerView = 'checklist';
+  function selectPlannerView(view) {
+    plannerView = view;
+    document.querySelector('#planner-checklist-panel').hidden = view !== 'checklist';
+    document.querySelector('#planner-notes-panel').hidden = view !== 'notes';
+    document.querySelector('#planner-checklist-view').setAttribute('aria-pressed', String(view === 'checklist'));
+    document.querySelector('#planner-notes-view').setAttribute('aria-pressed', String(view === 'notes'));
+  }
+  document.querySelector('#planner-checklist-view').addEventListener('click', () => selectPlannerView('checklist'));
+  document.querySelector('#planner-notes-view').addEventListener('click', () => selectPlannerView('notes'));
+  selectPlannerView(plannerView);
   function syncMobileNotes() {
     const isMobile = Boolean(mobileLayout?.matches);
     if (isMobile !== currentMobileLayout) {
-      const checklist = document.querySelector('.planning-checklist');
-      document.querySelector('.planning-checklist details').open = !isMobile;
-      const notes = document.querySelector('.trip-notepad');
-      const planning = document.querySelector('#planning-stage');
-      const workspace = document.querySelector('.workspace');
-      const chooser = document.querySelector('.chooser');
-      if (isMobile) {
-        document.querySelector('#mobile-trip-details').append(checklist, notes);
-      } else {
-        planning.insertBefore(checklist, workspace);
-        chooser.insertBefore(notes, document.querySelector('.agent-options'));
-      }
+      const planner = document.querySelector('.trip-planner');
+      if (isMobile) document.querySelector('#mobile-trip-details').append(planner);
+      else document.querySelector('.chooser').insertBefore(planner, document.querySelector('.agent-options'));
       currentMobileLayout = isMobile;
     }
     document.querySelector('.workspace').hidden = isMobile && mobileTripOpen;
@@ -528,12 +529,6 @@
     document.querySelector('.mobile-start-guide').hidden = isMobile && mobileTripOpen;
     document.querySelector('#mobile-chat-view').setAttribute('aria-pressed', String(!mobileTripOpen));
     document.querySelector('#mobile-details-view').setAttribute('aria-pressed', String(mobileTripOpen));
-    const expanded = !mobileLayout?.matches || mobileNotesOpen;
-    document.querySelector('.trip-notepad').dataset.mobileExpanded = String(expanded);
-    document.querySelector('#trip-notes-display').hidden = !expanded;
-    document.querySelector('#notes-status').hidden = !expanded;
-    notesToggle.setAttribute('aria-expanded', String(expanded));
-    notesToggle.textContent = expanded ? 'Hide notes ⌃' : 'Show notes ⌄';
   }
   document.querySelector('#mobile-chat-view').addEventListener('click', () => {
     mobileTripOpen = false;
@@ -541,11 +536,8 @@
   });
   document.querySelector('#mobile-details-view').addEventListener('click', () => {
     mobileTripOpen = true;
-    mobileNotesOpen = true;
-    document.querySelector('.planning-checklist details').open = true;
     syncMobileNotes();
   });
-  notesToggle.addEventListener('click', () => { mobileNotesOpen = !mobileNotesOpen; syncMobileNotes(); });
   mobileLayout?.addEventListener?.('change', syncMobileNotes);
   // Keep primary conversation actions ahead of optional settings on both layouts.
   const conversationControls = document.querySelector('.controls');

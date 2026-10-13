@@ -10,7 +10,6 @@
   .planning-checklist #trip-goal-hint{font-size:11px;margin-top:6px;line-height:1.6}
   .planning-checklist .goal-counts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12px;align-items:center}
   .planning-checklist .goal-counts span{padding:5px 8px;border:0;display:block;min-height:0;line-height:1.5;background:transparent}
-  .planning-checklist summary:focus-visible{outline:2px solid var(--note-accent,#476e53);outline-offset:5px;border-radius:5px}
   .planning-checklist #continue-review{display:inline-flex;align-items:center;min-height:40px;padding:10px 16px;border-radius:8px;background:var(--note-accent,#476e53);color:#fffdf7;font-weight:700}
   .planning-checklist #continue-review:hover{filter:brightness(.94);text-decoration:none}
   #planning-stage .workspace{grid-template-columns:minmax(300px,330px) minmax(0,1fr);gap:24px;align-items:stretch}
