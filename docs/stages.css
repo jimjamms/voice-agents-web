@@ -60,7 +60,13 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
 /* A quiet companion-colored cue when a reply recommends a handoff. */
 .switch-agent-button[data-suggested="true"]{border-color:#b7804a;box-shadow:0 0 0 3px #c8955e22,0 4px 12px #9a643514;background:#eacba5;transition:background .2s,border-color .2s,box-shadow .2s}
 .agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{border-color:#719467;box-shadow:0 0 0 3px #71946722,0 4px 12px #476e5314;background:#cdddbe}
-@media(prefers-reduced-motion:reduce){.switch-agent-button[data-suggested="true"]{transition:none}}
+.switch-agent-button[data-suggested="true"]{--handoff-glow:#c8955e;animation:handoff-pulse 2.8s ease-in-out infinite}
+.agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]{--handoff-glow:#719467}
+@keyframes handoff-pulse{
+  0%,100%{box-shadow:0 0 0 2px color-mix(in srgb,var(--handoff-glow) 12%,transparent),0 4px 12px color-mix(in srgb,var(--handoff-glow) 8%,transparent)}
+  50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--handoff-glow) 22%,transparent),0 4px 18px color-mix(in srgb,var(--handoff-glow) 18%,transparent)}
+}
+@media(prefers-reduced-motion:reduce){.switch-agent-button[data-suggested="true"]{transition:none;animation:none}}
 
 #cloud-status{font-size:10px;line-height:1.6;color:#63756d;max-width:440px}
 
@@ -70,3 +76,40 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
 .scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 20%,#f4f1e980 46%,#f4f1e928 76%,#f4f1e938 100%)}
 @media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9e8 23%,#f4f1e966 65%,#f4f1e93d 100%)}}
 
+/* Small travel-inspired movements, without slowing chat text or controls. */
+#setup-stage:not([hidden]) .setup-card,
+#planning-stage:not([hidden]) .chooser,
+#planning-stage:not([hidden]) .conversation,
+#review-stage:not([hidden]) .review-heading,
+#review-stage:not([hidden]) .review-grid{animation:journey-enter .32s ease-out both}
+#planning-stage:not([hidden]) .conversation{animation-delay:.045s}
+#review-stage:not([hidden]) .review-grid{animation-delay:.045s}
+.conversation .message{animation:message-arrive .18s ease-out}
+#planning-stage .agent-card:not([hidden]){animation:companion-arrive .3s ease-out}
+#planning-stage .agent-mascot{animation:companion-float 6s ease-in-out infinite}
+#planning-stage .agent-card.astra .agent-mascot{animation-duration:7s}
+.trip-notepad{transition:box-shadow .2s,border-color .2s,background-color .2s}
+.trip-notepad:focus-within{box-shadow:0 8px 28px #294d4014}
+.initial-option{transition:background-color .2s,border-color .2s,box-shadow .2s}
+.initial-option:has(input:checked){box-shadow:0 2px 8px #94603c12}
+.setup-next,.record-button,.switch-agent-button{transition:transform .18s,background-color .2s,box-shadow .2s,border-color .2s}
+.setup-next:hover:not(:disabled),.record-button:hover:not(:disabled),.switch-agent-button:hover:not(:disabled){transform:translateY(-1px)}
+.setup-next:active:not(:disabled),.record-button:active:not(:disabled),.switch-agent-button:active:not(:disabled){transform:translateY(1px)}
+.record-button.recording .mic{animation:recording-breath 1.6s ease-in-out infinite}
+#continue-review:not([hidden]){animation:message-arrive .25s ease-out}
+.stage-progress .active{animation:step-arrive .28s ease-out}
+@keyframes journey-enter{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@keyframes message-arrive{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@keyframes companion-arrive{from{opacity:0;translate:0 5px}to{opacity:1;translate:0 0}}
+@keyframes companion-float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-4px) rotate(.6deg)}}
+@keyframes recording-breath{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
+@keyframes step-arrive{from{opacity:.5}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){
+  #setup-stage .setup-card,#planning-stage .chooser,#planning-stage .conversation,
+  #review-stage .review-heading,#review-stage .review-grid,.conversation .message,
+  #planning-stage .agent-card,#planning-stage .agent-mascot,.record-button.recording .mic,
+  #continue-review,.stage-progress .active{animation:none}
+  .trip-notepad,.initial-option,.setup-next,.record-button,.switch-agent-button{transition:none}
+  .setup-next:hover,.setup-next:active,.record-button:hover,.record-button:active,
+  .switch-agent-button:hover,.switch-agent-button:active{transform:none}
+}
