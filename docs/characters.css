@@ -1,51 +1,21 @@
-/* Original watercolor travel characters: Sage in vacation clothes, Astra in winter clothes. */
-.agent-options .agent-card{min-height:270px;padding:22px;isolation:isolate}
-.agent-portrait{position:absolute;right:-2px;bottom:-18px;width:180px;height:270px;object-fit:contain;object-position:center bottom;pointer-events:none;z-index:0;filter:drop-shadow(0 5px 8px #32483712)}
-.agent-options .agent-card strong{position:relative;margin-top:100px;z-index:1}
-.agent-options .agent-card small{position:relative;max-width:165px;margin:6px 0 0;z-index:1;font-size:11px}
-.agent-card .card-top{position:relative;z-index:2}
-.initial-option{display:grid;grid-template-columns:14px 52px minmax(0,1fr);align-items:center;gap:9px;padding:12px}
+/* Original travel portraits on clean, untinted character cards. */
+#planning-stage .agent-options .agent-card{min-height:340px;height:auto;padding:0;isolation:isolate;display:flex;flex-direction:column;align-items:stretch;border-radius:14px;overflow:hidden;color:#243f3b}
+#planning-stage .agent-card.sage{background:linear-gradient(145deg,#f5e7cc,#ead1ab);border-color:#d6bd97}
+#planning-stage .agent-card.astra{background:linear-gradient(145deg,#e6efdf,#c8dbc2);border-color:#b1c8a8}
+#planning-stage .agent-card::before,#planning-stage .agent-card::after{content:none}
+#planning-stage .agent-card .card-top{position:relative;z-index:2;padding:18px 20px;font-size:9px;color:#526346;background:transparent}
+#planning-stage .agent-card .select-indicator{color:#47694a}
+#planning-stage .agent-portrait{position:absolute;top:28px;right:50%;transform:translateX(50%);bottom:auto;width:290px;height:435px;object-fit:contain;object-position:center top;z-index:0;pointer-events:none;filter:drop-shadow(0 6px 8px #304b3510)}
+#planning-stage .agent-card strong{position:relative;z-index:1;display:block;margin:205px 0 0;padding:12px 20px 0;font:800 29px Manrope,sans-serif;letter-spacing:-.05em;background:#fff9ee;color:#47392b}
+#planning-stage .agent-card small{position:relative;z-index:1;display:block;max-width:none;margin:0;padding:5px 20px 17px;background:#fff9ee;color:#756452;font-size:11px;line-height:1.6;opacity:1}
+#planning-stage .agent-card.astra strong,#planning-stage .agent-card.astra small{background:#f4f8ef}
+#planning-stage .agent-card.astra strong{color:#2d4936}
+#planning-stage .agent-card.astra small{color:#60745d}
+#planning-stage .agent-card.active{box-shadow:0 0 0 2px #ffffff80,0 8px 24px #294d4012}
+.initial-option{display:grid;grid-template-columns:14px minmax(0,1fr);align-items:center;gap:10px;padding:16px 13px}
 .initial-option input{margin:0}
-.setup-portrait{width:52px;height:76px;object-fit:cover;object-position:center 15%;border-radius:12px;background:#ecd7b6}
-.initial-option:has(input[value="astra"]) .setup-portrait{background:#d7e4cf}
-.welcome-avatar{height:78px;width:78px;border-radius:50%;overflow:hidden;margin:0 auto 14px;background:#f0d5b6;border:1px solid #dec6a7}
-.welcome-avatar img{display:block;width:100%;height:116px;object-fit:cover;object-position:center top}
-.conversation[data-agent="astra"] .welcome-avatar{background:#d6e6d2;border-color:#b9ceb5}
-/* Let the chat fill spare height above the controls, rather than below them. */
+/* Stretch the scrollable chat, keeping the controls against the panel bottom. */
 .conversation>.messages{flex:1 1 275px;max-height:none;min-height:275px;overflow-y:auto}
 .conversation>.controls,.conversation>.conversation-head{flex-shrink:0}
-@media(min-width:851px) and (max-width:1050px){.agent-portrait{width:145px;height:250px;right:-8px}.agent-options .agent-card small{max-width:135px}}
-@media(max-width:600px){.initial-option{grid-template-columns:13px 40px minmax(0,1fr);gap:7px;padding:10px 8px}.setup-portrait{width:40px;height:65px}.initial-option strong{font-size:13px}.initial-option small{font-size:9px}.agent-options .agent-card{min-height:250px;padding:20px}.agent-portrait{width:165px;height:250px}.agent-options .agent-card strong{margin-top:85px}.agent-options .agent-card small{max-width:170px}}
-@media(max-width:370px){.initial-options{grid-template-columns:1fr}.initial-option{grid-template-columns:14px 45px minmax(0,1fr)}.agent-portrait{width:145px}.agent-options .agent-card small{max-width:145px}}
-
-/* Text-only choices in setup; closer, softer character portraits in planning. */
-.initial-option{grid-template-columns:14px minmax(0,1fr);gap:10px;padding:16px 13px}
-#planning-stage .agent-portrait{width:230px;height:345px;top:24px;bottom:auto;right:-25px;object-fit:contain;object-position:center top;filter:brightness(.9) drop-shadow(0 5px 8px #32483712)}
-@media(min-width:851px) and (max-width:1050px){#planning-stage .agent-portrait{width:210px;height:315px;right:-36px;top:28px}}
-@media(max-width:600px){.initial-option{grid-template-columns:13px minmax(0,1fr);padding:13px 10px}#planning-stage .agent-portrait{width:220px;height:330px;top:22px;right:-24px}}
-@media(max-width:370px){.initial-options{grid-template-columns:1fr 1fr}#planning-stage .agent-portrait{width:205px;height:308px;right:-32px;top:23px}.initial-option small{font-size:9px}}
-
-/* Richer card backgrounds, with the portraits at their original brightness. */
-#planning-stage .agent-portrait{filter:drop-shadow(0 7px 12px #142a292b)}
-#planning-stage .agent-card.sage{background:linear-gradient(140deg,#826049 0%,#5d4136 100%);border-color:#a27f62;color:#fff3df}
-#planning-stage .agent-card.astra{background:linear-gradient(140deg,#3e6454 0%,#253f36 100%);border-color:#72927b;color:#edf5e5}
-#planning-stage .agent-card .card-top{color:inherit}
-#planning-stage .agent-card .select-indicator{color:#fff4d9}
-#planning-stage .agent-card small{color:inherit;opacity:.9}
-#planning-stage .agent-card.active{box-shadow:0 0 0 3px #314b3520,0 10px 25px #18312720}
-
-/* Tint the whole card, including the portrait, with a translucent color layer. */
-#planning-stage .agent-card.sage{background:linear-gradient(150deg,#f2dfbb,#e5c194);border-color:#cbccb7;color:#243f3b}
-#planning-stage .agent-card.astra{background:linear-gradient(145deg,#deeadb,#b9cebf);border-color:#cbccb7;color:#243f3b}
-#planning-stage .agent-card::after{content:"";position:absolute;inset:0;z-index:3;pointer-events:none;border-radius:inherit;background:rgba(144,84,47,.16)}
-#planning-stage .agent-card.astra::after{background:rgba(31,87,65,.18)}
-#planning-stage .agent-card .select-indicator{color:#275d52}
-
-/* Closer portraits, with a soft fade protecting the text on the left. */
-#planning-stage .agent-portrait{width:285px;height:428px;top:10px;right:-38px;bottom:auto}
-#planning-stage .agent-card::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(242,223,187,.95) 0%,rgba(242,223,187,.83) 30%,rgba(242,223,187,.25) 57%,transparent 76%)}
-#planning-stage .agent-card.astra::before{background:linear-gradient(90deg,rgba(222,234,219,.95) 0%,rgba(222,234,219,.83) 30%,rgba(222,234,219,.25) 57%,transparent 76%)}
-#planning-stage .agent-card strong,#planning-stage .agent-card small{position:relative;z-index:2}
-@media(min-width:851px) and (max-width:1050px){#planning-stage .agent-portrait{width:265px;height:398px;right:-52px;top:12px}}
-@media(max-width:600px){#planning-stage .agent-portrait{width:275px;height:413px;right:-40px;top:8px}}
-@media(max-width:370px){#planning-stage .agent-portrait{width:255px;height:383px;right:-50px;top:10px}}
+@media(max-width:600px){.initial-option{grid-template-columns:13px minmax(0,1fr);padding:13px 10px}#planning-stage .agent-options .agent-card{min-height:325px}#planning-stage .agent-portrait{width:280px;height:420px;top:25px}#planning-stage .agent-card strong{margin-top:190px;font-size:27px}#planning-stage .agent-card small{padding-bottom:15px}.initial-option small{font-size:9px}}
+@media(max-width:370px){.initial-options{grid-template-columns:1fr 1fr}#planning-stage .agent-portrait{width:260px;height:390px;top:28px}}
