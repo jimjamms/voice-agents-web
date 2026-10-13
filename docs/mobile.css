@@ -1,3 +1,35 @@
+/* Desktop keeps the existing layout. Notes disclosure is only shown below 850px. */
+#toggle-trip-notes{display:none}
+@media(max-width:850px){
+  .shell{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  .topbar{height:64px;gap:10px}
+  .brand{font-size:10px;letter-spacing:.12em;gap:8px}
+  footer{gap:12px;flex-wrap:wrap;padding-bottom:max(22px,env(safe-area-inset-bottom))}
+  body[data-stage] .stage-progress{display:grid;grid-template-columns:1fr 12px 1.5fr 12px 1fr;gap:4px;margin:16px 0;font-size:10px}
+  .stage-progress>span{min-width:0;text-align:center;line-height:1.5}
+  .stage-progress .stage-line{width:100%;min-width:0}
+  body[data-stage="setup"] .intro{padding:28px 0 22px}
+  body[data-stage="setup"] .intro h1{font-size:42px}
+  .setup-card{padding:22px 18px;margin-bottom:26px}
+  .setup-field input{font-size:16px;min-height:48px}
+  .setup-field label,#companions-heading{font-size:13px}
+  .setup-role{padding:13px 12px}
+  .setup-role small{font-size:12px}
+  .setup-data-note{font-size:12px;line-height:1.6}
+  .setup-next{min-height:48px;font-size:14px}
+  .planning-toolbar{flex-wrap:nowrap;gap:8px;margin-bottom:12px}
+  .planning-toolbar h2{flex:1;min-width:0;font-size:20px}
+  #change-setup{flex-shrink:0;min-height:44px;padding:8px;font-size:12px}
+  .planning-checklist{padding:12px;margin-bottom:16px}
+  .planning-checklist #trip-goal-hint{font-size:12px;line-height:1.6}
+  .workspace{grid-template-columns:minmax(0,1fr);gap:16px}
+  #planning-stage .chooser{display:flex;gap:12px;width:100%}
+  .notes-head{padding:10px 14px;flex-wrap:wrap;gap:4px 10px}
+  .notes-head h2{font-size:14px;min-width:0;flex:1}
+  .notes-head>div{gap:10px;align-items:center;flex-wrap:wrap}
+  .notes-head .text-button{min-height:44px;min-width:44px;font-size:12px}
+  #toggle-trip-notes{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;white-space:nowrap}
+  .trip-notepad[data-mobile-expanded="false"] .notes-head{border-bottom:0;flex-wrap:nowrap}
   .trip-notepad[data-mobile-expanded="false"] #copy-notes,.trip-notepad[data-mobile-expanded="false"] #clear-notes{display:none}
   .notes-content{height:240px;min-height:168px;max-height:420px;resize:none;padding:14px;font-size:16px;line-height:28px;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
   .review-grid .notes-content{height:300px}
