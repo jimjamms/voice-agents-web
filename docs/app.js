@@ -344,8 +344,10 @@
       setTimeout(() => { if (connected) { send('input_audio_buffer.commit'); send('response.create'); } }, 160);
     }
   });
+  window.addEventListener('trip-setup:open', () => { pipeline.stop(); endSession('Ready when you are'); });
   syncControls();
   document.addEventListener('keydown', event => {
+    if (document.querySelector('#planning-stage')?.hidden) return;
     if (event.key !== 'Enter' || event.repeat || ['INPUT', 'SELECT', 'BUTTON', 'TEXTAREA'].includes(event.target.tagName)) return;
     event.preventDefault(); record.click();
   });
