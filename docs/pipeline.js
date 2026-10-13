@@ -253,6 +253,7 @@
       form.set('speaker', speaker.name);
       form.set('memory_mode', mode);
       form.set('memories', JSON.stringify(this.options.memories()));
+      form.set('shared_turns', JSON.stringify(mode === 'shared' ? this.options.sharedTurns?.() || [] : []));
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
       const extension = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('ogg') ? 'ogg' : 'webm';
       form.set('audio', blob, `turn.${extension}`);

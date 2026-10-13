@@ -142,3 +142,12 @@ test('cloud chats restore separately by agent and memory mode without duplicatin
   app.click('shared-memory'); app.cloudOptions.chats('jenny', turns);
   assert.equal(app.options.history().length, 2);
 });
+
+test('switching cannot cancel a recorded turn before its new shared information arrives', () => {
+  const app = setup(); app.transport.busy = true; app.transport.playing = false; app.options.onState();
+  assert.equal(app.get('switch-agent').disabled, true);
+  app.click('switch-agent'); assert.equal(app.get('conversation').dataset.agent, 'sage');
+  app.transport.playing = true; app.options.onState(); assert.equal(app.get('switch-agent').disabled, false);
+  app.transport.busy = false; app.transport.playing = false; app.options.onState();
+  app.click('switch-agent'); assert.equal(app.get('conversation').dataset.agent, 'astra');
+});

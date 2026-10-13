@@ -175,3 +175,12 @@ test('same name loads chronological cloud chats, and New chat hides old messages
   assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM chat_turns').get().n, 3);
   db.db.close();
 });
+
+test('cloud profiles preserve recent shared details for a different device', async () => {
+  const db = database(), env = { LOG_DB: db };
+  const recentShared = [{ agent: 'sage', transcript: '2500 USD per person for 9 days.', reply: 'Astra can finalize this.', at: '2026-10-13T08:00:00.000Z' }];
+  assert.equal((await profileRequest(post({ action: 'save', name: 'Jenny', version: 0, profile: { ...profile, memories: { ...profile.memories, recentShared } } }), env, {})).status, 200);
+  const loaded = await (await profileRequest(post({ action: 'load', name: 'Jenny' }), env, {})).json();
+  assert.deepEqual(loaded.profile.memories.recentShared, recentShared);
+  db.db.close();
+});

@@ -34,6 +34,7 @@
   let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   const conversations = new Map();
   const chatStartsByName = new Map();
+  const sharedBootstrapNames = new Set();
   const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
   let activeConversationKey = conversationKey();
   let tripCompletionPending = false;
@@ -93,6 +94,7 @@
     history: () => history, code: () => codeInput.value.trim(),
     focusCode: () => codeInput.focus(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
     speaker: () => speakerName.value.trim() || 'Unknown', memoryMode: () => memoryMode.value,
+    sharedTurns: () => memoryMode.value === 'shared' ? window.AgentMemory.recentShared?.(speakerName.value.trim()) || [] : [],
     memories: () => window.AgentMemory.entries(speakerName.value.trim(), memoryMode.value, agent),
     onTurn: saveTurn, onInterrupt: markInterrupted,
     playback, onStatus: setStatus, getStatus: () => status.textContent,
@@ -106,7 +108,7 @@
     base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
     status: document.querySelector('#cloud-status'),
     snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name), chatStarts: chatStartsByName.get(name) || {}, reviewed: window.tripWasReviewed?.(name) === true }),
-    apply: (name, profile) => { chatStartsByName.set(name, profile.chatStarts || {}); window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); window.dispatchEvent(new CustomEvent('trip-profile:loaded', { detail: { name, reviewed: profile.reviewed === true, generation: profile.generation || 0 } })); },
+    apply: (name, profile) => { if (profile.memories.recentShared === undefined && profile.memories.shared?.length) sharedBootstrapNames.add(name); else sharedBootstrapNames.delete(name); chatStartsByName.set(name, profile.chatStarts || {}); window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); window.dispatchEvent(new CustomEvent('trip-profile:loaded', { detail: { name, reviewed: profile.reviewed === true, generation: profile.generation || 0 } })); },
     chats: restoreChats,
     onDeleted: (name, message) => {
       deletedNames.add(name); remoteLogger?.forget(name);
@@ -130,7 +132,7 @@
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
     cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; card.dataset.speaking = String(card.dataset.agent === agent && (engine === 'pipeline' ? Boolean(pipeline.playing) : responseActive)); });
     document.querySelector('.agent-options').dataset.companion = agent;
-    switchAgent.disabled = enrolling;
+    switchAgent.disabled = enrolling || (engine === 'pipeline' && (pipeline.connecting || (pipeline.busy && !pipeline.playing)));
     switchAgent.setAttribute('aria-label', `Switch to ${agent === 'sage' ? 'Astra' : 'Sage'}`);
     if (engine === 'pipeline') {
       tapMode.disabled = handsfreeMode.disabled = locked;
@@ -151,6 +153,7 @@
   }
   function saveTurn(turn) {
     if (deletedNames.has(turn.speaker?.trim().toLowerCase())) return;
+    window.AgentMemory.recordShared?.(turn.speaker, turn.mode, turn.agent, turn.transcript, turn.reply);
     tripNotes?.update(turn);
     turns.push({ timestamp: new Date().toISOString(), session_id: sessionId,
       agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
@@ -222,6 +225,7 @@
     syncControls();
   }
   function restoreChats(name, chatTurns) {
+    if (sharedBootstrapNames.delete(name)) for (const turn of chatTurns.filter(item => item.memory_sharing_mode === 'shared').slice(-6)) window.AgentMemory.recordShared?.(name, 'shared', turn.agent, turn.user_text, turn.agent_reply, turn.timestamp);
     for (const key of conversations.keys()) if (JSON.parse(key)[0] === name) conversations.delete(key);
     for (const turn of chatTurns) {
       if (!['sage', 'astra'].includes(turn.agent) || !['pipeline', 'realtime'].includes(turn.engine) || !['shared', 'isolated'].includes(turn.memory_sharing_mode)) continue;
@@ -292,7 +296,7 @@
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
   }));
   switchAgent.addEventListener('click', () => {
-    if (enrolling) return;
+    if (switchAgent.disabled || enrolling) return;
     if (responseActive || pipeline.playing) markInterrupted();
     pipeline.stop(); endSession('Ready when you are');
     cards.find(card => card.dataset.agent !== agent).click();
@@ -347,7 +351,7 @@
   async function rememberRealtime(reply) {
     const user = [...history].reverse().find(item => item.role === 'user');
     if (!user || !reply) return;
-    const generation = sessionId;
+    const memoryRevision = window.AgentMemory.revision?.(speakerName.value.trim()) || 0;
     const turn = { agent, speaker: speakerName.value.trim() || 'Unknown', mode: memoryMode.value, transcript: user.content, reply };
     saveTurn(turn);
     if (turn.speaker.toLowerCase() === 'unknown' || deletedNames.has(turn.speaker.trim().toLowerCase())) return;
@@ -358,7 +362,7 @@
       });
       if (response.ok) {
         const { fact } = await response.json();
-        if (fact && sessionId === generation) window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, fact);
+        if (fact && !deletedNames.has(turn.speaker.trim().toLowerCase()) && (window.AgentMemory.revision?.(turn.speaker) || 0) === memoryRevision) window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, fact);
       } else memoryStatus.textContent = 'Reply received, but this turn’s memory could not be saved.';
     } catch { memoryStatus.textContent = 'Reply received, but this turn’s memory could not be saved.'; }
   }

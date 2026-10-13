@@ -11,6 +11,13 @@ export function cleanProfile(data) {
       return bucket === 'shared' ? { fact, learned_by: entry.learned_by === 'Astra' ? 'Astra' : 'Sage' } : fact;
     });
   }
+  const recent = data.memories?.recentShared || [];
+  if (!Array.isArray(recent) || recent.length > 6) throw new Error('Invalid recent shared conversations');
+  memories.recentShared = recent.map(turn => {
+    if (!turn || !['sage', 'astra'].includes(turn.agent) || typeof turn.transcript !== 'string' || turn.transcript.length > 3500 ||
+        typeof turn.reply !== 'string' || turn.reply.length > 1500 || typeof turn.at !== 'string' || !Number.isFinite(Date.parse(turn.at))) throw new Error('Invalid shared conversation');
+    return { agent: turn.agent, transcript: turn.transcript, reply: turn.reply, at: new Date(turn.at).toISOString() };
+  });
   const chatStarts = {};
   if (data.chatStarts != null) {
     if (typeof data.chatStarts !== 'object' || Array.isArray(data.chatStarts) || Object.keys(data.chatStarts).length > 8) throw new Error('Invalid chat state');
@@ -26,7 +33,7 @@ export async function profileRequest(request, env, cors) {
   if (!env.LOG_DB) return json({ error: 'Cloud saving is not configured. Ask the host to apply the profile migration.' }, 503);
   try {
     if (!(request.headers.get('content-type') || '').startsWith('application/json')) return json({ error: 'Expected JSON.' }, 415);
-    const raw = await request.text(); if (raw.length > 90000) return json({ error: 'Profile is too large.' }, 413);
+    const raw = await request.text(); if (raw.length > 140000) return json({ error: 'Profile is too large.' }, 413);
     const data = JSON.parse(raw);
     if (typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 40 || data.name.trim().toLowerCase() === 'unknown') return json({ error: 'Enter a name ID of 1–40 characters.' }, 400);
     const id = data.name.trim().toLowerCase();

@@ -1,4 +1,4 @@
-import { memoryContext, extractFact } from './memory.mjs';
+import { memoryContext, extractFact, sharedTurnContext } from './memory.mjs';
 import pipelineAgents from './pipeline_agents.json' with { type: 'json' };
 
 const API = 'https://api.openai.com/v1';
@@ -37,7 +37,7 @@ async function upstream(path, options) {
 export async function pipelineTurn(request, env, cors) {
   if (!(request.headers.get('content-type') || '').startsWith('multipart/form-data'))
     return json({ error: 'Expected recorded audio.' }, 415, cors);
-  if (Number(request.headers.get('content-length')) > MAX_AUDIO_BYTES + 50000)
+  if (Number(request.headers.get('content-length')) > MAX_AUDIO_BYTES + 100000)
     return json({ error: 'Recording is too large.' }, 413, cors);
   try {
     const form = await request.formData();
@@ -56,6 +56,12 @@ export async function pipelineTurn(request, env, cors) {
       try { memories = JSON.parse(rawMemories); } catch {}
     }
     const memoryMode = form.get('memory_mode') === 'isolated' ? 'isolated' : 'shared';
+    let sharedTurns = [];
+    const rawSharedTurns = form.get('shared_turns');
+    if (memoryMode === 'shared' && typeof rawSharedTurns === 'string' && rawSharedTurns.length <= 35000) {
+      try { sharedTurns = JSON.parse(rawSharedTurns); } catch {}
+    }
+    const recentContext = memoryMode === 'shared' ? sharedTurnContext(speaker, sharedTurns, agent.name) : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
@@ -72,7 +78,7 @@ export async function pipelineTurn(request, env, cors) {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({
         model: env.PIPELINE_CHAT_MODEL || 'gpt-4.1-mini',
-        messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')),
+        messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
           { role: 'user', content: transcript }],
       }),
     })).json();

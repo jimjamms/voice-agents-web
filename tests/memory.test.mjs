@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { memoryContext, extractFact } from '../worker/src/memory.mjs';
+import { memoryContext, extractFact, sharedTurnContext } from '../worker/src/memory.mjs';
 import worker, { sessionConfig } from '../worker/src/index.mjs';
 import agents from '../worker/src/agents.json' with { type: 'json' };
 const source = readFileSync(new URL('../docs/memory.js', import.meta.url), 'utf8');
@@ -110,4 +110,45 @@ test('Realtime session receives shared, isolated or unavailable handoff instruct
   assert.match(sessionConfig(agents.sage, 'tap', 'model', 'shared').instructions, /Do not give a message to repeat or copy/);
   assert.match(sessionConfig(agents.astra, 'tap', 'model', 'isolated').instructions, /provide a short summary/);
   assert.match(sessionConfig(agents.sage, 'tap', 'model', 'invalid').instructions, /Cross-agent memory is unavailable/);
+});
+
+test('recent shared exchanges preserve multiple new details before summary extraction, survive reload and respect isolation', () => {
+  const storage = new Map(), memory = browser(storage);
+  memory.recordShared('Jenny', 'shared', 'sage', 'Budget is 2500 USD per person; 9 days; Tokyo, Kyoto, Osaka.', 'Astra can finalize those plans.', '2026-10-13T08:00:00Z');
+  const loaded = browser(storage);
+  assert.match(loaded.context('Jenny', 'shared', 'astra'), /2500 USD/);
+  assert.match(loaded.context('Jenny', 'shared', 'astra'), /Tokyo, Kyoto, Osaka/);
+  assert.ok(!loaded.context('Jenny', 'isolated', 'astra').includes('2500 USD'));
+  loaded.recordShared('Jenny', 'isolated', 'sage', 'Secret isolated choice', 'Okay');
+  assert.equal(loaded.recentShared('Jenny').length, 1);
+  const revision = loaded.revision('Jenny'); loaded.forget('Jenny');
+  assert.equal(loaded.recentShared('Jenny').length, 0); assert.ok(loaded.revision('Jenny') > revision);
+  assert.equal(browser(storage).recentShared('Jenny').length, 0);
+});
+test('shared context is bounded and explicitly prioritizes latest user corrections over earlier facts', () => {
+  const turn = { agent: 'sage', transcript: 'Actually my budget is 2500 USD, not 1500.', reply: 'I will use the new budget.' };
+  const context = sharedTurnContext('Jenny', [turn], 'Astra');
+  assert.match(context, /supersede older memories/); assert.match(context, /2500 USD/);
+  assert.equal(sharedTurnContext('Unknown', [turn], 'Astra'), '');
+  assert.equal(sharedTurnContext('Jenny', [{ ...turn, transcript: 'x'.repeat(3501) }], 'Astra'), '');
+});
+test('recorded handoff uses recent shared details even when extraction fails; isolated mode ignores them', async () => {
+  const original = globalThis.fetch; const chats = [];
+  globalThis.fetch = async (url, init) => {
+    if (url.endsWith('/audio/transcriptions')) return Response.json({ text: 'Can you finalize the plan?' });
+    if (url.endsWith('/audio/speech')) return new Response(new Uint8Array([1]));
+    const data = JSON.parse(init.body);
+    if (data.messages[0].content.startsWith('Extract')) return new Response('', { status: 500 });
+    chats.push(data); return Response.json({ choices: [{ message: { content: 'Let us finalize it.' } }] });
+  };
+  try {
+    const fd = new FormData(); fd.set('agent', 'astra'); fd.set('speaker', 'Jenny'); fd.set('memories', '[]');
+    fd.set('shared_turns', JSON.stringify([{ agent: 'sage', transcript: 'My budget is 2500 USD for 9 days in Japan.', reply: 'Great.' }]));
+    fd.set('audio', new Blob(['audio'], { type: 'audio/webm' }), 'turn.webm');
+    const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
+    const send = () => worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
+    assert.equal((await send()).status, 200); assert.match(JSON.stringify(chats[0]), /2500 USD/);
+    fd.set('memory_mode', 'isolated'); assert.equal((await send()).status, 200);
+    assert.ok(!JSON.stringify(chats[1]).includes('2500 USD'));
+  } finally { globalThis.fetch = original; }
 });
