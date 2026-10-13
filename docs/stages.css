@@ -113,3 +113,28 @@ body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-p
   .setup-next:hover,.setup-next:active,.record-button:hover,.record-button:active,
   .switch-agent-button:hover,.switch-agent-button:active{transform:none}
 }
+
+/* Keep the page chrome and stage layouts centered on the same canvas. */
+.shell{width:100%;max-width:1240px;margin-inline:auto;padding-inline:clamp(20px,4vw,48px)}
+.topbar,footer{width:100%;max-width:1120px;margin-inline:auto}
+#planning-stage,#review-stage{width:100%;max-width:1120px;margin-inline:auto}
+#setup-stage .setup-card{width:100%;margin-inline:auto}
+body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
+.workspace>*,.review-grid>*{min-width:0}
+.stage-progress{max-width:1120px;margin-inline:auto}
+@media(max-width:600px){.planning-toolbar{flex-wrap:wrap}.planning-toolbar h2{min-width:0}.stage-progress{gap:8px}}
+/* The information panel follows the active travel companion. */
+#planning-stage:has(.conversation[data-agent="sage"]) .footnote{
+  --notice-paper:#fff7ec;--notice-border:#dec6a7;--notice-ink:#654c35;
+  --notice-muted:#856246;--notice-icon:#f0d5b6;--notice-accent:#94603c;
+}
+#planning-stage:has(.conversation[data-agent="astra"]) .footnote{
+  --notice-paper:#f3f8ef;--notice-border:#b9ceb5;--notice-ink:#36553f;
+  --notice-muted:#60745d;--notice-icon:#d6e6d2;--notice-accent:#476e53;
+}
+#planning-stage .footnote{background:var(--notice-paper,#f3f8ef);border-color:var(--notice-border,#b9ceb5);transition:background-color .2s,border-color .2s,color .2s}
+#planning-stage .footnote p{color:var(--notice-ink,#36553f)}
+#planning-stage .footnote p::before{background:var(--notice-icon,#d6e6d2);color:var(--notice-accent,#476e53)}
+#planning-stage .footnote #cloud-status,
+#planning-stage .footnote #host-log-status{color:var(--notice-muted,#60745d)}
+@media(prefers-reduced-motion:reduce){#planning-stage .footnote{transition:none}}

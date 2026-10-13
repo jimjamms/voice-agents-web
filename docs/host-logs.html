@@ -53,6 +53,14 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
     #delete-user{background:#f1ded0;border-color:#d8b49a;color:#804b33;max-width:300px}#delete-user:hover{background:#e9cbb7}
     #delete-status{margin:16px 0 0;overflow-wrap:anywhere}
     @media(max-width:650px){.delete-card{padding:25px}.delete-grid{grid-template-columns:1fr;gap:0}#delete-user{max-width:none}}
+/* Center the archive and deletion panels together, with matching page gutters. */
+.shell{width:100%;max-width:1240px;margin-inline:auto;padding-inline:clamp(20px,4vw,48px)}
+.topbar,footer{width:100%;max-width:1120px;margin-inline:auto}
+.intro{width:100%;max-width:930px;margin-inline:auto}
+.host-card{width:100%;margin-inline:auto;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
+.delete-card{width:100%;margin-inline:auto}
+.archive,.export-panel,.delete-grid>*{min-width:0}
+@media(max-width:650px){.host-card{grid-template-columns:minmax(0,1fr)}}
   </style>
 </head>
 <body>
