@@ -11,7 +11,15 @@ export function cleanProfile(data) {
       return bucket === 'shared' ? { fact, learned_by: entry.learned_by === 'Astra' ? 'Astra' : 'Sage' } : fact;
     });
   }
-  return { notes: data.notes, choices: normalizeChoices(data.choices), memories };
+  const chatStarts = {};
+  if (data.chatStarts != null) {
+    if (typeof data.chatStarts !== 'object' || Array.isArray(data.chatStarts) || Object.keys(data.chatStarts).length > 8) throw new Error('Invalid chat state');
+    for (const [bucket, timestamp] of Object.entries(data.chatStarts)) {
+      if (!/^(shared|isolated):(pipeline|realtime):(sage|astra)$/.test(bucket) || typeof timestamp !== 'string' || timestamp.length > 30 || !Number.isFinite(Date.parse(timestamp))) throw new Error('Invalid chat state');
+      chatStarts[bucket] = new Date(timestamp).toISOString();
+    }
+  }
+  return { notes: data.notes, choices: normalizeChoices(data.choices), memories, chatStarts, reviewed: data.reviewed === true };
 }
 export async function profileRequest(request, env, cors) {
   const json = (body, status = 200) => Response.json(body, { status, headers: cors });
@@ -27,7 +35,16 @@ export async function profileRequest(request, env, cors) {
     if (data.action === 'status') return json({ active: true, generation });
     if (data.action === 'load') {
       const row = await env.LOG_DB.prepare('SELECT payload, version FROM trip_profiles WHERE name_id = ?').bind(id).first();
-      return json({ profile: row ? JSON.parse(row.payload) : null, version: row?.version || 0, generation });
+      const profile = row ? JSON.parse(row.payload) : null;
+      const { results } = await env.LOG_DB.prepare('SELECT payload, interrupted FROM chat_turns WHERE speaker_lower = ? ORDER BY id DESC LIMIT 500').bind(id).all();
+      const chatTurns = results.reverse().flatMap(item => {
+        const turn = JSON.parse(item.payload);
+        if (!['sage', 'astra'].includes(turn.agent) || !['shared', 'isolated'].includes(turn.memory_sharing_mode) || !['pipeline', 'realtime'].includes(turn.engine)) return [];
+        const start = profile?.chatStarts?.[`${turn.memory_sharing_mode}:${turn.engine}:${turn.agent}`];
+        if (start && turn.timestamp <= start) return [];
+        return [{ ...turn, interrupted: Boolean(item.interrupted) }];
+      });
+      return json({ profile, chatTurns, version: row?.version || 0, generation });
     }
     if (data.action !== 'save' || !Number.isSafeInteger(data.version) || data.version < 0) return json({ error: 'Invalid profile request.' }, 400);
     let profile;
