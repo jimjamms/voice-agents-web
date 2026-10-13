@@ -7,3 +7,6 @@
 .agent-options[data-companion="astra"] .switch-agent-button{background:#e0ebd9;border-color:#b5ccb0;color:#355941}
 .switch-agent-button:hover{filter:brightness(.97)}
 #planning-stage .chooser{gap:18px}
+
+/* Reduce only the scenic background brightness by 0.1. */
+.scene-background { filter: brightness(0.9); }

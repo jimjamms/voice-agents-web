@@ -1,5 +1,11 @@
 (() => {
   const switchAgent = document.querySelector('#switch-agent');
+  const optionalModes = {
+    realtime: window.VOICE_DEMO_CONFIG?.showRealtime === true,
+    handsFree: window.VOICE_DEMO_CONFIG?.showHandsFree === true,
+  };
+  document.querySelector('.engine-row').hidden = !optionalModes.realtime;
+  document.querySelector('.mode-row').hidden = !optionalModes.handsFree;
   const cards = [...document.querySelectorAll('[data-agent]')];
   const messages = document.querySelector('#messages');
   const record = document.querySelector('#record');
@@ -129,6 +135,7 @@
     memoryStatus.textContent = saved === false ? 'Memories cleared for this visit; browser storage could not update.' : 'Memories forgotten.';
   });
   function chooseEngine(next) {
+    if (next === 'realtime' && !optionalModes.realtime) return;
     if (connected || connecting || pipeline.isLocked() || enrolling || engine === next) return;
     engine = next; switchConversation();
     speakerControls.hidden = false;
@@ -193,6 +200,7 @@
     renderConversation();
   }
   function chooseMode(enabled) {
+    if (enabled && !optionalModes.handsFree) return;
     if (connecting || connected || pipeline.isLocked() || enrolling) return;
     handsFree = enabled;
     tapMode.classList.toggle('selected', !enabled); handsfreeMode.classList.toggle('selected', enabled);
