@@ -40,10 +40,26 @@
   }
   for (const input of [name, code]) input.addEventListener('input', () => input.setCustomValidity(''));
   for (const radio of radios) radio.addEventListener('change', () => { if (radio.checked) form.dataset.companion = radio.value; });
-  form.addEventListener('submit', event => {
+  form.addEventListener('submit', async event => {
     event.preventDefault(); name.value = name.value.trim(); code.value = code.value.trim();
     name.setCustomValidity(name.value ? '' : 'Enter your name.'); code.setCustomValidity(code.value ? '' : 'Enter your demo code.');
     if (!form.reportValidity()) return;
+    const start = document.querySelector('#start-planning');
+    if (start.disabled) return;
+    start.disabled = true;
+    const fields = [...form.querySelectorAll('input')];
+    fields.forEach(field => { field.disabled = true; });
+    const loginStatus = document.querySelector('#profile-login-status');
+    try {
+      if (window.restoreTripProfile) {
+        loginStatus.textContent = 'Loading your saved trip…';
+        // Activate the local name before applying its cloud notes.
+        name.dispatchEvent(new Event('change', { bubbles: true }));
+        await window.restoreTripProfile(name.value);
+        loginStatus.textContent = '';
+      }
+    } catch (error) { loginStatus.textContent = error.message; return; }
+    finally { start.disabled = false; fields.forEach(field => { field.disabled = false; }); }
     const selected = radios.find(radio => radio.checked)?.value || 'sage';
     name.dispatchEvent(new Event('change', { bubbles: true }));
     document.querySelector(`[data-agent="${selected}"]`).click();

@@ -40,6 +40,7 @@
     copy: document.querySelector('#copy-notes'), clear: document.querySelector('#clear-notes'),
     speaker: () => speakerName.value.trim(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
     code: () => codeInput.value.trim(),
+    onPersist: key => window.onTripProfileChange?.(key),
     onChange: snapshot => {
       window.dispatchEvent(new CustomEvent('trip-notes:updated', { detail: snapshot }));
       if (!snapshot.ready) tripCompletionPending = false;
@@ -99,6 +100,13 @@
     },
     onMessage: addMessage, onState: () => syncControls(),
   });
+  const tripCloud = window.createTripCloud?.({
+    base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
+    status: document.querySelector('#cloud-status'),
+    snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name) }),
+    apply: (name, profile) => { window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); },
+  });
+  window.restoreTripProfile = async name => { await tripNotes?.queue; await tripCloud?.load(name); };
   function maybeCompleteTrip() {
     if (!tripCompletionPending || pipeline?.busy || pipeline?.playing || pipeline?.recording || connecting || recording || responseActive) return;
     tripCompletionPending = false;

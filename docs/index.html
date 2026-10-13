@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="notes.css?v=1">
   <link rel="stylesheet" href="stages.css?v=3">
   <link rel="stylesheet" href="characters.css?v=3">
-  <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js" defer></script><script src="pipeline.js" defer></script><script src="remote-logs.js" defer></script><script src="app.js" defer></script><script src="stages.js" defer></script>
+  <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js" defer></script><script src="pipeline.js" defer></script><script src="remote-logs.js" defer></script><script src="cloud.js" defer></script><script src="app.js" defer></script><script src="stages.js" defer></script>
 </head>
 <body data-stage="setup">
   <div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -35,7 +35,7 @@
 <g transform="translate(536 51)"><circle r="17" fill="#fffdf2" stroke="#b7c7b1"/><path d="m-6 6 3-10 9-3-3 10Z" fill="#57816b"/></g>
 </svg><div class="scene-wash"></div></div>
   <div class="shell">
-    <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 6-6"/></svg></span> SAGE &amp; ASTRA</div></header>
+    <header class="topbar"><a class="brand" href="index.html" aria-label="Sage and Astra home"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 11 18-8-6 18-4-7-8-3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m11 14 10-11" stroke="currentColor" stroke-width="1.5"/></svg>SAGE &amp; ASTRA</a></header>
     <main>
       <section class="intro"><h1>Where to <em>next?</em></h1><p>Dream it up with Sage. Plan it out with Astra.</p></section>
 
@@ -43,13 +43,15 @@
       <section id="setup-stage" aria-labelledby="setup-heading">
         <form id="trip-setup" class="setup-card" data-companion="sage">
           <h2 id="setup-heading">Let’s get you ready.</h2>
-          <div class="setup-field"><label for="speaker-name">Your name</label><input id="speaker-name" type="text" maxlength="40" placeholder="Enter your name" autocomplete="given-name" required></div>
+          <div class="setup-field"><label for="speaker-name">Name ID</label><input id="speaker-name" type="text" maxlength="40" placeholder="e.g. jenny-trip-4827" autocomplete="off" spellcheck="false" required></div>
+          <p class="setup-data-note">Use the same unique name ID on any device. Anyone with this ID and the demo code can open this trip.</p>
           <fieldset class="initial-agent"><legend>Who would you like to start with?</legend><div class="initial-options">
             <label class="initial-option"><input type="radio" name="initial-agent" value="sage" checked><span><strong>Sage</strong><small>Explore destinations and ideas</small></span></label>
             <label class="initial-option"><input type="radio" name="initial-agent" value="astra"><span><strong>Astra</strong><small>Build a practical itinerary</small></span></label>
           </div></fieldset>
           <div class="setup-field"><label for="access-code">Demo code</label><input id="access-code" type="password" placeholder="Enter the code from your host" autocomplete="off" spellcheck="false" required></div>
           <p class="setup-data-note">Chat transcripts are saved for the host. Audio is not recorded in the chat log.</p>
+          <p id="profile-login-status" class="setup-data-note" role="status"></p>
           <button id="start-planning" class="setup-next" type="submit">Start planning <span aria-hidden="true">↗</span></button>
         </form>
       </section>
@@ -71,7 +73,7 @@
           <div class="controls"><div class="engine-row" hidden><span>Voice mode</span><div class="mode-switch" role="group" aria-label="Voice mode"><button id="realtime-engine" type="button" aria-pressed="false">Realtime</button><button id="pipeline-engine" type="button" class="selected" aria-pressed="true">Recorded</button></div></div><p id="engine-description" class="engine-description" hidden></p><div id="speaker-controls" class="speaker-controls"><div class="memory-row"><span id="memory-label">Shared memory</span><div class="mode-switch memory-switch" role="group" aria-labelledby="memory-label"><button id="shared-memory" type="button" class="selected" aria-pressed="true">Shared</button><button id="isolated-memory" type="button" aria-pressed="false">Separate</button></div><select id="memory-mode" hidden aria-label="Shared memory"><option value="shared">Shared</option><option value="isolated">Isolated</option></select></div><div class="memory-detail"><small id="memory-description">Share saved trip details between agents.</small><button id="forget-memory" class="text-button" type="button">Forget memories</button></div><small id="memory-status" role="status"></small></div><div class="mode-row" hidden><span>Talk mode</span><div class="mode-switch" role="group" aria-label="Talk mode"><button id="tap-mode" type="button" aria-pressed="true" class="selected">Tap to talk</button><button id="handsfree-mode" type="button" aria-pressed="false">Hands-free</button></div></div><div class="record-row"><button id="record" class="record-button" type="button"><span class="mic" aria-hidden="true">●</span><span id="record-label">Start talking</span></button><div class="record-help"><span id="status" role="status">Ready when you are</span><small id="hint">Tap to start and stop. Enter interrupts.</small></div></div><button id="disconnect" type="button" class="text-button" hidden>End session ×</button><audio id="playback" controls hidden aria-label="Agent reply"></audio></div>
         </div>
       </section>
-      <section class="footnote"><p>AI voices. Chat transcripts are saved for the host; memories and trip notes stay in this browser. Check current travel details before booking.</p><span id="host-log-status" role="status">Chat logs save automatically.</span></section>
+      <section class="footnote"><p>AI voices. Chat transcripts are saved for the host; memories and trip notes sync with your name ID. Check current travel details before booking.</p><span id="cloud-status" role="status">Enter your name ID to load your trip.</span><span id="host-log-status" role="status">Chat logs save automatically.</span></section>
       </section>
       <section id="review-stage" aria-labelledby="review-heading" hidden>
         <div class="review-heading"><p class="eyebrow">YOUR TRIP CHOICES ARE COMPLETE</p><h2 id="review-heading" tabindex="-1">Ready for the next step.</h2><p>Review your trip notes, then complete the form.</p></div>
@@ -79,7 +81,7 @@
         <section class="form-card" aria-labelledby="form-heading"><h2 id="form-heading">Final form</h2><p id="form-coming-soon">The Google Form is coming soon. Your completed trip notes are saved.</p><a id="google-form-link" class="setup-next" target="_blank" rel="noopener noreferrer" hidden>Open Google Form ↗</a><p id="form-open-hint" hidden>The form opens in a new tab. Keep your notepad here for reference.</p><button id="back-to-planning" class="text-button" type="button">Back to planning</button></section></div>
       </section>
     </main>
-    <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>
+    <footer><span>Sage &amp; Astra · Travel companions</span><span>Ideas to itineraries.</span></footer>
   </div>
 </body>
 </html>

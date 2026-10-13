@@ -5,6 +5,15 @@
   if (!store || typeof store !== 'object' || Array.isArray(store)) store = {};
   const id = (speaker, mode, agent) => JSON.stringify([mode, mode === 'shared' ? 'both' : agent, speaker.trim().toLowerCase()]);
   window.AgentMemory = {
+    snapshot(speaker) {
+      return { shared: this.entries(speaker, 'shared', 'sage'), sage: this.entries(speaker, 'isolated', 'sage'), astra: this.entries(speaker, 'isolated', 'astra') };
+    },
+    restore(speaker, memories) {
+      for (const [bucket, mode, agent] of [['shared', 'shared', 'sage'], ['sage', 'isolated', 'sage'], ['astra', 'isolated', 'astra']]) {
+        store[id(speaker, mode, agent)] = memories[bucket] || [];
+      }
+      try { localStorage.setItem(key, JSON.stringify(store)); } catch {}
+    },
     entries(speaker, mode, agent) { return store[id(speaker, mode, agent)] || []; },
     remember(speaker, mode, agent, fact) {
       if (!speaker || speaker.toLowerCase() === 'unknown' || !fact) return;
@@ -12,6 +21,7 @@
       const entries = this.entries(speaker, mode, agent);
       const value = mode === 'shared' ? { fact, learned_by: agent === 'sage' ? 'Sage' : 'Astra' } : fact;
       store[bucket] = [...entries, value].slice(-20);
+      window.onTripProfileChange?.(speaker);
       try { localStorage.setItem(key, JSON.stringify(store)); } catch { return false; }
       return true;
     },
@@ -19,6 +29,7 @@
       for (const bucket of Object.keys(store)) {
         try { if (JSON.parse(bucket)[2] === speaker.trim().toLowerCase()) delete store[bucket]; } catch {}
       }
+      window.onTripProfileChange?.(speaker);
       try { localStorage.setItem(key, JSON.stringify(store)); } catch { return false; }
       return true;
     },

@@ -46,9 +46,17 @@
       this.options.onChange?.({ key: this.key(), notes: this.text(this.key()), choices, updated,
         ready: choices.countries.length >= 1 && choices.cities.length >= 3 && choices.activities.length >= 1 && choices.activities.length <= 2 && Boolean(choices.budget) && Boolean(choices.itinerary) && choices.finalized });
     }
+    snapshot(speaker) { const key = this.key(speaker); return { notes: this.text(key), choices: this.choices(key) }; }
+    restore(speaker, profile) {
+      const key = this.key(speaker); this.bump(key); this.epochs.set(key, (this.epochs.get(key) || 0) + 1);
+      this.saved[key] = { notes: profile.notes, choices: profile.choices };
+      try { localStorage.setItem(STORE, JSON.stringify(this.saved)); } catch {}
+      if (key === this.key()) this.refresh();
+    }
     bump(key) { this.revisions.set(key, (this.revisions.get(key) || 0) + 1); }
     status(text, key = this.key()) { if (key === this.key()) this.options.status.textContent = text; }
     persist(key) {
+      this.options.onPersist?.(key);
       try { localStorage.setItem(STORE, JSON.stringify(this.saved)); this.status('Saved in this browser.', key); }
       catch { this.status('Saved for this visit; browser storage is unavailable.', key); }
     }

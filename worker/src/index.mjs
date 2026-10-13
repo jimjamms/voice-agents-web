@@ -1,3 +1,4 @@
+import { profileRequest } from './profiles.mjs';
 import agents from './agents.json' with { type: 'json' };
 import { saveLogs, exportLogs } from './logs.mjs';
 import { notesTurn } from './notes.mjs';
@@ -55,16 +56,17 @@ export default {
     }
     const cors = corsFor(allowedOrigin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (!['/session', '/turn', '/memory', '/notes', '/logs'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
+    if (!['/session', '/turn', '/memory', '/notes', '/logs', '/profile'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
     if (!env.OPENAI_API_KEY || !env.DEMO_ACCESS_CODE || !env.DEMO_RATE_LIMITER) {
       return json({ error: 'Voice service is not configured.' }, 503, cors);
     }
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: ['/notes', '/logs'].includes(url.pathname) ? `${ip}:${url.pathname.slice(1)}` : ip });
+    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: ['/notes', '/logs', '/profile'].includes(url.pathname) ? `${ip}:${url.pathname.slice(1)}` : ip });
     if (!success) return json({ error: 'Too many new sessions. Wait a minute and try again.' }, 429, cors);
     if (!validCode(request.headers.get('x-demo-code'), env.DEMO_ACCESS_CODE)) {
       return json({ error: 'Invalid demo access code.' }, 401, cors);
     }
+    if (url.pathname === '/profile') return profileRequest(request, env, cors);
     if (url.pathname === '/logs') return saveLogs(request, env, cors);
     if (url.pathname === '/notes') return notesTurn(request, env, cors);
     if (url.pathname === '/memory') return memoryTurn(request, env, cors);

@@ -32,6 +32,11 @@
     footer{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #bccdbb;padding:22px 0;font-size:10px;color:#5c7356}
     @media(max-width:650px){.shell{padding:0 20px}.topbar{height:72px}.brand{font-size:10px}.back{font-size:11px}main{padding:35px 0 45px}.host-card{grid-template-columns:1fr}.archive{padding:22px 25px;border-right:0;border-bottom:1px solid #c3d2b8;gap:0}.archive svg{display:none}.archive h2{font-size:18px}.archive-tag{margin-bottom:7px}.export-panel{padding:25px}.journey-art{width:165%;left:-32.5%;height:55vh}footer{flex-wrap:wrap}}
     @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* Matching, brighter scenery on the planning and host pages. */
+.scene-background{filter:brightness(1);background:#e4ede2}
+.scene-background .journey-art{position:absolute;bottom:0;left:0;width:100%;height:clamp(380px,48vw,740px);opacity:.75}
+.scene-background .scene-wash{background:linear-gradient(180deg,#f4f1e9 0%,#f4f1e9ee 34%,#f4f1e99c 76%,#f4f1e966 100%)}
+@media(max-width:600px){.scene-background .journey-art{height:390px;width:165%;left:-32.5%}}
   </style>
 </head>
 <body>

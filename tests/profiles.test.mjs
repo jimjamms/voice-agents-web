@@ -1,0 +1,64 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import { profileRequest } from '../worker/src/profiles.mjs';
+import worker from '../worker/src/index.mjs';
+const profile = { notes: 'Japan trip', choices: { countries: ['Japan'], cities: ['Tokyo'], activities: ['Hiking'] }, memories: { shared: [{ fact: 'Prefers trains', learned_by: 'Astra' }], sage: ['Likes hiking'], astra: ['Budget conscious'] } };
+function database() {
+  const db = new DatabaseSync(':memory:');
+  db.exec(readFileSync(new URL('../worker/migrations/0002_trip_profiles.sql', import.meta.url), 'utf8'));
+  return { db, prepare(sql) { return { bind(...params) { return {
+    async first() { return db.prepare(sql).get(...params); },
+    async run() { const result = db.prepare(sql).run(...params); return { meta: { changes: result.changes } }; },
+  }; } }; } };
+}
+const post = body => new Request('https://worker.test/profile', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+test('name ID loads across devices case-insensitively and separates profiles', async () => {
+  const db = database(); const env = { LOG_DB: db };
+  assert.equal((await profileRequest(post({ action: 'save', name: ' Jenny-trip-4827 ', version: 0, profile }), env, {})).status, 200);
+  const data = await (await profileRequest(post({ action: 'load', name: 'JENNY-TRIP-4827' }), env, {})).json();
+  assert.equal(data.profile.notes, profile.notes); assert.equal(data.profile.memories.shared[0].learned_by, 'Astra'); assert.equal(data.version, 1);
+  assert.equal((await (await profileRequest(post({ action: 'load', name: 'someone-else' }), env, {})).json()).profile, null);
+  db.db.close();
+});
+test('stale device saves and duplicate initial saves cannot overwrite newer trip data', async () => {
+  const db = database(), env = { LOG_DB: db };
+  const save = (version, notes) => profileRequest(post({ action: 'save', name: 'Jenny', version, profile: { ...profile, notes } }), env, {});
+  assert.equal((await save(0, 'First')).status, 200); assert.equal((await save(0, 'Duplicate')).status, 409);
+  assert.equal((await save(1, 'Newer')).status, 200); assert.equal((await save(1, 'Stale')).status, 409);
+  assert.equal((await (await profileRequest(post({ action: 'load', name: 'Jenny' }), env, {})).json()).profile.notes, 'Newer');
+  assert.equal((await save(2, '')).status, 200); db.db.close();
+});
+test('profile endpoint requires origin and demo code and rejects malformed memories', async () => {
+  const db = database(), env = { LOG_DB: db, PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'demo', OPENAI_API_KEY: 'secret', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
+  const req = (origin, code) => new Request('https://worker.test/profile', { method: 'POST', headers: { origin, 'x-demo-code': code, 'content-type': 'application/json' }, body: JSON.stringify({ action: 'load', name: 'Jenny' }) });
+  assert.equal((await worker.fetch(req(env.PUBLIC_ORIGIN, 'wrong'), env)).status, 401);
+  assert.equal((await worker.fetch(req('https://wrong.test', 'demo'), env)).status, 403);
+  assert.equal((await worker.fetch(req(env.PUBLIC_ORIGIN, 'demo'), env)).status, 200);
+  assert.equal((await profileRequest(post({ action: 'save', name: 'Jenny', version: 0, profile: { ...profile, memories: { ...profile.memories, sage: [42] } } }), env, {})).status, 400);
+  db.db.close();
+});
+function client(fetcher, local = profile) {
+  const handlers = {}, status = {}; let applied;
+  const window = { addEventListener(type, fn) { handlers[type] = fn; } };
+  vm.runInNewContext(readFileSync(new URL('../docs/cloud.js', import.meta.url), 'utf8'), { window, fetch: fetcher, AbortController, setTimeout: () => 1, clearTimeout() {} });
+  const cloud = window.createTripCloud({ base: () => 'https://worker.test', code: () => 'demo', status, snapshot: () => local, apply(name, value) { applied = { name, value }; } });
+  return { cloud, window, status, applied: () => applied };
+}
+test('client restores cloud data and imports local notes only for a new ID', async () => {
+  const calls = [];
+  const app = client(async (_url, init) => { const body = JSON.parse(init.body); calls.push(body); return Response.json(body.action === 'load' ? { version: 3, profile: { ...profile, notes: 'Remote trip' } } : { version: body.version + 1 }); });
+  await app.cloud.load('JENNY'); assert.equal(app.applied().value.notes, 'Remote trip'); assert.equal(calls.length, 1);
+  app.window.onTripProfileChange('jenny'); await app.cloud.flush(); assert.equal(calls[1].version, 3);
+  const fresh = client(async (_url, init) => { const body = JSON.parse(init.body); return Response.json(body.action === 'load' ? { version: 0, profile: null } : { version: 1 }); });
+  await fresh.cloud.load('new-trip'); assert.match(fresh.status.textContent, /saved across devices/);
+});
+test('failed initial load cannot upload a stale local profile; conflicts stop silent overwrite', async () => {
+  let calls = 0;
+  const failed = client(async () => { calls++; return Response.json({ error: 'Unavailable' }, { status: 503 }); });
+  await assert.rejects(failed.cloud.load('Jenny')); failed.window.onTripProfileChange('jenny'); await failed.cloud.flush(); assert.equal(calls, 1);
+  const app = client(async (_url, init) => { const body = JSON.parse(init.body); return body.action === 'load' ? Response.json({ version: 1, profile }) : Response.json({ error: 'Changed on another device' }, { status: 409 }); });
+  await app.cloud.load('Jenny'); app.window.onTripProfileChange('jenny'); await app.cloud.flush(); assert.match(app.status.textContent, /another device/);
+});
