@@ -60,7 +60,7 @@
       try { localStorage.setItem(STORE, JSON.stringify(this.saved)); this.status('Saved in this browser.', key); }
       catch { this.status('Saved for this visit; browser storage is unavailable.', key); }
     }
-    refresh() { this.options.textarea.value = this.text(this.key()); this.status('Automatically updated with important trip details.'); this.publish(false); }
+    refresh() { this.options.textarea.value = this.text(this.key()); this.status('Your trip details and next steps, updated as you plan.'); this.publish(false); }
     update(turn) {
       const key = this.key(turn.speaker || 'Unknown'); const epoch = this.epochs.get(key) || 0;
       const base = this.options.base(); const code = this.options.code();
