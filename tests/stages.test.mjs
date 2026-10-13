@@ -144,7 +144,7 @@ test('next-step guidance alternates first Sage choices, Astra review, second Sag
 test('the collapsible checklist lives before the workspace outside the notepad', () => {
   const html = readFileSync(new URL('../docs/index.html', import.meta.url), 'utf8');
   assert.ok(html.indexOf('planning-checklist') < html.indexOf('class="workspace"'));
-  assert.match(html, /planning-checklist[^]*?<details><summary>/);
+  assert.match(html, /planning-checklist[^]*?<details open><summary>/);
   assert.match(html, /trip-notepad" aria-labelledby="notes-heading"><div class="notes-head"/);
 });
 

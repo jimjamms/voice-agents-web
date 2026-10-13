@@ -214,3 +214,15 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 .conversation[data-agent="sage"] #chat-text::placeholder,.conversation[data-agent="sage"] .text-chat-meta{color:#88735d}
 .conversation[data-agent="sage"] #send-text{border-color:#c79e78;background:#e7b98b;color:#493324}
 .conversation[data-agent="sage"] #read-text-reply{accent-color:#94603c}
+
+/* On desktop, show the trip requirements without needing to discover a disclosure. */
+@media(min-width:851px){
+  .planning-checklist{padding:18px 20px;border:2px solid var(--note-border,#b9ceb5);border-left:5px solid var(--note-accent,#476e53);box-shadow:0 7px 22px #294d4012;color:var(--note-ink,#36553f)}
+  .planning-checklist #trip-goal-title{font:800 18px Manrope,sans-serif;letter-spacing:-.025em}
+  .planning-checklist #goal-progress{padding:5px 10px;border-radius:20px;background:var(--note-header,#e9f0e3);color:var(--note-ink,#36553f);font-size:12px;font-weight:700}
+  .planning-checklist .goal-counts{gap:10px;margin-top:16px;font-size:13px;line-height:1.5}
+  .planning-checklist .goal-counts span{padding:12px;border:1px solid var(--note-border,#b9ceb5);background:var(--note-paper,#fffdf4);color:var(--note-ink,#36553f)}
+  .planning-checklist .goal-counts span[data-complete="true"]{background:var(--note-header,#e9f0e3);border-color:var(--note-accent,#476e53)}
+  .planning-checklist #trip-goal-hint{display:block;font-size:13px;font-weight:600;line-height:1.6;margin-top:14px;color:var(--note-accent,#476e53)}
+  .planning-checklist #trip-goal-hint::before{content:'Next step · ';font-weight:800}
+}

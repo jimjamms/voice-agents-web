@@ -248,6 +248,7 @@ test('mobile notes collapse and expand without hiding desktop notes or losing ch
   const mobileMedia = { matches: true, addEventListener(type, handler) { assert.equal(type, 'change'); resize = handler; } };
   const app = setup({ mobileMedia });
   app.options.onMessage('user', 'Plan Kyoto');
+  assert.equal(app.get('planning-checklist details').open, false);
   assert.deepEqual(app.get('mobile-trip-details').children.map(child => child.id), ['planning-checklist', 'trip-notepad']);
   assert.deepEqual(app.get('controls').placements.map(item => item.child.id), ['record-row', 'text-chat']);
   assert.equal(app.get('trip-notes-display').hidden, true);
@@ -257,12 +258,14 @@ test('mobile notes collapse and expand without hiding desktop notes or losing ch
   assert.equal(app.get('notes-status').hidden, false);
   app.click('toggle-trip-notes');
   mobileMedia.matches = false; resize();
+  assert.equal(app.get('planning-checklist details').open, true);
   assert.equal(app.get('planning-stage').placements.at(-1).child.id, 'planning-checklist');
   assert.equal(app.get('chooser').placements.at(-1).child.id, 'trip-notepad');
   assert.deepEqual(app.get('controls').placements.slice(-2).map(item => item.child.id), ['record-row', 'text-chat']);
   assert.equal(app.get('trip-notes-display').hidden, false);
   assert.equal(app.get('trip-notepad').dataset.mobileExpanded, 'true');
   mobileMedia.matches = true; resize();
+  assert.equal(app.get('planning-checklist details').open, false);
   assert.equal(app.get('trip-notes-display').hidden, true);
   assert.equal(app.options.history()[0].content, 'Plan Kyoto');
 });

@@ -509,6 +509,7 @@
     const isMobile = Boolean(mobileLayout?.matches);
     if (isMobile !== currentMobileLayout) {
       const checklist = document.querySelector('.planning-checklist');
+      document.querySelector('.planning-checklist details').open = !isMobile;
       const notes = document.querySelector('.trip-notepad');
       const planning = document.querySelector('#planning-stage');
       const workspace = document.querySelector('.workspace');
