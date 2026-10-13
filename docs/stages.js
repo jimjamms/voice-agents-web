@@ -8,7 +8,18 @@
   const title = document.querySelector('#traveler-title');
   const radios = [...form.querySelectorAll('input[name="initial-agent"]')];
   const steps = [document.querySelector('#setup-step'), document.querySelector('#planning-step'), document.querySelector('#review-step')];
-  const reviewedTrips = new Set();
+  const REVIEW_STORE = 'sage-astra-reviewed-trips-v1';
+  let storedReviews = {};
+  try { storedReviews = JSON.parse(localStorage.getItem(REVIEW_STORE) || '{}'); } catch {}
+  if (!storedReviews || typeof storedReviews !== 'object' || Array.isArray(storedReviews)) storedReviews = {};
+  const reviewedTrips = new Set(Object.keys(storedReviews).filter(key => storedReviews[key]?.reviewed === true));
+  const reviewGenerations = new Map(Object.entries(storedReviews).map(([key, value]) => [key, value.generation || 0]));
+  const persistReviews = () => {
+    const values = {};
+    for (const [key, generation] of reviewGenerations) values[key] = { generation, reviewed: reviewedTrips.has(key) };
+    try { localStorage.setItem(REVIEW_STORE, JSON.stringify(values)); } catch {}
+  };
+  window.tripWasReviewed = id => reviewedTrips.has(id.trim().toLowerCase());
   const tripKey = () => name.value.trim().toLowerCase() || 'unknown';
   let snapshot = { notes: '', ready: false, choices: { countries: [], cities: [], activities: [] } };
   function step(next) {
@@ -39,6 +50,8 @@
     document.querySelector('#completed-notes').value = snapshot.notes;
     document.querySelector('#completed-notepad').dataset.companion = document.querySelector('[data-agent].active')?.dataset.agent || 'sage';
     reviewedTrips.add(tripKey());
+    if (!reviewGenerations.has(tripKey())) reviewGenerations.set(tripKey(), 0);
+    persistReviews(); window.onTripProfileChange?.(tripKey());
     step('review'); document.querySelector('#review-heading').focus();
   }
   for (const input of [name, code]) input.addEventListener('input', () => input.setCustomValidity(''));
@@ -82,9 +95,15 @@
       if (!snapshot.ready) { step('planning'); title.focus(); }
     }
   });
+  window.addEventListener('trip-profile:loaded', event => {
+    const { name: key, generation, reviewed } = event.detail;
+    if ((reviewGenerations.get(key) || 0) !== generation) reviewedTrips.delete(key);
+    if (reviewed) reviewedTrips.add(key);
+    reviewGenerations.set(key, generation); persistReviews();
+  });
   window.addEventListener('trip-profile:deleted', event => {
     if (name.value.trim().toLowerCase() !== event.detail.name) return;
-    reviewedTrips.delete(event.detail.name);
+    reviewedTrips.delete(event.detail.name); reviewGenerations.delete(event.detail.name); persistReviews();
     document.querySelector('#profile-login-status').textContent = event.detail.message;
     document.querySelector('#completed-notes').value = '';
     step('setup'); name.focus();

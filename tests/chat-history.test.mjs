@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../docs/app.js', import.meta.url), 'utf8');
 function setup(frameTools = {}) {
-  const elements = new Map(); let options, noteOptions; let counter = 0; const emitted = [];
+  const elements = new Map(); let options, noteOptions, cloudOptions; let counter = 0; const emitted = [];
   function element(id) {
     return { id, children: [], listeners: {}, value: id === 'memory-mode' ? 'shared' : '', disabled: false,
       dataset: {}, scrollTop: 0, scrollHeight: 100, classList: { toggle() {}, remove() {} },
@@ -19,10 +19,10 @@ function setup(frameTools = {}) {
   const document = { body: { dataset: { stage: 'planning' } }, querySelector: selector => get(selector.slice(1)), querySelectorAll: () => cards,
     createElement: () => element('new'), addEventListener() {} };
   const transport = { isLocked: () => false, stop() {}, busy: false, active: false };
-  const testWindow = { dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
+  const testWindow = { createTripCloud(value) { cloudOptions = value; return { async load() {} }; }, dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
   vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, Event, CustomEvent, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
     window: testWindow, ...frameTools });
-  return { get, options, transport, noteOptions, emitted, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
+  return { get, options, transport, noteOptions, cloudOptions, emitted, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
   const app = setup();
@@ -126,4 +126,19 @@ test('speaking animation follows playback and clears when playback stops', () =>
   app.click('astra'); app.transport.playing = true; app.options.onState();
   assert.equal(app.get('astra').dataset.speaking, 'true');
   assert.equal(app.get('sage').dataset.speaking, 'false');
+});
+
+test('cloud chats restore separately by agent and memory mode without duplicating messages', () => {
+  const app = setup(); app.change('speaker-name', 'Jenny');
+  const turns = [
+    { agent: 'sage', engine: 'pipeline', memory_sharing_mode: 'shared', speaker: 'Jenny', user_text: 'Japan ideas', agent_reply: 'Try Kyoto', session_id: 'sage-saved' },
+    { agent: 'astra', engine: 'pipeline', memory_sharing_mode: 'shared', speaker: 'Jenny', user_text: 'Japan budget', agent_reply: 'Plan train costs', session_id: 'astra-saved' },
+    { agent: 'sage', engine: 'pipeline', memory_sharing_mode: 'isolated', speaker: 'Jenny', user_text: 'Private ideas', agent_reply: 'Hiking', session_id: 'isolated-saved' },
+  ];
+  app.cloudOptions.chats('jenny', turns);
+  assert.deepEqual(Array.from(app.options.history(), item => item.content), ['Japan ideas', 'Try Kyoto']);
+  app.click('astra'); assert.equal(app.options.history()[1].content, 'Plan train costs');
+  app.click('sage'); app.click('isolated-memory'); assert.equal(app.options.history()[0].content, 'Private ideas');
+  app.click('shared-memory'); app.cloudOptions.chats('jenny', turns);
+  assert.equal(app.options.history().length, 2);
 });

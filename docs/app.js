@@ -33,6 +33,7 @@
   let sessionId = crypto.randomUUID();
   let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   const conversations = new Map();
+  const chatStartsByName = new Map();
   const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
   let activeConversationKey = conversationKey();
   let tripCompletionPending = false;
@@ -104,8 +105,9 @@
   const tripCloud = window.createTripCloud?.({
     base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
     status: document.querySelector('#cloud-status'),
-    snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name) }),
-    apply: (name, profile) => { window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); },
+    snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name), chatStarts: chatStartsByName.get(name) || {}, reviewed: window.tripWasReviewed?.(name) === true }),
+    apply: (name, profile) => { chatStartsByName.set(name, profile.chatStarts || {}); window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); window.dispatchEvent(new CustomEvent('trip-profile:loaded', { detail: { name, reviewed: profile.reviewed === true, generation: profile.generation || 0 } })); },
+    chats: restoreChats,
     onDeleted: (name, message) => {
       deletedNames.add(name); remoteLogger?.forget(name);
       for (const key of conversations.keys()) if (JSON.parse(key)[0] === name) conversations.delete(key);
@@ -115,7 +117,7 @@
       window.dispatchEvent(new CustomEvent('trip-profile:deleted', { detail: { name, message } }));
     },
   });
-  window.restoreTripProfile = async name => { await tripNotes?.queue; await tripCloud?.load(name); deletedNames.delete(name.trim().toLowerCase()); };
+  window.restoreTripProfile = async name => { await tripNotes?.queue; await remoteLogger?.flush(); await tripCloud?.load(name); deletedNames.delete(name.trim().toLowerCase()); };
   function maybeCompleteTrip() {
     if (!tripCompletionPending || pipeline?.busy || pipeline?.playing || pipeline?.recording || connecting || recording || responseActive) return;
     tripCompletionPending = false;
@@ -219,6 +221,24 @@
     setStatus(message, 'Choose a mode, then connect to start.');
     syncControls();
   }
+  function restoreChats(name, chatTurns) {
+    for (const key of conversations.keys()) if (JSON.parse(key)[0] === name) conversations.delete(key);
+    for (const turn of chatTurns) {
+      if (!['sage', 'astra'].includes(turn.agent) || !['pipeline', 'realtime'].includes(turn.engine) || !['shared', 'isolated'].includes(turn.memory_sharing_mode)) continue;
+      const key = JSON.stringify([name, turn.memory_sharing_mode, turn.engine, turn.agent]);
+      const saved = conversations.get(key) || { history: [], sessionId: turn.session_id || crypto.randomUUID() };
+      if (turn.user_text) saved.history.push({ role: 'user', content: turn.user_text, speaker: turn.speaker, at: turn.timestamp });
+      if (turn.agent_reply) saved.history.push({ role: 'assistant', content: turn.agent_reply, at: turn.timestamp, interrupted: turn.interrupted });
+      saved.sessionId = turn.session_id || saved.sessionId;
+      conversations.set(key, saved);
+    }
+    if (speakerName.value.trim().toLowerCase() === name) {
+      activeConversationKey = conversationKey();
+      const saved = conversations.get(activeConversationKey);
+      history = saved?.history || []; sessionId = saved?.sessionId || crypto.randomUUID();
+      switchAgent.dataset.suggested = 'false'; renderConversation();
+    }
+  }
   function renderConversation(scrollTop) {
     messages.replaceChildren();
     if (history.length) {
@@ -244,6 +264,10 @@
     switchAgent.dataset.suggested = 'false';
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
     history = []; sessionId = crypto.randomUUID();
+    const name = speakerName.value.trim().toLowerCase() || 'unknown';
+    const starts = chatStartsByName.get(name) || {};
+    starts[`${memoryMode.value}:${engine}:${agent}`] = new Date().toISOString();
+    chatStartsByName.set(name, starts); window.onTripProfileChange?.(name);
     activeConversationKey = conversationKey();
     conversations.delete(activeConversationKey);
     renderConversation();

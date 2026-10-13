@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-function setup(config = {}) {
+function setup(config = {}, storage = new Map()) {
   const items = new Map(), emitted = [], handlers = {}; let chosen = '';
   const get = id => { if (!items.has(id)) items.set(id, { hidden: false, value: '', checked: false, dataset: {}, listeners: {}, attrs: {}, classList: { toggle() {} }, addEventListener(type, fn) { this.listeners[type] = fn; }, setAttribute(key, value) { this.attrs[key] = value; }, removeAttribute(key) { delete this.attrs[key]; }, setCustomValidity(value) { this.error = value; }, dispatchEvent(event) { this.listeners[event.type]?.(event); }, focus() { this.focused = true; } }); return items.get(id); };
   const sage = get('sage-radio'), astra = get('astra-radio'); sage.value = 'sage'; sage.checked = true; astra.value = 'astra';
@@ -14,7 +14,7 @@ function setup(config = {}) {
     return get(selector.slice(1));
   } };
   get('planning-stage').hidden = true;
-  vm.runInNewContext(readFileSync(new URL('../docs/stages.js', import.meta.url), 'utf8'), { document, Event, URL, window: { VOICE_DEMO_CONFIG: config, addEventListener(type, fn) { handlers[type] = fn; }, dispatchEvent(event) { emitted.push(event.type); handlers[event.type]?.(event); } } });
+  vm.runInNewContext(readFileSync(new URL('../docs/stages.js', import.meta.url), 'utf8'), { document, Event, URL, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) }, window: { VOICE_DEMO_CONFIG: config, addEventListener(type, fn) { handlers[type] = fn; }, dispatchEvent(event) { emitted.push(event.type); handlers[event.type]?.(event); } } });
   return { get, sage, astra, document, emitted, event(type, detail) { handlers[type]?.({ type, detail }); }, chosen: () => chosen, submit() { form.listeners.submit({ preventDefault() {} }); } };
 }
 test('setup requires name and demo code before revealing planning', () => {
@@ -93,4 +93,21 @@ test('after returning from the form, agent replies never force another automatic
   page.get('continue-review').listeners.click();
   assert.equal(page.document.body.dataset.stage, 'review');
   assert.equal(page.get('completed-notes').value, 'Revised approved trip');
+});
+
+test('the form-return preference survives refresh and restores on a different device', () => {
+  const storage = new Map(); const first = setup({}, storage);
+  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'] };
+  const ready = page => page.event('trip-notes:updated', { key: 'jenny', notes: 'Trip', ready: true, choices });
+  const start = page => { page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit(); };
+  start(first); ready(first); first.event('trip-goal:complete'); first.get('back-to-planning').listeners.click();
+  const refreshed = setup({}, storage); start(refreshed); ready(refreshed); refreshed.event('trip-goal:complete');
+  assert.equal(refreshed.document.body.dataset.stage, 'planning');
+  const otherDevice = setup(); start(otherDevice);
+  otherDevice.event('trip-profile:loaded', { name: 'jenny', reviewed: true, generation: 0 }); ready(otherDevice); otherDevice.event('trip-goal:complete');
+  assert.equal(otherDevice.document.body.dataset.stage, 'planning');
+  otherDevice.get('continue-review').listeners.click(); assert.equal(otherDevice.document.body.dataset.stage, 'review');
+  otherDevice.get('back-to-planning').listeners.click();
+  otherDevice.event('trip-profile:loaded', { name: 'jenny', reviewed: false, generation: 1 }); ready(otherDevice); otherDevice.event('trip-goal:complete');
+  assert.equal(otherDevice.document.body.dataset.stage, 'review');
 });

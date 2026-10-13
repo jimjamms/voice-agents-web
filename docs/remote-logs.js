@@ -24,7 +24,14 @@
       if(index>=0)this.queue[index]=value; else this.queue.push(value);
       this.persist(); this.flush();
     }
-    async flush(keepalive=false) {
+    flush(keepalive=false) {
+      if (this.inFlight) return this.inFlight;
+      if (!this.queue.length || !this.options.base() || !this.options.code()) return Promise.resolve();
+      const task = this.send(keepalive); this.inFlight = task;
+      task.finally(() => { if (this.inFlight === task) this.inFlight = null; });
+      return task;
+    }
+    async send(keepalive=false) {
       const base=this.options.base(),code=this.options.code();
       if(this.running||!this.queue.length||!base||base.includes('REPLACE-ME')||!code)return;
       clearTimeout(this.timer);this.timer=null;this.running=true;

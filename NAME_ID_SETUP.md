@@ -27,6 +27,8 @@ Shared memories remain shared; separate Sage and Astra memories remain separate.
 
 Each session loads once at setup and saves changes automatically. This is not live multi-device collaboration. Concurrent edits use a version check: an older device cannot silently overwrite a newer cloud save. If the footer reports a conflict, return to setup and submit the same ID to reload the latest cloud data. Unuploaded local changes are discarded during that explicit reload. Failed saves retry while the page stays open and when the network reconnects. Keep the page open until the save confirmation; pending changes are not guaranteed after closing it.
 
-Chat messages shown in the conversation panel are still held in that tab; they are not restored across devices. The host can download transcripts as before.
+The latest 500 saved conversation turns are restored from the host log database when you submit the same Name ID, including after refreshing or on another device. Sage and Astra chats, shared/separate memory modes, and voice modes remain separate. Wait for Chat saved for the host before closing or refreshing; an unfinished recording or unuploaded turn cannot be restored. New chat clears the visible thread for the selected agent/mode and saves that boundary, while keeping the older host archive available. The host can download transcripts as before.
+
+Once you have visited the form page, returning to planning disables subsequent automatic form redirects for that trip. That preference persists locally and in the cloud; use Continue to form to return manually. A host reset clears the preference for the fresh trip.
 
 Profile reads and writes do not call OpenAI. They consume Cloudflare Workers requests and D1 usage. Free-plan limits apply to the whole account, including the existing chat-log database. OpenAI conversation, speech, memory extraction and notepad extraction costs continue separately.

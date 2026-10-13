@@ -14,6 +14,7 @@ function database() {
   db.exec(readFileSync(new URL('../worker/migrations/0004_reusable_name_ids.sql', import.meta.url), 'utf8'));
   return { db, async batch(statements) { db.exec('BEGIN'); try { const results = []; for (const statement of statements) results.push(await statement.run()); db.exec('COMMIT'); return results; } catch (error) { db.exec('ROLLBACK'); throw error; } }, prepare(sql) { return { bind(...params) { return {
     async first() { return db.prepare(sql).get(...params); },
+    async all() { return { results: db.prepare(sql).all(...params) }; },
     async run() { const result = db.prepare(sql).run(...params); return { meta: { changes: result.changes } }; },
   }; } }; } };
 }
@@ -158,4 +159,19 @@ test('reset detection clears an open client and the same ID can be loaded again'
   await app.cloud.load('Jenny'); generation = 1; await app.cloud.checkDeletion();
   assert.equal(app.applied().value.notes, ''); assert.match(app.status.textContent, /same name ID/);
   await app.cloud.load('Jenny'); assert.match(app.status.textContent, /loaded/); assert.equal(app.applied().value.notes, '');
+});
+
+test('same name loads chronological cloud chats, and New chat hides old messages without deleting host logs', async () => {
+  const db = database(), env = { LOG_DB: db };
+  const makeTurn = (id, agent, speaker, timestamp) => ({ turn_id: id, participant_id: 'p', session_id: id, timestamp, agent, engine: 'pipeline', memory_sharing_mode: 'shared', speaker, user_text: id + ' question', agent_reply: id + ' reply', interrupted: false });
+  const turns = [makeTurn('sage-1', 'sage', 'Jenny', '2026-10-13T05:00:00Z'), makeTurn('astra-1', 'astra', 'Jenny', '2026-10-13T05:01:00Z'), makeTurn('other', 'sage', 'Other', '2026-10-13T05:02:00Z')];
+  await saveLogs(new Request('https://worker.test/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ turns }) }), env, {});
+  let loaded = await (await profileRequest(post({ action: 'load', name: 'JENNY' }), env, {})).json();
+  assert.deepEqual(loaded.chatTurns.map(turn => turn.turn_id), ['sage-1', 'astra-1']);
+  await profileRequest(post({ action: 'save', name: 'Jenny', version: 0, profile: { ...profile, reviewed: true, chatStarts: { 'shared:pipeline:sage': '2026-10-13T05:03:00Z' } } }), env, {});
+  loaded = await (await profileRequest(post({ action: 'load', name: 'Jenny' }), env, {})).json();
+  assert.deepEqual(loaded.chatTurns.map(turn => turn.turn_id), ['astra-1']);
+  assert.equal(loaded.profile.reviewed, true);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS n FROM chat_turns').get().n, 3);
+  db.db.close();
 });
