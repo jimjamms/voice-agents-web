@@ -34,11 +34,19 @@
   const conversations = new Map();
   const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
   let activeConversationKey = conversationKey();
+  let tripCompletionPending = false;
   const tripNotes = window.createTripNotes?.({
     textarea: document.querySelector('#trip-notes'), status: document.querySelector('#notes-status'),
     copy: document.querySelector('#copy-notes'), clear: document.querySelector('#clear-notes'),
     speaker: () => speakerName.value.trim(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
     code: () => codeInput.value.trim(),
+    onChange: snapshot => {
+      window.dispatchEvent(new CustomEvent('trip-notes:updated', { detail: snapshot }));
+      if (!snapshot.ready) tripCompletionPending = false;
+      else if (snapshot.updated && document.body.dataset.stage === 'planning') {
+        tripCompletionPending = true; maybeCompleteTrip();
+      }
+    },
   });
   let pipeline;
   let enrolling = false;
@@ -78,6 +86,11 @@
     },
     onMessage: addMessage, onState: () => syncControls(),
   });
+  function maybeCompleteTrip() {
+    if (!tripCompletionPending || pipeline?.busy || pipeline?.playing || pipeline?.recording || connecting || recording || responseActive) return;
+    tripCompletionPending = false;
+    window.dispatchEvent(new Event('trip-goal:complete'));
+  }
   function syncControls() {
     document.querySelector('.conversation').dataset.agent = agent;
     document.querySelector('.trip-notepad').dataset.companion = agent;
@@ -99,6 +112,7 @@
     }
     sharedMemory.disabled = isolatedMemory.disabled = locked;
     speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
+    maybeCompleteTrip();
   }
   function markInterrupted() {
     const last = turns.at(-1); if (last) last.interrupted = true;
@@ -268,7 +282,7 @@
         break;
       }
       case 'response.done':
-        responseActive = false;
+        responseActive = false; maybeCompleteTrip();
         setStatus(handsFree ? 'Listening… just start talking' : 'Your turn', handsFree ? 'The agent can hear you now.' : 'Tap Start talking for another turn.');
         break;
       case 'error':
@@ -363,6 +377,7 @@
       setTimeout(() => { if (connected) { send('input_audio_buffer.commit'); send('response.create'); } }, 160);
     }
   });
+  window.addEventListener('trip-review:open', () => { tripCompletionPending = false; pipeline.stop(); endSession(); });
   window.addEventListener('trip-setup:open', () => { pipeline.stop(); endSession('Ready when you are'); });
   syncControls();
   document.addEventListener('keydown', event => {

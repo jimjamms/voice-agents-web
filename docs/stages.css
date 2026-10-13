@@ -10,3 +10,19 @@
 
 /* Reduce only the scenic background brightness by 0.1. */
 .scene-background { filter: brightness(0.9); }
+
+/* Setup uses the same palette as the chosen companion. */
+.setup-card[data-companion="sage"]{background:#fff7ec;border-color:#dec6a7;box-shadow:0 15px 45px #ad79471c;color:#69482f}
+.setup-card[data-companion="astra"]{background:#f3f8ef;border-color:#b9ceb5;box-shadow:0 15px 45px #476e531c;color:#36553f}
+.setup-card[data-companion="sage"] .setup-field label,.setup-card[data-companion="sage"] .initial-agent legend{color:#856246}
+.setup-card[data-companion="astra"] .setup-field label,.setup-card[data-companion="astra"] .initial-agent legend{color:#60745d}
+.setup-card[data-companion="sage"] .initial-option{background:#fffaf2;border-color:#e5d2b8}
+.setup-card[data-companion="astra"] .initial-option{background:#f9fcf4;border-color:#cfddc5}
+.setup-card .initial-option:has(input:checked){background:var(--setup-color);border-color:var(--setup-accent)}
+.trip-goal{padding:13px 18px;background:var(--note-header,#f6f8ed);border-bottom:1px solid var(--note-border,#d3dccb)}
+#trip-goal-title{font-size:11px;font-weight:700;color:var(--note-ink,#36553f)}
+.goal-counts{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0;font-size:9px;color:var(--note-accent,#476e53)}
+.goal-counts span{background:var(--note-paper,#fffdf4);border:1px solid var(--note-border,#d3dccb);padding:5px 7px;border-radius:6px}
+#trip-goal-hint{font-size:10px;color:var(--note-muted,#73836b);display:block;line-height:1.5}
+body[data-stage="review"] .intro{display:none}body[data-stage="review"] .stage-progress{margin:28px 0}
+.review-heading{margin:15px 0 26px}.review-heading h2{font:800 clamp(26px,4vw,40px) Manrope,sans-serif;letter-spacing:-.05em;margin:0 0 12px}.review-heading p:last-child{font-size:13px;color:#63756d;margin:0}.review-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;margin-bottom:35px}.review-grid textarea{min-height:360px}.form-card{border:1px solid #c8d5bd;background:#fffdf5;border-radius:14px;padding:25px;height:fit-content}.form-card h2{font:700 20px Manrope,sans-serif;margin:0 0 14px}.form-card p{font-size:13px;line-height:1.8;color:#63756d;margin:0 0 20px}.form-card .setup-next{background:#dbe8cf;text-decoration:none;margin-bottom:18px}.form-card .text-button{margin-top:4px}.review-heading h2:focus{outline:none}@media(max-width:700px){.review-grid{grid-template-columns:1fr}.stage-progress{gap:8px;font-size:9px}.stage-line{width:20px}.form-card{padding:20px}}

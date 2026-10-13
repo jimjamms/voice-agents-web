@@ -7,11 +7,11 @@ import { notesTurn } from '../worker/src/notes.mjs';
 const source = readFileSync(new URL('../docs/notes.js', import.meta.url), 'utf8');
 function setup(storage = new Map(), fetcher = async () => Response.json({ notes: 'Destination: Kyoto' })) {
   const element = () => ({ value: '', textContent: '', listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn; }, focus() {}, select() {} });
-  const textarea = element(), status = element(), clear = element(), copy = element(); let speaker = 'Jenny';
+  const textarea = element(), status = element(), clear = element(), copy = element(); let speaker = 'Jenny'; const notifications = [];
   const context = { window: {}, localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) }, fetch: fetcher, AbortController, setTimeout, clearTimeout };
   vm.runInNewContext(source, context);
-  const notes = context.window.createTripNotes({ textarea, status, clear, copy, speaker: () => speaker, base: () => 'https://worker.test', code: () => 'test-code' });
-  return { notes, textarea, status, clear, context, name(value) { speaker = value; notes.refresh(); }, edit(value) { textarea.value = value; notes.saved[notes.key()] = value; notes.bump(notes.key()); notes.persist(notes.key()); } };
+  const notes = context.window.createTripNotes({ textarea, status, clear, copy, speaker: () => speaker, base: () => 'https://worker.test', code: () => 'test-code', onChange: value => notifications.push(value) });
+  return { notes, textarea, status, clear, context, notifications, name(value) { speaker = value; notes.refresh(); }, edit(value) { textarea.value = value; notes.saved[notes.key()] = value; notes.bump(notes.key()); notes.persist(notes.key()); } };
 }
 const turn = { agent: 'sage', speaker: 'Jenny', transcript: 'I chose Kyoto.', reply: 'A four-day trip could work.' };
 test('notepad persists by speaker and combines both agent turns in order', async () => {
@@ -59,7 +59,7 @@ test('notes route requires the existing access code', async () => {
 });
 test('notes extraction distinguishes suggestions from confirmed plans and validates output', async () => {
   const original = globalThis.fetch; let prompt;
-  globalThis.fetch = async (_url, init) => { prompt = JSON.parse(init.body); return Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'Destination: Kyoto\nIdeas / unconfirmed: Osaka day trip' }) } }] }); };
+  globalThis.fetch = async (_url, init) => { prompt = JSON.parse(init.body); return Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'Destination: Kyoto\nIdeas / unconfirmed: Osaka day trip', choices: { countries: [], cities: ['Kyoto'], activities: [] } }) } }] }); };
   try {
     const request = () => new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'Kyoto is my choice.', reply: 'You could visit Osaka too.', notes: '' }) });
     const response = await notesTurn(request(), { OPENAI_API_KEY: 'secret', PIPELINE_CHAT_MODEL: 'configured-model' }, {});
@@ -78,4 +78,14 @@ test('notepad is read-only and has no user edit listener', () => {
   const app = setup();
   assert.equal(app.textarea.readOnly, true);
   assert.equal(app.textarea.listeners.input, undefined);
+});
+
+test('confirmed choices persist and publish completion with the notepad', async () => {
+  const storage = new Map(); const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour', 'Hiking'] };
+  const app = setup(storage, async () => Response.json({ notes: 'Confirmed Japan itinerary', choices }));
+  await app.notes.update(turn);
+  assert.equal(app.notifications.at(-1).ready, true); assert.equal(app.notifications.at(-1).updated, true);
+  const reload = setup(storage); assert.equal(reload.notifications.at(-1).ready, true);
+  assert.equal(reload.notifications.at(-1).updated, false);
+  app.clear.listeners.click(); assert.equal(app.notifications.at(-1).ready, false);
 });

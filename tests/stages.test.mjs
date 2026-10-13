@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-function setup() {
-  const items = new Map(), emitted = []; let chosen = '';
+function setup(config = {}) {
+  const items = new Map(), emitted = [], handlers = {}; let chosen = '';
   const get = id => { if (!items.has(id)) items.set(id, { hidden: false, value: '', checked: false, dataset: {}, listeners: {}, attrs: {}, classList: { toggle() {} }, addEventListener(type, fn) { this.listeners[type] = fn; }, setAttribute(key, value) { this.attrs[key] = value; }, removeAttribute(key) { delete this.attrs[key]; }, setCustomValidity(value) { this.error = value; }, dispatchEvent(event) { this.listeners[event.type]?.(event); }, focus() { this.focused = true; } }); return items.get(id); };
   const sage = get('sage-radio'), astra = get('astra-radio'); sage.value = 'sage'; sage.checked = true; astra.value = 'astra';
   const form = get('trip-setup'); form.querySelectorAll = () => [sage, astra];
@@ -14,8 +14,8 @@ function setup() {
     return get(selector.slice(1));
   } };
   get('planning-stage').hidden = true;
-  vm.runInNewContext(readFileSync(new URL('../docs/stages.js', import.meta.url), 'utf8'), { document, Event, window: { dispatchEvent(event) { emitted.push(event.type); } } });
-  return { get, sage, astra, document, emitted, chosen: () => chosen, submit() { form.listeners.submit({ preventDefault() {} }); } };
+  vm.runInNewContext(readFileSync(new URL('../docs/stages.js', import.meta.url), 'utf8'), { document, Event, URL, window: { VOICE_DEMO_CONFIG: config, addEventListener(type, fn) { handlers[type] = fn; }, dispatchEvent(event) { emitted.push(event.type); handlers[event.type]?.(event); } } });
+  return { get, sage, astra, document, emitted, event(type, detail) { handlers[type]?.({ type, detail }); }, chosen: () => chosen, submit() { form.listeners.submit({ preventDefault() {} }); } };
 }
 test('setup requires name and demo code before revealing planning', () => {
   const page = setup(); page.get('speaker-name').value = '  '; page.get('access-code').value = 'demo'; page.submit();
@@ -38,4 +38,20 @@ test('Change setup requests voice shutdown and restores selected agent', () => {
   assert.deepEqual(page.emitted, ['trip-setup:open']); assert.equal(page.get('planning-stage').hidden, true);
   assert.equal(page.get('setup-stage').hidden, false); assert.equal(page.astra.checked, true);
   assert.equal(page.get('speaker-name').focused, true);
+});
+
+test('stage three requires completed choices and displays the completed notes', () => {
+  const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto', ready: false, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto'], activities: ['Hiking'] } });
+  page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, true);
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto, Osaka. Hiking.', ready: true, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'] } });
+  page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, false);
+  assert.equal(page.get('planning-stage').hidden, true); assert.match(page.get('completed-notes').value, /Osaka/);
+  assert.equal(page.get('google-form-link').hidden, true);
+  page.get('back-to-planning').listeners.click(); assert.equal(page.get('planning-stage').hidden, false);
+});
+test('only configured Google Form URLs are shown', () => {
+  assert.equal(setup({ googleFormUrl: 'https://example.com/' }).get('google-form-link').hidden, true);
+  const page = setup({ googleFormUrl: 'https://docs.google.com/forms/d/e/test/viewform' });
+  assert.equal(page.get('google-form-link').hidden, false); assert.match(page.get('google-form-link').href, /docs.google.com/);
 });

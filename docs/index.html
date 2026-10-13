@@ -8,7 +8,7 @@
   <meta name="description" content="Plan your next trip with Sage for ideas and Astra for practical itineraries.">
   <link rel="stylesheet" href="styles.css?v=travel-background-4">
   <link rel="stylesheet" href="notes.css?v=1">
-  <link rel="stylesheet" href="stages.css?v=2">
+  <link rel="stylesheet" href="stages.css?v=3">
   <link rel="stylesheet" href="characters.css?v=3">
   <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js" defer></script><script src="pipeline.js" defer></script><script src="app.js" defer></script><script src="stages.js" defer></script>
 </head>
@@ -39,7 +39,7 @@
     <main>
       <section class="intro"><h1>Where to <em>next?</em></h1><p>Dream it up with Sage. Plan it out with Astra.</p></section>
 
-      <nav class="stage-progress" aria-label="Planning stages"><span id="setup-step" class="active" aria-current="step">1 · Setup</span><span class="stage-line" aria-hidden="true"></span><span id="planning-step">2 · Plan your trip</span></nav>
+      <nav class="stage-progress" aria-label="Planning stages"><span id="setup-step" class="active" aria-current="step">1 · Setup</span><span class="stage-line" aria-hidden="true"></span><span id="planning-step">2 · Plan your trip</span><span class="stage-line" aria-hidden="true"></span><span id="review-step">3 · Finish</span></nav>
       <section id="setup-stage" aria-labelledby="setup-heading">
         <form id="trip-setup" class="setup-card" data-companion="sage">
           <h2 id="setup-heading">Let’s get you ready.</h2>
@@ -56,7 +56,7 @@
         <div class="planning-toolbar"><h2 id="traveler-title" tabindex="-1">Your trip</h2><button id="change-setup" type="button" class="text-button">Change setup</button></div>
       <section class="workspace" aria-label="Voice conversation">
         <div class="chooser">
-          <section class="trip-notepad" aria-labelledby="notes-heading"><div class="notes-head"><h2 id="notes-heading">Trip notepad</h2><div><button id="copy-notes" type="button" class="text-button">Copy</button><button id="clear-notes" type="button" class="text-button">Clear</button></div></div><label class="sr-only" for="trip-notes">Important itinerary details</label><textarea id="trip-notes" readonly maxlength="6000" placeholder="Your destination, dates, budget, and itinerary will collect here as you talk." spellcheck="true"></textarea><small id="notes-status" role="status">Automatically updated with important trip details.</small></section>
+          <section class="trip-notepad" aria-labelledby="notes-heading"><div class="trip-goal"><span id="trip-goal-title">Choose your trip</span><div class="goal-counts" aria-live="polite"><span id="country-count">Country 0/1</span><span id="city-count">Cities 0/3</span><span id="activity-count">Activities 0/1–2</span></div><small id="trip-goal-hint">Confirm your choices with either agent.</small><button id="continue-review" class="text-button" type="button" hidden>Continue to form ↗</button></div><div class="notes-head"><h2 id="notes-heading">Trip notepad</h2><div><button id="copy-notes" type="button" class="text-button">Copy</button><button id="clear-notes" type="button" class="text-button">Clear</button></div></div><label class="sr-only" for="trip-notes">Important itinerary details</label><textarea id="trip-notes" readonly maxlength="6000" placeholder="Your destination, dates, budget, and itinerary will collect here as you talk." spellcheck="true"></textarea><small id="notes-status" role="status">Automatically updated with important trip details.</small></section>
         <div class="agent-options" role="group" aria-label="Choose an agent">
           <button class="agent-card active sage" type="button" data-agent="sage" aria-pressed="true"><span class="card-top">CHOOSE YOUR TRIP <span class="select-indicator">●</span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><img class="agent-mascot" src="assets/sage-mascot.svg" alt="" width="200" height="220" decoding="async"><strong>Sage<span class="arrow">↗</span></strong><small>Find your destination and must-do experiences.</small></button>
           <button class="agent-card astra" type="button" data-agent="astra" aria-pressed="false" hidden><span class="card-top">FINALIZE YOUR PLAN <span class="select-indicator">○</span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><img class="agent-mascot" src="assets/astra-mascot.svg" alt="" width="200" height="220" decoding="async"><strong>Astra<span class="arrow">↗</span></strong><small>Work out your itinerary, timing, and budget.</small></button>
@@ -71,6 +71,11 @@
         </div>
       </section>
       <section class="footnote"><p>AI voices. Chats stay in this tab; named memories and trip notes stay in this browser. Check current travel details before booking.</p><button id="download" type="button" class="text-button">Download chat ↓</button></section>
+      </section>
+      <section id="review-stage" aria-labelledby="review-heading" hidden>
+        <div class="review-heading"><p class="eyebrow">YOUR TRIP CHOICES ARE COMPLETE</p><h2 id="review-heading" tabindex="-1">Ready for the next step.</h2><p>Review your trip notes, then complete the form.</p></div>
+        <div class="review-grid"><section id="completed-notepad" class="trip-notepad" data-companion="sage" aria-labelledby="completed-heading"><div class="notes-head"><h2 id="completed-heading">Your completed notepad</h2><button id="copy-completed-notes" class="text-button" type="button">Copy</button></div><label class="sr-only" for="completed-notes">Completed itinerary notes</label><textarea id="completed-notes" readonly></textarea><small id="completed-status" role="status">Saved in this browser.</small></section>
+        <section class="form-card" aria-labelledby="form-heading"><h2 id="form-heading">Final form</h2><p id="form-coming-soon">The Google Form is coming soon. Your completed trip notes are saved.</p><a id="google-form-link" class="setup-next" target="_blank" rel="noopener noreferrer" hidden>Open Google Form ↗</a><p id="form-open-hint" hidden>The form opens in a new tab. Keep your notepad here for reference.</p><button id="back-to-planning" class="text-button" type="button">Back to planning</button></section></div>
       </section>
     </main>
     <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>

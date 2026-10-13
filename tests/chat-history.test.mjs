@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../docs/app.js', import.meta.url), 'utf8');
 function setup(frameTools = {}) {
-  const elements = new Map(); let options; let counter = 0;
+  const elements = new Map(); let options, noteOptions; let counter = 0; const emitted = [];
   function element(id) {
     return { id, children: [], listeners: {}, value: id === 'memory-mode' ? 'shared' : '', disabled: false,
       dataset: {}, scrollTop: 0, scrollHeight: 100, classList: { toggle() {}, remove() {} },
@@ -16,13 +16,13 @@ function setup(frameTools = {}) {
   }
   const get = id => { if (!elements.has(id)) elements.set(id, element(id)); return elements.get(id); };
   const cards = ['sage', 'astra'].map(name => { const item = get(name); item.dataset.agent = name; item.querySelector = () => element('indicator'); return item; });
-  const document = { querySelector: selector => get(selector.slice(1)), querySelectorAll: () => cards,
+  const document = { body: { dataset: { stage: 'planning' } }, querySelector: selector => get(selector.slice(1)), querySelectorAll: () => cards,
     createElement: () => element('new'), addEventListener() {} };
   const transport = { isLocked: () => false, stop() {}, busy: false, active: false };
-  const testWindow = { createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
-  vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
+  const testWindow = { dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener() {}, AgentMemory: { forget() { return true; } } };
+  vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, Event, CustomEvent, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
     window: testWindow, ...frameTools });
-  return { get, options, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
+  return { get, options, transport, noteOptions, emitted, event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
 }
 test('switching agents restores messages and model history without duplicating entries', () => {
   const app = setup();
@@ -89,4 +89,12 @@ test('Switch agent shows only the active companion and preserves each chat', () 
   app.click('switch-agent');
   assert.equal(app.get('sage').hidden, false); assert.equal(app.get('astra').hidden, true);
   assert.equal(app.options.history()[0].content, 'Sage trip ideas');
+});
+
+test('automatic completion waits until the current audio reply finishes', () => {
+  const app = setup(); app.transport.playing = true;
+  app.noteOptions.onChange({ key: 'unknown', notes: 'Confirmed trip', updated: true, ready: true, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'] } });
+  assert.ok(!app.emitted.includes('trip-goal:complete'));
+  app.transport.playing = false; app.options.onState();
+  assert.ok(app.emitted.includes('trip-goal:complete'));
 });
