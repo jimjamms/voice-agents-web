@@ -22,17 +22,21 @@ export async function profileRequest(request, env, cors) {
     const data = JSON.parse(raw);
     if (typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 40 || data.name.trim().toLowerCase() === 'unknown') return json({ error: 'Enter a name ID of 1–40 characters.' }, 400);
     const id = data.name.trim().toLowerCase();
+    const blocked = async () => Boolean(await env.LOG_DB.prepare('SELECT name_id FROM deleted_name_ids WHERE name_id = ? AND trip_blocked = 1').bind(id).first());
+    const gone = () => json({ error: 'The host deleted this name ID’s saved trip. Use a new name ID to start again.' }, 410);
+    if (await blocked()) return gone();
     if (data.action === 'load') {
-      const row = await env.LOG_DB.prepare('SELECT payload, version FROM trip_profiles WHERE name_id = ?').bind(id).first();
+      const row = await env.LOG_DB.prepare('SELECT payload, version FROM trip_profiles WHERE name_id = ? AND NOT EXISTS (SELECT 1 FROM deleted_name_ids WHERE name_id = ? AND trip_blocked = 1)').bind(id, id).first();
       return json({ profile: row ? JSON.parse(row.payload) : null, version: row?.version || 0 });
     }
     if (data.action !== 'save' || !Number.isSafeInteger(data.version) || data.version < 0) return json({ error: 'Invalid profile request.' }, 400);
     let profile;
     try { profile = cleanProfile(data.profile); } catch (error) { return json({ error: error.message }, 400); }
     const payload = JSON.stringify(profile);
-    const statement = data.version === 0 ? env.LOG_DB.prepare('INSERT INTO trip_profiles(name_id, payload, version) VALUES(?, ?, 1) ON CONFLICT(name_id) DO NOTHING').bind(id, payload) :
-      env.LOG_DB.prepare('UPDATE trip_profiles SET payload = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE name_id = ? AND version = ?').bind(payload, id, data.version);
+    const statement = data.version === 0 ? env.LOG_DB.prepare('INSERT INTO trip_profiles(name_id, payload, version) SELECT ?, ?, 1 WHERE NOT EXISTS (SELECT 1 FROM deleted_name_ids WHERE name_id = ? AND trip_blocked = 1) ON CONFLICT(name_id) DO NOTHING').bind(id, payload, id) :
+      env.LOG_DB.prepare('UPDATE trip_profiles SET payload = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE name_id = ? AND version = ? AND NOT EXISTS (SELECT 1 FROM deleted_name_ids WHERE name_id = ? AND trip_blocked = 1)').bind(payload, id, data.version, id);
     const result = await statement.run();
+    if (!result.meta.changes && await blocked()) return gone();
     if (!result.meta.changes) return json({ error: 'This trip was changed on another device. Return to setup and enter the same name ID to reload before making more changes.' }, 409);
     return json({ version: data.version + 1 });
   } catch { return json({ error: 'Cloud saving is unavailable. Check the database migration and try again.' }, 503); }

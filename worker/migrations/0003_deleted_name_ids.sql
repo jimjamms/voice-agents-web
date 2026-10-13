@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS deleted_name_ids (
+  name_id TEXT PRIMARY KEY,
+  trip_blocked INTEGER NOT NULL DEFAULT 0,
+  logs_blocked INTEGER NOT NULL DEFAULT 0,
+  deleted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
