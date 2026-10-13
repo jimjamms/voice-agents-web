@@ -39,11 +39,8 @@
 
 /* Larger floating mascots; names and descriptions retain their original layout. */
 #planning-stage .agent-card .agent-mascot{position:absolute;right:-14px;top:25px;width:210px;height:220px;object-fit:contain;object-position:center;z-index:0}
-#planning-stage .agent-card::after{content:"";position:absolute;right:30px;bottom:21px;width:108px;height:12px;border-radius:50%;background:#57736126;filter:blur(2px);pointer-events:none;z-index:0;animation:mascot-ground-shadow 6s ease-in-out infinite}
-#planning-stage .agent-card.sage::after{background:#9a643529}
-#planning-stage .agent-card.astra::after{animation-duration:7s}
-@keyframes mascot-ground-shadow{0%,100%{transform:scaleX(1);opacity:.85}50%{transform:scaleX(.86);opacity:.55}}
+#planning-stage .agent-card::after{content:"";position:absolute;right:30px;bottom:21px;width:108px;height:12px;border-radius:50%;background:#63846b;opacity:.16;pointer-events:none;z-index:0}
+#planning-stage .agent-card.sage::after{background:#bd9763}
 @media(min-width:851px) and (max-width:1050px){#planning-stage .agent-card .agent-mascot{width:185px;height:204px;right:-18px;top:36px}#planning-stage .agent-card small{max-width:125px}#planning-stage .agent-card::after{width:96px;right:24px;bottom:23px}}
 @media(max-width:600px){#planning-stage .agent-card .agent-mascot{width:210px;height:220px;right:-8px;top:19px}#planning-stage .agent-card::after{right:34px;bottom:17px}}
 @media(max-width:400px){#planning-stage .agent-card .agent-mascot{width:185px;height:204px;right:-14px;top:29px}#planning-stage .agent-card small{max-width:125px}#planning-stage .agent-card::after{width:96px;right:25px;bottom:19px}}
-@media(prefers-reduced-motion:reduce){#planning-stage .agent-card::after{animation:none}}
