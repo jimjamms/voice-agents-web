@@ -44,3 +44,9 @@
 @media(min-width:851px) and (max-width:1050px){#planning-stage .agent-card .agent-mascot{width:185px;height:204px;right:-18px;top:36px}#planning-stage .agent-card small{max-width:125px}#planning-stage .agent-card::after{width:96px;right:24px;bottom:23px}}
 @media(max-width:600px){#planning-stage .agent-card .agent-mascot{width:210px;height:220px;right:-8px;top:19px}#planning-stage .agent-card::after{right:34px;bottom:17px}}
 @media(max-width:400px){#planning-stage .agent-card .agent-mascot{width:185px;height:204px;right:-14px;top:29px}#planning-stage .agent-card small{max-width:125px}#planning-stage .agent-card::after{width:96px;right:25px;bottom:19px}}
+
+/* Locked cards stay opaque; only the mascot moves while a reply plays. */
+#planning-stage .agent-card:disabled{opacity:1;cursor:default}
+#planning-stage .agent-card[data-speaking="true"] .agent-mascot{animation:mascot-speaking 1.4s ease-in-out infinite;transform-origin:50% 85%}
+@keyframes mascot-speaking{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-6px) rotate(1deg)}}
+@media(prefers-reduced-motion:reduce){#planning-stage .agent-card[data-speaking="true"] .agent-mascot{animation:none;transform:none}}

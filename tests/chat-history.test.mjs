@@ -115,3 +115,15 @@ test('handoff cue follows recommendations, clears on switching, and ignores ment
   assert.equal(app.get('switch-agent').dataset.suggested, 'true');
   app.click('reset'); assert.equal(app.get('switch-agent').dataset.suggested, 'false');
 });
+
+test('speaking animation follows playback and clears when playback stops', () => {
+  const app = setup();
+  app.transport.playing = true; app.options.onState();
+  assert.equal(app.get('sage').dataset.speaking, 'true');
+  assert.equal(app.get('astra').dataset.speaking, 'false');
+  app.transport.playing = false; app.options.onState();
+  assert.equal(app.get('sage').dataset.speaking, 'false');
+  app.click('astra'); app.transport.playing = true; app.options.onState();
+  assert.equal(app.get('astra').dataset.speaking, 'true');
+  assert.equal(app.get('sage').dataset.speaking, 'false');
+});

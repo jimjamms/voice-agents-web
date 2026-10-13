@@ -126,7 +126,7 @@
     document.querySelector('.trip-notepad').dataset.companion = agent;
     const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
-    cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; });
+    cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; card.dataset.speaking = String(card.dataset.agent === agent && (engine === 'pipeline' ? Boolean(pipeline.playing) : responseActive)); });
     document.querySelector('.agent-options').dataset.companion = agent;
     switchAgent.disabled = enrolling;
     switchAgent.setAttribute('aria-label', `Switch to ${agent === 'sage' ? 'Astra' : 'Sage'}`);
@@ -288,7 +288,7 @@
         addMessage('user', event.transcript, { name: speakerName.value.trim() || 'Unknown', score: 1 });
         break;
       case 'response.created':
-        responseActive = true; setStatus('Speaking…', 'You can interrupt in hands-free mode.');
+        responseActive = true; syncControls(); setStatus('Speaking…', 'You can interrupt in hands-free mode.');
         break;
       case 'response.output_audio_transcript.delta': {
         const id = event.item_id || event.response_id || 'reply';
@@ -312,7 +312,7 @@
         break;
       }
       case 'response.done':
-        responseActive = false; maybeCompleteTrip();
+        responseActive = false; syncControls();
         setStatus(handsFree ? 'Listening… just start talking' : 'Your turn', handsFree ? 'The agent can hear you now.' : 'Tap Start talking for another turn.');
         break;
       case 'error':
