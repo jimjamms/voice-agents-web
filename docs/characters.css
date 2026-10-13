@@ -24,3 +24,12 @@
 @media(min-width:851px) and (max-width:1050px){#planning-stage .agent-portrait{width:210px;height:315px;right:-36px;top:28px}}
 @media(max-width:600px){.initial-option{grid-template-columns:13px minmax(0,1fr);padding:13px 10px}#planning-stage .agent-portrait{width:220px;height:330px;top:22px;right:-24px}}
 @media(max-width:370px){.initial-options{grid-template-columns:1fr 1fr}#planning-stage .agent-portrait{width:205px;height:308px;right:-32px;top:23px}.initial-option small{font-size:9px}}
+
+/* Richer card backgrounds, with the portraits at their original brightness. */
+#planning-stage .agent-portrait{filter:drop-shadow(0 7px 12px #142a292b)}
+#planning-stage .agent-card.sage{background:linear-gradient(140deg,#826049 0%,#5d4136 100%);border-color:#a27f62;color:#fff3df}
+#planning-stage .agent-card.astra{background:linear-gradient(140deg,#3e6454 0%,#253f36 100%);border-color:#72927b;color:#edf5e5}
+#planning-stage .agent-card .card-top{color:inherit}
+#planning-stage .agent-card .select-indicator{color:#fff4d9}
+#planning-stage .agent-card small{color:inherit;opacity:.9}
+#planning-stage .agent-card.active{box-shadow:0 0 0 3px #314b3520,0 10px 25px #18312720}
