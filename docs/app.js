@@ -33,6 +33,7 @@
   let sessionId = crypto.randomUUID();
   let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   const conversations = new Map();
+  const welcomedConversations = new Set();
   const chatStartsByName = new Map();
   const sharedBootstrapNames = new Set();
   const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
@@ -142,7 +143,7 @@
       record.classList.toggle('recording', pipeline.recording || pipeline.active);
       recordLabel.textContent = pipeline.connecting ? 'Opening microphone…' :
         handsFree ? (pipeline.active ? 'Stop hands-free' : 'Start hands-free') :
-        pipeline.playing ? 'Interrupt & talk' : pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
+        pipeline.playing ? 'Interrupt & talk' : pipeline.pendingPlayback ? 'Hear greeting / reply' : pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
     }
     sharedMemory.disabled = isolatedMemory.disabled = locked;
     speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
@@ -153,6 +154,7 @@
   }
   function saveTurn(turn) {
     if (deletedNames.has(turn.speaker?.trim().toLowerCase())) return;
+    if (turn.greeting) welcomedConversations.add(activeConversationKey);
     const sharedTurns = turn.mode === 'shared' ? window.AgentMemory.recentShared?.(turn.speaker) || [] : [];
     const priorConversation = sharedTurns.length ?
       sharedTurns.slice(-4).flatMap(item => [
@@ -297,9 +299,10 @@
   tapMode.addEventListener('click', () => chooseMode(false));
   handsfreeMode.addEventListener('click', () => chooseMode(true));
   function greetFirstVisit() {
-    if (engine === 'pipeline' && document.body.dataset.stage === 'planning' && !history.length) pipeline.greet?.();
+    if (engine === 'pipeline' && document.body.dataset.stage === 'planning' && !welcomedConversations.has(activeConversationKey)) pipeline.greet?.();
   }
   window.addEventListener('trip-planning:open', greetFirstVisit);
+  window.addEventListener('trip-audio:unlock', () => pipeline.unlockAudio?.());
   cards.forEach(card => card.addEventListener('click', () => {
     if (connected || connecting || pipeline.isLocked() || enrolling) return;
     if (agent !== card.dataset.agent) { agent = card.dataset.agent; switchConversation(); }

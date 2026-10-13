@@ -45,10 +45,10 @@
           <h2 id="setup-heading">Let’s get you ready.</h2>
           <div class="setup-field"><label for="speaker-name">Name ID</label><input id="speaker-name" type="text" maxlength="40" placeholder="e.g. jenny-trip-4827" autocomplete="off" spellcheck="false" required></div>
           <p class="setup-data-note">Use the same unique name ID on any device. Anyone with this ID and the demo code can open this trip.</p>
-          <fieldset class="initial-agent"><legend>Start your trip with Sage</legend><div class="initial-options">
-            <label class="initial-option"><input type="radio" name="initial-agent" value="sage" checked disabled><span><strong>Sage</strong><small>Explore destinations and ideas</small></span></label>
-            <label class="initial-option"><input type="radio" name="initial-agent" value="astra" disabled><span><strong>Astra</strong><small>Build a practical itinerary</small></span></label>
-          </div></fieldset>
+          <section class="initial-agent" aria-labelledby="companions-heading"><h3 id="companions-heading">Your travel companions</h3><div class="initial-options">
+            <div class="setup-role"><strong>Sage <span class="role-order">First</span></strong><small>Choose destinations and an activity for each city.</small></div>
+            <div class="setup-role"><strong>Astra <span class="role-order">Next</span></strong><small>Confirm your budget and finalize the itinerary.</small></div>
+          </div></section>
           <div class="setup-field"><label for="access-code">Demo code</label><input id="access-code" type="password" placeholder="Enter the code from your host" autocomplete="off" spellcheck="false" required></div>
           <p class="setup-data-note">Chat transcripts are saved for the host. Audio is not recorded in the chat log.</p>
           <p id="profile-login-status" class="setup-data-note" role="status"></p>

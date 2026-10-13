@@ -8,6 +8,7 @@
   class PipelineTransport {
     constructor(options) {
       this.options = options;
+      this.pendingPlayback = false; this.unlocking = false; this.audioUnlock = null;
       this.active = false; this.busy = false; this.recording = false; this.connecting = false;
       this.stream = null; this.recorder = null; this.context = null; this.analyser = null;
       this.chunks = []; this.timer = null; this.interval = null; this.audioUrl = null;
@@ -15,7 +16,7 @@
       this.playing = false; this.interruptStartedAt = null;
       this.replyText = ''; this.replyDisplay = null; this.replyWords = []; this.replyFrame = null; this.lastWordCount = -1;
       this.options.playback.addEventListener('ended', () => {
-        if (!this.options.isSelected()) return;
+        if (this.unlocking || !this.options.isSelected()) return;
         this.finishReply();
         this.playing = false; this.notify();
         if (this.interruptStartedAt !== null && this.recording) {
@@ -29,8 +30,8 @@
         else this.status('Your turn', 'Tap Start talking for another turn.');
       });
       this.options.playback.addEventListener('play', () => {
-        if (!this.options.isSelected()) return;
-        this.playing = true; this.notify();
+        if (this.unlocking || !this.options.isSelected()) return;
+        this.pendingPlayback = false; this.playing = true; this.notify();
         if (!this.active) return;
         this.stream?.getAudioTracks().forEach(track => { track.enabled = true; });
         this.status('Playing reply…', 'You can interrupt by speaking. Headphones help prevent echo.');
@@ -84,7 +85,7 @@
     format() { return formats.find(type => MediaRecorder.isTypeSupported(type)); }
     stopPlayback() {
       this.finishReply();
-      this.playing = false; this.interruptStartedAt = null;
+      this.playing = false; this.pendingPlayback = false; this.interruptStartedAt = null;
       const audio = this.options.playback;
       audio.pause(); audio.removeAttribute('src'); audio.hidden = true;
       if (this.audioUrl) URL.revokeObjectURL(this.audioUrl);
@@ -101,7 +102,26 @@
       this.analyser = null; this.stopPlayback();
       this.notify();
     }
+    unlockAudio() {
+      if (this.unlocking || this.isLocked()) return;
+      this.unlocking = true;
+      const audio = this.options.playback;
+      audio.src = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+      this.audioUnlock = (async () => {
+        try { await audio.play(); } catch {} finally {
+          audio.pause(); audio.removeAttribute('src'); this.unlocking = false;
+        }
+      })();
+      return this.audioUnlock;
+    }
     async press() {
+      if (this.pendingPlayback) {
+        try {
+          await this.options.playback.play(); this.pendingPlayback = false;
+          this.playing = true; this.notify();
+        } catch { this.status('Tap the audio player to hear the reply.'); }
+        return;
+      }
       if (this.playing) {
         this.options.onInterrupt?.();
         this.stopPlayback();
@@ -244,7 +264,10 @@
     }
     async greet() {
       if (this.isLocked()) return;
-      await this.submit(null, ++this.generation);
+      const generation = ++this.generation;
+      await this.audioUnlock;
+      if (generation !== this.generation) return;
+      await this.submit(null, generation);
     }
     async submit(blob, generation) {
       this.busy = true; this.notify();
@@ -284,7 +307,7 @@
         this.status('Playing reply…', this.active ? 'Speak to interrupt; headphones help prevent echo.' : 'Tap Start talking for another turn.');
         try { await this.options.playback.play(); }
         catch {
-          this.playing = false; this.notify();
+          this.playing = false; this.pendingPlayback = true; this.notify();
           this.options.playback.hidden = false;
           if (this.active) this.resume();
           this.status('Tap play to hear the reply.', 'Your browser paused automatic playback.');

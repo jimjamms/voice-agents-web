@@ -175,3 +175,16 @@ test('first greeting uses only TTS, selected voice, no fake user transcript or m
     assert.equal(calls.length, 2); assert.ok(calls.every(call => call.url.endsWith('/audio/speech')));
   } finally { globalThis.fetch = original; }
 });
+
+
+test('blocked greeting playback is retried before starting the microphone', async () => {
+  let played = 0;
+  const playback = { addEventListener() {}, async play() { played++; } };
+  const context = { window: {} };
+  vm.runInNewContext(readFileSync(new URL('../docs/pipeline.js', import.meta.url), 'utf8'), context);
+  const transport = context.window.createPipelineTransport({ playback, onState() {} });
+  transport.pendingPlayback = true;
+  await transport.press();
+  assert.equal(played, 1); assert.equal(transport.pendingPlayback, false);
+  assert.equal(transport.recording, false); assert.equal(transport.playing, true);
+});

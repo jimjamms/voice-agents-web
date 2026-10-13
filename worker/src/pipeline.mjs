@@ -68,7 +68,8 @@ export async function pipelineTurn(request, env, cors) {
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     let transcript = '', reply;
     if (greeting) {
-      reply = name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. What kind of trip sounds exciting to you?" : "Hi, I’m Astra. I’ll help turn your choices into a practical itinerary and budget. What would you like to finalize first?";
+      const returning = safeHistory(form.get('history')).length > 0;
+      reply = returning ? (name === 'sage' ? "Welcome back! It’s Sage. What would you like to explore for your trip today?" : "Welcome back. It’s Astra. What part of your itinerary would you like to work on?") : name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. What kind of trip sounds exciting to you?" : "Hi, I’m Astra. I’ll help turn your choices into a practical itinerary and budget. What would you like to finalize first?";
     } else {
       const input = new FormData();
       input.set('file', audio, `turn.${format}`);

@@ -63,7 +63,9 @@
   }
   for (const input of [name, code]) input.addEventListener('input', () => input.setCustomValidity(''));
   form.addEventListener('submit', async event => {
-    event.preventDefault(); name.value = name.value.trim(); code.value = code.value.trim();
+    event.preventDefault();
+    window.dispatchEvent(new Event('trip-audio:unlock'));
+    name.value = name.value.trim(); code.value = code.value.trim();
     name.setCustomValidity(name.value ? '' : 'Enter your name.'); code.setCustomValidity(code.value ? '' : 'Enter your demo code.');
     if (!form.reportValidity()) return;
     const start = document.querySelector('#start-planning');

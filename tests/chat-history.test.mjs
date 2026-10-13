@@ -155,10 +155,25 @@ test('switching cannot cancel a recorded turn before its new shared information 
 
 test('agents greet on first entry only and restored conversations do not repeat introductions', () => {
   const app = setup(); const greetings = [];
-  app.transport.greet = () => { greetings.push(app.options.agent()); app.options.onMessage('assistant', 'Hello, let’s plan your trip.'); };
+  app.transport.greet = () => { greetings.push(app.options.agent()); app.options.onTurn({ agent: app.options.agent(), mode: 'shared', speaker: '', greeting: true, transcript: '', reply: 'Hello.' }); app.options.onMessage('assistant', 'Hello, let’s plan your trip.'); };
   app.windowEvent('trip-planning:open');
   assert.deepEqual(greetings, ['sage']);
   app.click('switch-agent'); assert.deepEqual(greetings, ['sage', 'astra']);
   app.click('switch-agent'); app.windowEvent('trip-planning:open');
   assert.deepEqual(greetings, ['sage', 'astra']);
+});
+
+
+test('saved chat still receives one welcome when planning opens, and unlock is tied to the start gesture', () => {
+  const app = setup(); let welcomes = 0, unlocks = 0;
+  app.options.onMessage('user', 'Existing trip question');
+  app.options.onMessage('assistant', 'Existing reply');
+  app.transport.unlockAudio = () => unlocks++;
+  app.transport.greet = () => {
+    welcomes++;
+    app.options.onTurn({ agent: 'sage', mode: 'shared', speaker: '', greeting: true, transcript: '', reply: 'Welcome.' });
+  };
+  app.windowEvent('trip-audio:unlock'); app.windowEvent('trip-planning:open'); app.windowEvent('trip-planning:open');
+  assert.equal(unlocks, 1); assert.equal(welcomes, 1);
+  assert.equal(app.options.history()[0].content, 'Existing trip question');
 });

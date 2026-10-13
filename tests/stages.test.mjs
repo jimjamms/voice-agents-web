@@ -30,7 +30,7 @@ test('setup always opens Sage and focuses the planning heading', () => {
   assert.equal(page.chosen(), 'sage'); assert.equal(page.get('setup-stage').hidden, true);
   assert.equal(page.get('planning-stage').hidden, false); assert.equal(page.get('traveler-title').textContent, 'Jenny’s trip');
   assert.equal(page.get('traveler-title').focused, true); assert.equal(page.get('access-code').value, 'demo');
-  assert.deepEqual(page.emitted, ['trip-planning:open']);
+  assert.deepEqual(page.emitted, ['trip-audio:unlock', 'trip-planning:open']);
   assert.equal(page.get('sage-radio').disabled, true);
   assert.equal(page.get('astra-radio').disabled, true);
 });
@@ -39,7 +39,7 @@ test('Change setup from Astra preserves Sage setup and restarts with Sage', () =
   page.document.querySelector('[data-agent="astra"]').click(); page.submit();
   page.document.querySelector('[data-agent="astra"]').click();
   page.get('change-setup').listeners.click();
-  assert.deepEqual(page.emitted, ['trip-planning:open', 'trip-setup:open']); assert.equal(page.get('planning-stage').hidden, true);
+  assert.deepEqual(page.emitted, ['trip-audio:unlock', 'trip-planning:open', 'trip-setup:open']); assert.equal(page.get('planning-stage').hidden, true);
   assert.equal(page.get('setup-stage').hidden, false); assert.equal(page.get('trip-setup').dataset.companion, 'sage');
   assert.equal(page.get('speaker-name').focused, true);
   page.submit(); assert.equal(page.chosen(), 'sage');
