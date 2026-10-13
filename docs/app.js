@@ -80,6 +80,7 @@
   });
   function syncControls() {
     document.querySelector('.conversation').dataset.agent = agent;
+    document.querySelector('.trip-notepad').dataset.companion = agent;
     const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
     cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; });

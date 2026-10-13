@@ -19,3 +19,15 @@
 .conversation>.controls,.conversation>.conversation-head{flex-shrink:0}
 @media(max-width:600px){.initial-option{grid-template-columns:13px minmax(0,1fr);padding:13px 10px}#planning-stage .agent-options .agent-card{min-height:325px}#planning-stage .agent-portrait{width:280px;height:420px;top:25px}#planning-stage .agent-card strong{margin-top:190px;font-size:27px}#planning-stage .agent-card small{padding-bottom:15px}.initial-option small{font-size:9px}}
 @media(max-width:370px){.initial-options{grid-template-columns:1fr 1fr}#planning-stage .agent-portrait{width:260px;height:390px;top:28px}}
+
+/* Compact header above the artwork, replacing the bottom caption strip. */
+#planning-stage .agent-options .agent-card{min-height:360px}
+#planning-stage .agent-card strong{position:absolute;top:18px;left:20px;margin:0;padding:0;background:transparent;color:#47392b;font-size:28px}
+#planning-stage .agent-card .card-top{position:absolute;top:28px;left:122px;right:20px;width:auto;padding:0;font-size:8px;letter-spacing:.08em;gap:8px}
+#planning-stage .agent-card small{position:absolute;top:62px;left:20px;right:20px;padding:0;margin:0;max-width:none;background:transparent;color:#756452;font-size:10px}
+#planning-stage .agent-card.astra strong,#planning-stage .agent-card.astra small{background:transparent}
+#planning-stage .agent-card.astra strong{color:#2d4936}
+#planning-stage .agent-card.astra small{color:#60745d}
+#planning-stage .agent-portrait{top:92px;width:310px;height:465px}
+@media(max-width:600px){#planning-stage .agent-options .agent-card{min-height:350px}#planning-stage .agent-card strong{margin:0;font-size:27px}#planning-stage .agent-card small{padding:0}#planning-stage .agent-portrait{top:87px;width:300px;height:450px}}
+@media(max-width:370px){#planning-stage .agent-card .card-top{left:112px;font-size:7px}#planning-stage .agent-portrait{width:285px;height:428px}}
