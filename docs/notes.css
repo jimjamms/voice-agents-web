@@ -23,5 +23,5 @@
   background-attachment:local;
 }
 
-/* Quiet paper and larger type keep long checklist items easy to read. */
-.trip-notepad textarea,.trip-notepad[data-companion] textarea{font-size:14px;line-height:1.8;padding:20px;background:var(--note-paper,#fffdf4);min-height:320px;white-space:pre-wrap}
+/* Larger text follows the 28px paper ruling, including while scrolling. */
+.trip-notepad textarea,.trip-notepad[data-companion] textarea{font-size:14px;line-height:28px;padding:20px;min-height:320px;white-space:pre-wrap}
