@@ -1,5 +1,42 @@
 /* User-visible itinerary notes; these are never injected into either agent's chat. */
 (() => {
+  // Render read-only notes as text nodes so headings can be styled safely.
+  function renderTripNotes(textarea, text) {
+    textarea.value = text;
+    const view = textarea.nextElementSibling;
+    if (!view?.classList?.contains('notes-content')) return;
+    view.replaceChildren();
+    if (!text.trim()) {
+      const placeholder = document.createElement('span'); placeholder.className = 'notes-placeholder';
+      placeholder.textContent = textarea.placeholder || 'Your completed trip details will appear here.';
+      view.append(placeholder); return;
+    }
+    for (const line of text.split('\n')) {
+      const row = document.createElement('div'); row.className = 'note-line';
+      const heading = line.trim().replace(/^#{1,3}\s+/, '').replace(/^\*\*(.*?)\*\*:?$/, '$1').replace(/:$/, '');
+      if (/^(Need to know|To do|Still undecided|Itinerary|Budget|Trip overview|Travel details)$/i.test(heading)) {
+        const strong = document.createElement('strong'); strong.textContent = heading;
+        row.classList.add('note-heading'); row.append(strong);
+      } else {
+        const label = line.match(/^(\s*(?:[-•]\s*)?[^:]{1,60}:)(.*)$/);
+        if (label) {
+          const strong = document.createElement('strong'); strong.textContent = label[1];
+          const rest = document.createElement('span'); rest.textContent = label[2];
+          row.append(strong, rest);
+        } else row.textContent = line || '\u00a0';
+      }
+      view.append(row);
+    }
+  }
+  function selectTripNotes(textarea) {
+    const view = textarea.nextElementSibling;
+    if (view?.classList?.contains('notes-content')) {
+      view.focus(); const range = document.createRange(); range.selectNodeContents(view);
+      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    } else { textarea.focus(); textarea.select(); }
+  }
+  window.renderTripNotes = renderTripNotes;
+  window.selectTripNotes = selectTripNotes;
   const STORE = 'sage-astra-trip-notes-v1';
   class TripNotes {
     constructor(options) {
@@ -9,12 +46,12 @@
       options.textarea.readOnly = true;
       options.clear.addEventListener('click', () => {
         const key = this.key(); this.bump(key); this.epochs.set(key, (this.epochs.get(key) || 0) + 1);
-        this.saved[key] = { notes: '', choices: { countries: [], cities: [], activities: [] } }; options.textarea.value = ''; this.persist(key); this.publish(false);
+        this.saved[key] = { notes: '', choices: { countries: [], cities: [], activities: [] } }; renderTripNotes(options.textarea, ''); this.persist(key); this.publish(false);
       });
       options.copy.addEventListener('click', async () => {
         if (!options.textarea.value) { this.status('No trip notes yet.'); return; }
         try { await navigator.clipboard.writeText(options.textarea.value); this.status('Copied.'); }
-        catch { options.textarea.focus(); options.textarea.select(); this.status('Select and copy the notes manually.'); }
+        catch { selectTripNotes(options.textarea); this.status('Select and copy the notes manually.'); }
       });
       this.refresh();
     }
@@ -68,7 +105,7 @@
       try { localStorage.setItem(STORE, JSON.stringify(this.saved)); this.status('Saved in this browser.', key); }
       catch { this.status('Saved for this visit; browser storage is unavailable.', key); }
     }
-    refresh() { this.options.textarea.value = this.text(this.key()); this.status('Your trip details and next steps, updated as you plan.'); this.publish(false); }
+    refresh() { renderTripNotes(this.options.textarea, this.text(this.key())); this.status('Your trip details and next steps, updated as you plan.'); this.publish(false); }
     update(turn) {
       const key = this.key(turn.speaker || 'Unknown'); const epoch = this.epochs.get(key) || 0;
       const base = this.options.base(); const code = this.options.code();
@@ -89,7 +126,7 @@
             this.status('Your edits were kept. Auto-update skipped this turn.', key); return;
           }
           this.saved[key] = { notes: result.notes, choices: result.choices || { countries: [], cities: [], activities: [] } }; this.bump(key); this.persist(key);
-          if (key === this.key()) { this.options.textarea.value = this.text(key); this.publish(true); }
+          if (key === this.key()) { renderTripNotes(this.options.textarea, this.text(key)); this.publish(true); }
         } catch { this.status('Could not auto-update. Your saved notes are unchanged.', key); }
         finally { clearTimeout(timer); }
       });

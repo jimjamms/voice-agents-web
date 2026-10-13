@@ -147,3 +147,12 @@ test('the collapsible checklist lives before the workspace outside the notepad',
   assert.match(html, /planning-checklist[^]*?<details><summary>/);
   assert.match(html, /trip-notepad" aria-labelledby="notes-heading"><div class="notes-head"/);
 });
+
+
+test('planning and completed notepads both use an accessible read-only rich display', () => {
+  const html = readFileSync(new URL('../docs/index.html', import.meta.url), 'utf8');
+  assert.equal((html.match(/class="notes-content" role="textbox" aria-readonly="true"/g) || []).length, 2);
+  assert.match(html, /id="trip-notes" hidden readonly/);
+  assert.match(html, /id="completed-notes" hidden readonly/);
+  assert.equal(html.includes('contenteditable="true"'), false);
+});

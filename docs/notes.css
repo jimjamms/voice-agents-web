@@ -25,3 +25,13 @@
 
 /* Larger text follows the 28px paper ruling, including while scrolling. */
 .trip-notepad textarea,.trip-notepad[data-companion] textarea{font-size:14px;line-height:28px;padding:20px;min-height:320px;white-space:pre-wrap}
+
+/* Read-only rich display; plain text remains available for copying and storage. */
+.trip-notepad textarea[hidden]{display:none}
+.notes-content{height:320px;min-height:190px;max-height:650px;resize:vertical;overflow:auto;padding:20px;color:var(--note-ink,#294d3b);font:14px/28px 'DM Sans',sans-serif;background-color:var(--note-paper,#fffdf4);background-image:repeating-linear-gradient(to bottom,transparent 0,transparent 27px,var(--note-line,#e9eddf) 27px,var(--note-line,#e9eddf) 28px);background-size:100% 28px;background-origin:content-box;background-attachment:local;outline-offset:-3px}
+.notes-content:focus{outline:2px solid var(--note-accent,#6b8b69)}
+.note-line{min-height:28px;white-space:pre-wrap;overflow-wrap:anywhere}
+.note-line strong{font-weight:700}
+.note-heading{color:var(--note-accent,#476e53)}
+.notes-placeholder{color:var(--note-muted,#86927d)}
+.review-grid .notes-content{height:360px}

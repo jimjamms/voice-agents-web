@@ -62,7 +62,7 @@ test('notes extraction distinguishes suggestions from confirmed plans and valida
   globalThis.fetch = async (_url, init) => { prompt = JSON.parse(init.body); return Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'Destination: Kyoto\nIdeas / unconfirmed: Osaka day trip', choices: { countries: [], cities: ['Kyoto'], activities: [] } }) } }] }); };
   try {
     const request = () => new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'Kyoto is my choice.', reply: 'You could visit Osaka too.', notes: '' }) });
-    const response = await notesTurn(request(), { OPENAI_API_KEY: 'secret', PIPELINE_CHAT_MODEL: 'configured-model' }, {});
+    const response = await notesTurn(request(), { OPENAI_API_KEY: 'secret', NOTES_MODEL: 'configured-model' }, {});
     assert.equal(response.status, 200); assert.match((await response.json()).notes, /unconfirmed/);
     assert.equal(prompt.model, 'configured-model'); assert.match(prompt.messages[0].content, /Never turn a suggested destination/);
     globalThis.fetch = async () => Response.json({ choices: [{ message: { content: 'Not valid JSON' } }] });
@@ -132,4 +132,24 @@ test('notepad separates sections and includes each confirmed city activity witho
   assert.match(notes, /\n\nTo do\n/); assert.match(notes, /\n\nStill undecided\n/);
   assert.equal(notes.includes('old activity'), false);
   assert.equal((notes.match(/Tokyo:/g) || []).length, 1);
+});
+
+
+test('notepad bolds section headings and labels while keeping plain text and untrusted content literal', () => {
+  const node = () => ({ children: [], classes: new Set(), textContent: '', classList: { add() {}, contains: name => name === 'notes-content' }, append(...items) { this.children.push(...items); }, replaceChildren() { this.children = []; } });
+  const context = { window: {}, document: { createElement: node } };
+  vm.runInNewContext(source, context);
+  const view = node(), textarea = { nextElementSibling: view, placeholder: 'Your trip notes' };
+  const text = 'Need to know\n- Tokyo: Food tour\n\nTo do\n[ ] Book trains\n<img src=x onerror=alert(1)>';
+  context.window.renderTripNotes(textarea, text);
+  assert.equal(textarea.value, text);
+  assert.equal(view.children[0].className, 'note-line');
+  assert.equal(view.children[0].children[0].textContent, 'Need to know');
+  assert.equal(view.children[1].children[0].textContent, '- Tokyo:');
+  assert.equal(view.children[1].children[1].textContent, ' Food tour');
+  assert.equal(view.children[3].children[0].textContent, 'To do');
+  assert.equal(view.children[5].textContent, '<img src=x onerror=alert(1)>');
+  assert.equal(view.children[5].children.length, 0);
+  context.window.renderTripNotes(textarea, '');
+  assert.equal(view.children.length, 1); assert.equal(view.children[0].textContent, 'Your trip notes');
 });

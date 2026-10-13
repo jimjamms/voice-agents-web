@@ -21,6 +21,11 @@
   window.tripWasReviewed = id => reviewedTrips.has(id.trim().toLowerCase());
   const tripKey = () => name.value.trim().toLowerCase() || 'unknown';
   let snapshot = { notes: '', ready: false, choices: { countries: [], cities: [], activities: [] } };
+  function renderCompletedNotes(text) {
+    const textarea = document.querySelector('#completed-notes');
+    if (window.renderTripNotes) window.renderTripNotes(textarea, text);
+    else textarea.value = text;
+  }
   function step(next) {
     setup.hidden = next !== 'setup'; planning.hidden = next !== 'planning'; review.hidden = next !== 'review';
     document.body.dataset.stage = next;
@@ -58,7 +63,7 @@
   function openReview() {
     if (!snapshot.ready || document.body.dataset.stage !== 'planning') return;
     window.dispatchEvent(new Event('trip-review:open'));
-    document.querySelector('#completed-notes').value = snapshot.notes;
+    renderCompletedNotes(snapshot.notes);
     document.querySelector('#completed-notepad').dataset.companion = document.querySelector('[data-agent].active')?.dataset.agent || 'sage';
     reviewedTrips.add(tripKey());
     if (!reviewGenerations.has(tripKey())) reviewGenerations.set(tripKey(), 0);
@@ -101,7 +106,7 @@
     if (event.detail.key !== (name.value.trim().toLowerCase() || 'unknown')) return;
     snapshot = event.detail; refreshGoal();
     if (document.body.dataset.stage === 'review') {
-      document.querySelector('#completed-notes').value = snapshot.notes;
+      renderCompletedNotes(snapshot.notes);
       if (!snapshot.ready) { step('planning'); title.focus(); }
     }
   });
@@ -115,7 +120,7 @@
     if (name.value.trim().toLowerCase() !== event.detail.name) return;
     reviewedTrips.delete(event.detail.name); reviewGenerations.delete(event.detail.name); persistReviews();
     document.querySelector('#profile-login-status').textContent = event.detail.message;
-    document.querySelector('#completed-notes').value = '';
+    renderCompletedNotes('');
     step('setup'); name.focus();
   });
   window.addEventListener('trip-goal:complete', () => {
@@ -126,7 +131,7 @@
   document.querySelector('#copy-completed-notes').addEventListener('click', async () => {
     const notes = document.querySelector('#completed-notes');
     try { await navigator.clipboard.writeText(notes.value); document.querySelector('#completed-status').textContent = 'Copied.'; }
-    catch { notes.focus(); notes.select(); document.querySelector('#completed-status').textContent = 'Select and copy the notes manually.'; }
+    catch { if (window.selectTripNotes) window.selectTripNotes(notes); else { notes.focus(); notes.select(); } document.querySelector('#completed-status').textContent = 'Select and copy the notes manually.'; }
   });
   const link = document.querySelector('#google-form-link');
   try {
