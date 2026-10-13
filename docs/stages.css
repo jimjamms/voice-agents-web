@@ -138,3 +138,22 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 #planning-stage .footnote #cloud-status,
 #planning-stage .footnote #host-log-status{color:var(--notice-muted,#60745d)}
 @media(prefers-reduced-motion:reduce){#planning-stage .footnote{transition:none}}
+
+/* Keep the switch control visually solid while a turn is processing. */
+#planning-stage .switch-agent-button:disabled{opacity:1;cursor:wait;transform:none}
+/* A small waiting indicator replaces the switch arrow during processing. */
+#planning-stage .switch-agent-button:disabled{animation:none}
+#planning-stage .switch-agent-button:disabled>span{display:none}
+#planning-stage .switch-agent-button:disabled::after{
+  content:"";display:block;flex:0 0 25px;width:25px;height:14px;
+  background-image:radial-gradient(circle,currentColor 2px,transparent 2.5px),radial-gradient(circle,currentColor 2px,transparent 2.5px),radial-gradient(circle,currentColor 2px,transparent 2.5px);
+  background-size:5px 5px;background-repeat:no-repeat;background-position:0 8px,10px 8px,20px 8px;
+  animation:switch-waiting-dots 1.15s ease-in-out infinite;
+}
+@keyframes switch-waiting-dots{
+  0%,65%,100%{background-position:0 8px,10px 8px,20px 8px}
+  15%{background-position:0 2px,10px 8px,20px 8px}
+  30%{background-position:0 8px,10px 2px,20px 8px}
+  45%{background-position:0 8px,10px 8px,20px 2px}
+}
+@media(prefers-reduced-motion:reduce){#planning-stage .switch-agent-button:disabled::after{animation:none}}

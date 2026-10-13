@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import worker from '../worker/src/index.mjs';
-import { notesTurn } from '../worker/src/notes.mjs';
+import { notesTurn, includeSelectedCities } from '../worker/src/notes.mjs';
 const source = readFileSync(new URL('../docs/notes.js', import.meta.url), 'utf8');
 function setup(storage = new Map(), fetcher = async () => Response.json({ notes: 'Destination: Kyoto' })) {
   const element = () => ({ value: '', textContent: '', listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn; }, focus() {}, select() {} });
@@ -95,4 +95,32 @@ test('legacy saved destination choices do not unlock the form without budget and
   const app = setup(storage);
   assert.equal(app.notifications.at(-1).ready, false);
   assert.equal(app.notifications.at(-1).choices.budget, null);
+});
+
+test('every selected city is visible even if the model omits the route from its checklist', () => {
+  const notes = includeSelectedCities('Need to know\n- Budget: 2500 USD\nTo do\n[ ] Book trains', ['Tokyo', 'Kyoto', 'Osaka']);
+  for (const city of ['Tokyo', 'Kyoto', 'Osaka']) assert.ok(notes.includes(city));
+  assert.match(notes, /Book trains/);
+  const complete = 'Need to know\n- Cities: Tokyo, Kyoto, Osaka';
+  assert.equal(includeSelectedCities(complete, ['Tokyo', 'Kyoto', 'Osaka']), complete);
+});
+test('notepad receives the preceding proposal to resolve a short city acceptance', async () => {
+  const original = globalThis.fetch; let supplied;
+  globalThis.fetch = async (_url, init) => {
+    const messages = JSON.parse(init.body).messages; supplied = JSON.parse(messages[1].content);
+    return Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'To do\n[ ] Choose travel dates', choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: [] } }) } }] });
+  };
+  try {
+    const priorConversation = [{ role: 'assistant', content: 'Shall we choose Tokyo, Kyoto, and Osaka?', agent: 'sage' }];
+    const request = new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'Yes, those three.', reply: 'Great.', notes: '', priorConversation }) });
+    const response = await notesTurn(request, { OPENAI_API_KEY: 'test' }, {}); const data = await response.json();
+    assert.equal(response.status, 200); assert.deepEqual(supplied.priorConversation, priorConversation);
+    assert.equal(data.choices.cities.length, 3); assert.match(data.notes, /Tokyo → Kyoto → Osaka/); assert.equal(data.ready, false);
+  } finally { globalThis.fetch = original; }
+});
+test('browser sends the preceding conversation along with the current turn', async () => {
+  let sent;
+  const app = setup(new Map(), async (_url, init) => { sent = JSON.parse(init.body); return Response.json({ notes: 'Need to know\n- Cities: Kyoto' }); });
+  await app.notes.update({ ...turn, priorConversation: [{ role: 'assistant', content: 'Would you like Kyoto?', agent: 'sage' }] });
+  assert.equal(sent.priorConversation[0].content, 'Would you like Kyoto?');
 });

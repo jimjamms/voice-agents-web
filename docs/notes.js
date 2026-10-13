@@ -73,7 +73,7 @@
         try {
           const response = await fetch(`${base.replace(/\/$/, '')}/notes`, {
             method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': code }, signal: controller.signal,
-            body: JSON.stringify({ agent: turn.agent, userText: String(turn.transcript || '').slice(0, 3500), reply: String(turn.reply || '').slice(0, 3500), notes: this.text(key), choices: this.choices(key) }),
+            body: JSON.stringify({ agent: turn.agent, userText: String(turn.transcript || '').slice(0, 3500), reply: String(turn.reply || '').slice(0, 3500), priorConversation: (turn.priorConversation || []).slice(-8).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 3500), agent: item.agent })), notes: this.text(key), choices: this.choices(key) }),
           });
           const result = await response.json();
           if (!response.ok || typeof result.notes !== 'string' || result.notes.length > 6000) throw new Error('Notes failed');

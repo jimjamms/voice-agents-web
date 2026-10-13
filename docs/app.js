@@ -153,8 +153,13 @@
   }
   function saveTurn(turn) {
     if (deletedNames.has(turn.speaker?.trim().toLowerCase())) return;
+    const sharedTurns = turn.mode === 'shared' ? window.AgentMemory.recentShared?.(turn.speaker) || [] : [];
+    const priorConversation = sharedTurns.length ?
+      sharedTurns.slice(-4).flatMap(item => [
+        { role: 'user', content: item.transcript, agent: item.agent }, { role: 'assistant', content: item.reply, agent: item.agent },
+      ]) : history.slice(-8).map(item => ({ role: item.role, content: item.content, agent: turn.agent }));
     window.AgentMemory.recordShared?.(turn.speaker, turn.mode, turn.agent, turn.transcript, turn.reply);
-    tripNotes?.update(turn);
+    tripNotes?.update({ ...turn, priorConversation });
     turns.push({ timestamp: new Date().toISOString(), session_id: sessionId,
       agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
       speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
