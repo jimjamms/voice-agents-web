@@ -103,6 +103,7 @@
       const values = [user.nameId, user.chatTurns, date && Number.isFinite(date.getTime()) ? date.toLocaleString() : '—', user.tripStatus];
       values.forEach((value, index) => {
         const cell = document.createElement('td');
+        cell.setAttribute('data-label', ['Name ID', 'Chat turns', 'Last saved', 'Trip'][index]);
         if (!index) {
           cell.className = 'user-id';
           const wrap = document.createElement('div'), name = document.createElement('span'), remove = document.createElement('button');
@@ -124,6 +125,7 @@
       memory.setAttribute('aria-label', `Download memories for ${user.nameId}`);
       memory.addEventListener('click', () => { void downloadMemories(user.nameId); });
       rowActionButtons.push(use, memory);
+      actions.setAttribute('data-label', 'Downloads');
       actions.className = 'user-downloads'; actions.append(use, memory); row.append(actions); userRows.append(row);
     }
   }

@@ -19,7 +19,7 @@ function setup(frameTools = {}) {
   const document = { body: { dataset: { stage: 'planning' } }, querySelector: selector => get(selector.slice(1)), querySelectorAll: () => cards,
     createElement: () => element('new'), addEventListener() {} };
   const transport = { isLocked: () => false, stop() {}, busy: false, active: false };
-  const testWindow = { createTripCloud(value) { cloudOptions = value; return { async load() {} }; }, dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener(type, handler) { handlers[type] = handler; }, AgentMemory: { forget() { return true; } } };
+  const testWindow = { matchMedia: frameTools.mobileMedia ? () => frameTools.mobileMedia : undefined, createTripCloud(value) { cloudOptions = value; return { async load() {} }; }, dispatchEvent(event) { emitted.push(event.type); }, createTripNotes(value) { noteOptions = value; return { update() {}, refresh() {} }; }, createPipelineTransport(value) { options = value; return transport; }, addEventListener(type, handler) { handlers[type] = handler; }, AgentMemory: { forget() { return true; } } };
   vm.runInNewContext(source.replace(/\}\)\(\);\s*$/, 'window.handleTestEvent = handleEvent; })();'), { document, Event, CustomEvent, crypto: { randomUUID: () => `session-${++counter}` }, clearTimeout,
     window: testWindow, ...frameTools });
   return { get, options, transport, noteOptions, cloudOptions, emitted, window: testWindow, windowEvent: type => handlers[type]?.(), event: testWindow.handleTestEvent, click: id => get(id).listeners.click(), change: (id, value) => { get(id).value = value; get(id).listeners.change(); } };
@@ -239,4 +239,24 @@ test('Enter sends text while Shift+Enter and IME confirmation do not send', () =
   const key = values => app.get('chat-text').listeners.keydown({ key: 'Enter', preventDefault() {}, ...values });
   key({ shiftKey: true }); key({ isComposing: true }); key({ repeat: true }); assert.equal(submitted, 0);
   key({}); assert.equal(submitted, 1);
+});
+
+
+test('mobile notes collapse and expand without hiding desktop notes or losing chat', () => {
+  let resize;
+  const mobileMedia = { matches: true, addEventListener(type, handler) { assert.equal(type, 'change'); resize = handler; } };
+  const app = setup({ mobileMedia });
+  app.options.onMessage('user', 'Plan Kyoto');
+  assert.equal(app.get('trip-notes-display').hidden, true);
+  assert.equal(app.get('notes-status').hidden, true);
+  app.click('toggle-trip-notes');
+  assert.equal(app.get('trip-notes-display').hidden, false);
+  assert.equal(app.get('notes-status').hidden, false);
+  app.click('toggle-trip-notes');
+  mobileMedia.matches = false; resize();
+  assert.equal(app.get('trip-notes-display').hidden, false);
+  assert.equal(app.get('trip-notepad').dataset.mobileExpanded, 'true');
+  mobileMedia.matches = true; resize();
+  assert.equal(app.get('trip-notes-display').hidden, true);
+  assert.equal(app.options.history()[0].content, 'Plan Kyoto');
 });

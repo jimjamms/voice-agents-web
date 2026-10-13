@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f4f1e9">
   <title>Chat logs · Sage & Astra</title>
   <script src="config.js" defer></script>
-  <script src="host-logs.js?v=memory-export-4" defer></script>
+  <script src="host-logs.js?v=mobile-5" defer></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
     :root{font-family:'DM Sans',sans-serif;color:#294b3b;background:#f4f1e9;font-synthesis:none}
@@ -85,6 +85,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 #export-memories:hover{background:#cedfc4}
 .user-downloads>button+button{margin-top:6px}
   </style>
+  <link rel="stylesheet" href="mobile.css?v=1">
 </head>
 <body>
 <div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -144,7 +145,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
         </form>
         <fieldset class="delete-options users-delete-options"><legend>Data to delete with each user’s Delete button</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>
         <div class="users-table-wrap" tabindex="0" role="region" aria-label="Saved user list">
-          <table class="users-table"><thead><tr><th scope="col">Name ID</th><th scope="col">Chat turns</th><th scope="col">Last saved</th><th scope="col">Trip</th><th scope="col">Downloads</th></tr></thead>
+          <table class="users-table" role="table"><thead><tr><th scope="col">Name ID</th><th scope="col">Chat turns</th><th scope="col">Last saved</th><th scope="col">Trip</th><th scope="col">Downloads</th></tr></thead>
           <tbody id="users-rows"><tr><td colspan="5">Enter your host key above, then load users.</td></tr></tbody></table>
         </div>
         <p id="users-status" role="status" aria-live="polite"></p>

@@ -501,6 +501,20 @@
   });
   window.addEventListener('trip-review:open', () => { tripCompletionPending = false; pipeline.stop(); endSession(); });
   window.addEventListener('trip-setup:open', () => { pipeline.stop(); endSession('Ready when you are'); });
+  const notesToggle = document.querySelector('#toggle-trip-notes');
+  const mobileLayout = window.matchMedia?.('(max-width:850px)');
+  let mobileNotesOpen = false;
+  function syncMobileNotes() {
+    const expanded = !mobileLayout?.matches || mobileNotesOpen;
+    document.querySelector('.trip-notepad').dataset.mobileExpanded = String(expanded);
+    document.querySelector('#trip-notes-display').hidden = !expanded;
+    document.querySelector('#notes-status').hidden = !expanded;
+    notesToggle.setAttribute('aria-expanded', String(expanded));
+    notesToggle.textContent = expanded ? 'Hide notes ⌃' : 'Show notes ⌄';
+  }
+  notesToggle.addEventListener('click', () => { mobileNotesOpen = !mobileNotesOpen; syncMobileNotes(); });
+  mobileLayout?.addEventListener?.('change', syncMobileNotes);
+  syncMobileNotes();
   syncControls();
   document.addEventListener('keydown', event => {
     if (document.querySelector('#planning-stage')?.hidden) return;

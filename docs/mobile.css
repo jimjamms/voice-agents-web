@@ -1,0 +1,107 @@
+/* Desktop keeps the existing layout. Notes disclosure is only shown below 850px. */
+#toggle-trip-notes{display:none}
+@media(max-width:850px){
+  .shell{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  .topbar{height:64px;gap:10px}
+  .brand{font-size:10px;letter-spacing:.12em;gap:8px}
+  footer{gap:12px;flex-wrap:wrap;padding-bottom:max(22px,env(safe-area-inset-bottom))}
+  body[data-stage] .stage-progress{display:grid;grid-template-columns:1fr 12px 1.5fr 12px 1fr;gap:4px;margin:16px 0;font-size:10px}
+  .stage-progress>span{min-width:0;text-align:center;line-height:1.5}
+  .stage-progress .stage-line{width:100%;min-width:0}
+  body[data-stage="setup"] .intro{padding:28px 0 22px}
+  body[data-stage="setup"] .intro h1{font-size:42px}
+  .setup-card{padding:22px 18px;margin-bottom:26px}
+  .setup-field input{font-size:16px;min-height:48px}
+  .setup-field label,#companions-heading{font-size:13px}
+  .setup-role{padding:13px 12px}
+  .setup-role small{font-size:12px}
+  .setup-data-note{font-size:12px;line-height:1.6}
+  .setup-next{min-height:48px;font-size:14px}
+  .planning-toolbar{flex-wrap:nowrap;gap:8px;margin-bottom:12px}
+  .planning-toolbar h2{flex:1;min-width:0;font-size:20px}
+  #change-setup{flex-shrink:0;min-height:44px;padding:8px;font-size:12px}
+  .planning-checklist{padding:12px;margin-bottom:16px}
+  .planning-checklist #trip-goal-hint{font-size:12px;line-height:1.6}
+  .workspace{grid-template-columns:minmax(0,1fr);gap:16px}
+  #planning-stage .chooser{display:flex;gap:12px;width:100%}
+  .notes-head{padding:10px 14px;flex-wrap:wrap;gap:4px 10px}
+  .notes-head h2{font-size:14px;min-width:0;flex:1}
+  .notes-head>div{gap:10px;align-items:center;flex-wrap:wrap}
+  .notes-head .text-button{min-height:44px;min-width:44px;font-size:12px}
+  #toggle-trip-notes{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;white-space:nowrap}
+  .trip-notepad[data-mobile-expanded="false"] .notes-head{border-bottom:0;flex-wrap:nowrap}
+  .trip-notepad[data-mobile-expanded="false"] #copy-notes,.trip-notepad[data-mobile-expanded="false"] #clear-notes{display:none}
+  .notes-content{height:240px;min-height:168px;max-height:420px;resize:none;padding:14px;font-size:16px;line-height:28px;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+  .review-grid .notes-content{height:300px}
+  #planning-stage .agent-options{gap:12px;grid-template-columns:minmax(0,1fr)}
+  #planning-stage .agent-options .agent-card{min-height:124px;padding:14px 16px}
+  #planning-stage .agent-card .card-top{font-size:8px;line-height:1.3}
+  #planning-stage .agent-card strong{margin-top:10px;font-size:27px;line-height:1.15;max-width:calc(100% - 116px)}
+  #planning-stage .agent-card small{max-width:calc(100% - 116px);font-size:12px;line-height:1.5;margin:5px 0 0}
+  #planning-stage .agent-card .agent-mascot{width:112px;height:118px;right:2px;top:9px}
+  #planning-stage .agent-card::after{width:60px;height:8px;right:27px;bottom:10px}
+  #planning-stage .agent-card .card-landscape{height:48px}
+  .switch-agent-button{min-height:48px;padding:13px 16px;font-size:14px}
+  .conversation-head{height:auto;min-height:54px;padding:8px 14px;font-size:12px;gap:8px}
+  .conversation-head>div{min-width:0;overflow-wrap:anywhere}
+  #reset{min-height:44px;flex-shrink:0;font-size:12px}
+  .conversation>.messages{flex:0 1 auto;min-height:200px;max-height:min(48svh,360px);padding:16px 14px;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch}
+  .message{max-width:94%;font-size:15px;padding:11px 13px}
+  .controls{padding:14px}
+  .memory-row{flex-wrap:wrap;gap:8px}
+  .memory-switch button,.mode-switch button{min-height:44px;font-size:12px}
+  .memory-detail{gap:4px}
+  .memory-detail small{font-size:11px;line-height:1.5}
+  #forget-memory{min-height:44px;font-size:12px}
+  #chat-text{font-size:16px;line-height:1.5;min-height:72px;max-height:140px}
+  #send-text{min-height:48px;min-width:66px;font-size:14px;padding:12px}
+  .text-chat-meta{font-size:11px;gap:8px}
+  .text-chat-meta label{min-height:44px}
+  #read-text-reply{width:20px;height:20px;margin:0}
+  .record-row{gap:10px;align-items:center}
+  .record-button{min-height:48px;padding:13px 14px;flex-shrink:0;font-size:12px}
+  .record-help{min-width:0;overflow-wrap:anywhere}
+  .record-help small{font-size:11px;line-height:1.5}
+  .footnote{padding:16px 0 22px;gap:8px}
+  .footnote p{font-size:11px;line-height:1.6}
+  .review-grid{grid-template-columns:minmax(0,1fr);gap:16px}
+  .form-card{padding:20px}
+  .form-card .text-button{min-height:44px;font-size:13px}
+
+  /* Host controls and user rows fit the same phone-width canvas. */
+  .shell>main{padding-top:28px;padding-bottom:36px}
+  .host-card{grid-template-columns:minmax(0,1fr)}
+  .archive,.export-panel{padding:22px 18px}
+  .archive{border-right:0;border-bottom:1px solid #c3d2b8;gap:14px}
+  .archive svg{display:none}
+  .users-card{padding:20px 16px;margin-top:18px}
+  .export-panel input,.users-card input[type="search"]{font-size:16px;min-height:48px}
+  .export-actions button,#load-users,#users-more{min-height:48px;font-size:14px}
+  .users-toolbar{flex-direction:column;align-items:stretch;gap:12px}
+  #load-users{width:100%}
+  .users-table{min-width:0;display:block}
+  .users-table thead{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
+  .users-table tbody,.users-table tr{display:block;width:100%}
+  .users-table tr+tr{border-top:2px solid #d8dfce}
+  .users-table td{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;width:100%;padding:9px 12px;font-size:13px;overflow-wrap:anywhere;border-top:0}
+  .users-table td::before{content:attr(data-label);font-weight:600;color:#60745d}
+  .users-table td.user-id{display:block;max-width:none;padding-top:14px;padding-bottom:12px;background:#f4f7ed}
+  .users-table td.user-id::before,.users-table td[colspan]::before{content:none}
+  .users-table td[colspan]{display:block}
+  .user-name-actions{gap:12px}
+  .user-name{font-size:14px}
+  .users-table .user-delete-button,.users-table .user-use{min-height:44px;padding:10px 12px;font-size:12px}
+  .users-table td.user-downloads{display:flex;flex-wrap:wrap;align-items:center;padding-bottom:14px}
+  .users-table td.user-downloads::before{width:90px}
+  .user-downloads>button+button{margin-top:0}
+  .delete-options{gap:0 12px;line-height:1.5}
+  .delete-options label{min-height:44px;font-size:12px}
+  .delete-options input{width:20px;height:20px;min-height:20px;flex-shrink:0}
+}
+@media(max-width:380px){
+  .initial-options{grid-template-columns:minmax(0,1fr);gap:10px}
+  .text-chat-meta{display:block}
+  .record-row{flex-wrap:wrap}
+  .record-button{flex:1;justify-content:center}
+  .record-help{width:100%}
+}
