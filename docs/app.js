@@ -27,6 +27,12 @@
   const conversations = new Map();
   const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
   let activeConversationKey = conversationKey();
+  const tripNotes = window.createTripNotes?.({
+    textarea: document.querySelector('#trip-notes'), status: document.querySelector('#notes-status'),
+    copy: document.querySelector('#copy-notes'), clear: document.querySelector('#clear-notes'),
+    speaker: () => speakerName.value.trim(), base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl,
+    code: () => codeInput.value.trim(),
+  });
   let pipeline;
   let enrolling = false;
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
@@ -87,6 +93,7 @@
     const last = turns.at(-1); if (last) last.interrupted = true;
   }
   function saveTurn(turn) {
+    tripNotes?.update(turn);
     turns.push({ timestamp: new Date().toISOString(), session_id: sessionId,
       agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
       speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
@@ -96,7 +103,7 @@
       memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved.';
     }
   }
-  speakerName.addEventListener('change', switchConversation);
+  speakerName.addEventListener('change', () => { switchConversation(); tripNotes?.refresh(); });
   function chooseMemory(mode) {
     if (sharedMemory.disabled || memoryMode.value === mode) return;
     memoryMode.value = mode;

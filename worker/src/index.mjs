@@ -1,4 +1,5 @@
 import agents from './agents.json' with { type: 'json' };
+import { notesTurn } from './notes.mjs';
 import { memoryTurn } from './memory.mjs';
 import { pipelineTurn } from './pipeline.mjs';
 
@@ -48,16 +49,17 @@ export default {
     }
     const cors = corsFor(allowedOrigin);
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
-    if (!['/session', '/turn', '/memory'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
+    if (!['/session', '/turn', '/memory', '/notes'].includes(url.pathname) || request.method !== 'POST') return json({ error: 'Not found.' }, 404, cors);
     if (!env.OPENAI_API_KEY || !env.DEMO_ACCESS_CODE || !env.DEMO_RATE_LIMITER) {
       return json({ error: 'Voice service is not configured.' }, 503, cors);
     }
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: ip });
+    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: url.pathname === '/notes' ? `${ip}:notes` : ip });
     if (!success) return json({ error: 'Too many new sessions. Wait a minute and try again.' }, 429, cors);
     if (!validCode(request.headers.get('x-demo-code'), env.DEMO_ACCESS_CODE)) {
       return json({ error: 'Invalid demo access code.' }, 401, cors);
     }
+    if (url.pathname === '/notes') return notesTurn(request, env, cors);
     if (url.pathname === '/memory') return memoryTurn(request, env, cors);
     if (url.pathname === '/turn') return pipelineTurn(request, env, cors);
     const agentName = url.searchParams.get('agent');
