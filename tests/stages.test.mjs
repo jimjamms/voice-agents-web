@@ -44,7 +44,7 @@ test('stage three requires completed choices and displays the completed notes', 
   const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
   page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto', ready: false, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto'], activities: ['Hiking'] } });
   page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, true);
-  page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto, Osaka. Hiking.', ready: true, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'] } });
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto, Osaka. Hiking.', ready: true, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days' }, finalized: true } });
   page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, false);
   assert.equal(page.get('planning-stage').hidden, true); assert.match(page.get('completed-notes').value, /Osaka/);
   assert.equal(page.get('google-form-link').hidden, true);
@@ -54,4 +54,18 @@ test('only configured Google Form URLs are shown', () => {
   assert.equal(setup({ googleFormUrl: 'https://example.com/' }).get('google-form-link').hidden, true);
   const page = setup({ googleFormUrl: 'https://docs.google.com/forms/d/e/test/viewform' });
   assert.equal(page.get('google-form-link').hidden, false); assert.match(page.get('google-form-link').href, /docs.google.com/);
+});
+
+test('budget and approval remain visible requirements and revisions return to planning', () => {
+  const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
+  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], budget: null, finalized: false };
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Trip', choices, ready: false });
+  page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, true);
+  assert.equal(page.get('budget-check').textContent, 'Budget pending');
+  assert.match(page.get('trip-goal-hint').textContent, /spending limit/);
+  const completed = { ...choices, budget: { amount: 2000, currency: 'USD', scope: 'whole trip' }, itinerary: { timing: '9 days' }, finalized: true };
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Final trip', choices: completed, ready: true });
+  page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, false);
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Revised trip', choices: { ...completed, finalized: false }, ready: false });
+  assert.equal(page.get('review-stage').hidden, true); assert.equal(page.get('planning-stage').hidden, false);
 });

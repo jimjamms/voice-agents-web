@@ -81,11 +81,18 @@ test('notepad is read-only and has no user edit listener', () => {
 });
 
 test('confirmed choices persist and publish completion with the notepad', async () => {
-  const storage = new Map(); const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour', 'Hiking'] };
+  const storage = new Map(); const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour', 'Hiking'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days', route: 'Tokyo, Kyoto, Osaka', transport: 'Train', lodging: 'Hotels near stations', costs: 'Estimated total 2250 USD' }, finalized: true };
   const app = setup(storage, async () => Response.json({ notes: 'Confirmed Japan itinerary', choices }));
   await app.notes.update(turn);
   assert.equal(app.notifications.at(-1).ready, true); assert.equal(app.notifications.at(-1).updated, true);
   const reload = setup(storage); assert.equal(reload.notifications.at(-1).ready, true);
   assert.equal(reload.notifications.at(-1).updated, false);
   app.clear.listeners.click(); assert.equal(app.notifications.at(-1).ready, false);
+});
+
+test('legacy saved destination choices do not unlock the form without budget and final approval', () => {
+  const storage = new Map([['sage-astra-trip-notes-v1', JSON.stringify({ jenny: { notes: 'Japan trip', choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'] } } })]]);
+  const app = setup(storage);
+  assert.equal(app.notifications.at(-1).ready, false);
+  assert.equal(app.notifications.at(-1).choices.budget, null);
 });

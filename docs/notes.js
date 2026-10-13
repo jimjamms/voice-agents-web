@@ -33,12 +33,18 @@
           const id = item.trim().toLowerCase(); if (seen.has(id)) return false; seen.add(id); return true;
         }).map(item => item.trim());
       }
+      const budget = value.budget;
+      result.budget = budget && typeof budget.amount === 'number' && Number.isFinite(budget.amount) && budget.amount > 0 &&
+        typeof budget.currency === 'string' && budget.currency.trim() && ['per person', 'whole trip'].includes(budget.scope) ? budget : null;
+      result.itinerary = value.itinerary && ['timing', 'route', 'transport', 'lodging', 'costs'].every(
+        field => typeof value.itinerary[field] === 'string' && value.itinerary[field].trim()) ? value.itinerary : null;
+      result.finalized = value.finalized === true;
       return result;
     }
     publish(updated) {
       const choices = this.choices();
       this.options.onChange?.({ key: this.key(), notes: this.text(this.key()), choices, updated,
-        ready: choices.countries.length >= 1 && choices.cities.length >= 3 && choices.activities.length >= 1 && choices.activities.length <= 2 });
+        ready: choices.countries.length >= 1 && choices.cities.length >= 3 && choices.activities.length >= 1 && choices.activities.length <= 2 && Boolean(choices.budget) && Boolean(choices.itinerary) && choices.finalized });
     }
     bump(key) { this.revisions.set(key, (this.revisions.get(key) || 0) + 1); }
     status(text, key = this.key()) { if (key === this.key()) this.options.status.textContent = text; }

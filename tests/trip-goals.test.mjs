@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeChoices, tripReady } from '../worker/src/trip-goals.mjs';
 import { notesTurn } from '../worker/src/notes.mjs';
-const complete = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour'] };
-test('completion requires one country, three distinct cities and one or two activities', () => {
+const complete = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days', route: 'Tokyo 3 days, Kyoto 3 days, Osaka 3 days', transport: 'Trains between cities', lodging: 'Midrange hotels near stations', costs: 'Estimated flights 900, hotels 700, trains 250, food and activities 400; total 2250 USD' }, finalized: true };
+test('completion requires destination choices, confirmed budget and finalized logistics', () => {
   assert.equal(tripReady(normalizeChoices(complete)), true);
   assert.equal(tripReady(normalizeChoices({ ...complete, countries: [] })), false);
   assert.equal(tripReady(normalizeChoices({ ...complete, cities: ['Tokyo', 'Kyoto'] })), false);
@@ -20,10 +20,33 @@ test('notes service returns server-checked progress and instructs extraction to 
   const original = globalThis.fetch; let prompt;
   globalThis.fetch = async (_url, init) => { prompt = JSON.parse(init.body); return Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'Japan: Tokyo, Kyoto, Osaka. Food tour.', choices: complete }) } }] }); };
   try {
-    const request = new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'I choose Japan, Tokyo, Kyoto, Osaka, and a food tour.', reply: 'Great.', notes: '' }) });
+    const request = new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'astra', userText: 'I approve the complete itinerary and the 2500 USD per-person budget.', reply: 'Great.', notes: '' }) });
     const response = await notesTurn(request, { OPENAI_API_KEY: 'test' }, {}); const data = await response.json();
     assert.equal(response.status, 200); assert.equal(data.ready, true);
     assert.match(prompt.messages[0].content, /Agent suggestions do not count/);
     assert.match(prompt.messages[0].content, /Preserve all selected activities even if more than two/);
+  } finally { globalThis.fetch = original; }
+});
+
+test('destinations alone, unapproved plans and incomplete logistics cannot unlock the form', () => {
+  for (const change of [{ budget: null }, { finalized: false }, { itinerary: null },
+    { itinerary: { ...complete.itinerary, lodging: '' } }, { itinerary: { ...complete.itinerary, costs: '' } }]) {
+    assert.equal(tripReady(normalizeChoices({ ...complete, ...change })), false);
+  }
+  assert.equal(tripReady(normalizeChoices({ countries: complete.countries, cities: complete.cities, activities: complete.activities })), false);
+  assert.throws(() => normalizeChoices({ ...complete, budget: { amount: -1, currency: 'USD', scope: 'per person' } }));
+  assert.throws(() => normalizeChoices({ ...complete, budget: { amount: 2500, currency: '', scope: 'per person' } }));
+});
+test('new final approval requires Astra, and changes invalidate existing approval', async () => {
+  const original = globalThis.fetch;
+  let generated = complete;
+  globalThis.fetch = async () => Response.json({ choices: [{ message: { content: JSON.stringify({ notes: 'Complete itinerary', choices: generated }) } }] });
+  const request = (agent, choices) => new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent, userText: 'Update the trip', reply: 'Updated.', notes: 'Existing trip', choices }) });
+  try {
+    assert.equal((await (await notesTurn(request('sage', { ...complete, finalized: false }), {}, {})).json()).ready, false);
+    assert.equal((await (await notesTurn(request('sage', complete), {}, {})).json()).ready, true);
+    generated = { ...complete, budget: { ...complete.budget, amount: 3000 } };
+    const revised = await (await notesTurn(request('astra', complete), {}, {})).json();
+    assert.equal(revised.ready, false); assert.equal(revised.choices.finalized, false);
   } finally { globalThis.fetch = original; }
 });

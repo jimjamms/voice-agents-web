@@ -48,6 +48,8 @@
       }
     },
   });
+  const remoteLogger = window.createRemoteLogger?.({ base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(), status: document.querySelector('#host-log-status') });
+  codeInput.addEventListener('change', () => remoteLogger?.flush());
   let pipeline;
   let enrolling = false;
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
@@ -115,7 +117,7 @@
     maybeCompleteTrip();
   }
   function markInterrupted() {
-    const last = turns.at(-1); if (last) last.interrupted = true;
+    const last = turns.at(-1); if (last) { last.interrupted = true; remoteLogger?.record(last); }
   }
   function saveTurn(turn) {
     tripNotes?.update(turn);
@@ -123,6 +125,7 @@
       agent_name: turn.agent === 'sage' ? 'Sage' : 'Astra', memory_sharing_mode: turn.mode,
       speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
       agent_traits: turn.traits, interrupted: false, engine, ...turn });
+    remoteLogger?.record(turns.at(-1));
     if (turn.fact) {
       const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.fact);
       memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved.';

@@ -19,11 +19,16 @@
     }
   }
   function refreshGoal() {
-    const { countries, cities, activities } = snapshot.choices;
+    const { countries, cities, activities, budget, itinerary, finalized } = snapshot.choices;
     document.querySelector('#country-count').textContent = `Country ${countries.length}/1+`;
     document.querySelector('#city-count').textContent = `Cities ${cities.length}/3+`;
     document.querySelector('#activity-count').textContent = `Activities ${activities.length}/1–2`;
-    document.querySelector('#trip-goal-hint').textContent = activities.length > 2 ? 'Choose your top one or two activities.' : snapshot.ready ? 'Your trip choices are complete.' : 'Confirm your choices with either agent.';
+    document.querySelector('#budget-check').textContent = budget ? 'Budget confirmed' : 'Budget pending';
+    document.querySelector('#final-check').textContent = finalized && itinerary ? 'Plan finalized' : 'Plan pending';
+    document.querySelector('#trip-goal-hint').textContent = activities.length > 2 ? 'Choose your top one or two activities.' :
+      snapshot.ready ? 'Your budget and itinerary are confirmed.' :
+      countries.length < 1 || cities.length < 3 || activities.length < 1 ? 'Choose your destinations and activities with Sage.' :
+      !budget ? 'Confirm your spending limit and currency with Astra.' : 'Review and approve your complete itinerary with Astra.';
     document.querySelector('#continue-review').hidden = !snapshot.ready;
   }
   function openReview() {
@@ -53,7 +58,10 @@
   window.addEventListener('trip-notes:updated', event => {
     if (event.detail.key !== (name.value.trim().toLowerCase() || 'unknown')) return;
     snapshot = event.detail; refreshGoal();
-    if (document.body.dataset.stage === 'review') document.querySelector('#completed-notes').value = snapshot.notes;
+    if (document.body.dataset.stage === 'review') {
+      document.querySelector('#completed-notes').value = snapshot.notes;
+      if (!snapshot.ready) { step('planning'); title.focus(); }
+    }
   });
   window.addEventListener('trip-goal:complete', openReview);
   document.querySelector('#continue-review').addEventListener('click', openReview);
