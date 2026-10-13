@@ -160,3 +160,10 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 
 /* The original companion cards introduce the roles; Sage always starts. */
 .initial-option:has(input:disabled){cursor:default}
+
+/* Each requirement gets its own readable checklist row. */
+.goal-counts{display:grid;grid-template-columns:1fr;gap:6px;font-size:12px;line-height:1.5}
+.goal-counts span{padding:8px 10px;border-radius:7px}
+.goal-counts span[data-complete="true"]{background:var(--note-header);font-weight:600}
+#trip-goal-title{font-size:13px}
+#trip-goal-hint{font-size:11px}

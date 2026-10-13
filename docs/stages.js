@@ -31,16 +31,24 @@
     }
   }
   function refreshGoal() {
-    const { countries, cities, activities, budget, itinerary, finalized } = snapshot.choices;
-    document.querySelector('#country-count').textContent = `Country ${countries.length}/1+`;
-    document.querySelector('#city-count').textContent = `Cities ${cities.length}/3+`;
-    document.querySelector('#activity-count').textContent = `Activities ${activities.length}/1–2`;
-    document.querySelector('#budget-check').textContent = budget ? 'Budget confirmed' : 'Budget pending';
-    document.querySelector('#final-check').textContent = finalized && itinerary ? 'Plan finalized' : 'Plan pending';
-    document.querySelector('#trip-goal-hint').textContent = activities.length > 2 ? 'Choose your top one or two activities.' :
-      snapshot.ready ? 'Your budget and itinerary are confirmed.' :
-      countries.length < 1 || cities.length < 3 || activities.length < 1 ? 'Choose your destinations and activities with Sage.' :
-      !budget ? 'Confirm your spending limit and currency with Astra.' : 'Review and approve your complete itinerary with Astra.';
+    const { countries, cities, cityActivities = {}, budget, itinerary, finalized } = snapshot.choices;
+    const covered = cities.filter(city => cityActivities[city]).length;
+    const requirements = [
+      ['country-count', countries.length >= 1, `Choose 1 country (${countries.length}/1)`],
+      ['city-count', cities.length >= 2, `Choose 2 cities (${cities.length}/2)`],
+      ['activity-count', cities.length >= 2 && covered === cities.length, `1 activity per city (${covered}/${Math.max(2, cities.length)} cities)`],
+      ['budget-check', Boolean(budget), budget ? 'Budget confirmed' : 'Confirm your budget'],
+      ['final-check', Boolean(finalized && itinerary), finalized && itinerary ? 'Itinerary approved' : 'Approve itinerary with Astra'],
+    ];
+    for (const [id, done, label] of requirements) {
+      const item = document.querySelector(`#${id}`);
+      item.textContent = `${done ? '✓' : '○'} ${label}`;
+      item.dataset.complete = String(done);
+    }
+    document.querySelector('#trip-goal-hint').textContent = snapshot.ready ? 'Your trip is ready. Continue to the form.' :
+      countries.length < 1 || cities.length < 2 ? 'Sage: choose your country and two cities.' :
+      covered < cities.length ? `Sage: choose an activity in ${cities.filter(city => !cityActivities[city]).join(', ')}.` :
+      !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review and approve your practical itinerary.';
     document.querySelector('#continue-review').hidden = !snapshot.ready;
   }
   function openReview() {

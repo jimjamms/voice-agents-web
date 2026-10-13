@@ -11,6 +11,14 @@ export function normalizeChoices(value = { countries: [], cities: [], activities
       seen.add(key); return [text];
     });
   }
+  result.cityActivities = {};
+  const assignments = value.cityActivities ?? {};
+  if (!assignments || typeof assignments !== 'object' || Array.isArray(assignments) || Object.keys(assignments).length > 30) throw new Error('Invalid city activities');
+  for (const [city, activity] of Object.entries(assignments)) {
+    if (typeof activity !== 'string' || !activity.trim() || activity.length > 200) throw new Error('Invalid city activity');
+    const selected = result.cities.find(item => item.toLowerCase() === city.trim().toLowerCase());
+    if (selected) result.cityActivities[selected] = activity.trim();
+  }
   result.budget = null;
   if (value.budget != null) {
     const budget = value.budget;
@@ -31,7 +39,7 @@ export function normalizeChoices(value = { countries: [], cities: [], activities
   return result;
 }
 export function tripReady(choices) {
-  return choices.countries.length >= 1 && choices.cities.length >= 3 && choices.activities.length >= 1 && choices.activities.length <= 2 &&
+  return choices.countries.length >= 1 && choices.cities.length >= 2 && choices.cities.every(city => choices.cityActivities?.[city]) &&
     Boolean(choices.budget) && choices.finalized === true &&
     Boolean(choices.itinerary && ['timing', 'route', 'transport', 'lodging', 'costs'].every(field => choices.itinerary[field]));
 }

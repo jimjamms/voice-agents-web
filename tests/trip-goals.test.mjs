@@ -2,14 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeChoices, tripReady } from '../worker/src/trip-goals.mjs';
 import { notesTurn } from '../worker/src/notes.mjs';
-const complete = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days', route: 'Tokyo 3 days, Kyoto 3 days, Osaka 3 days', transport: 'Trains between cities', lodging: 'Midrange hotels near stations', costs: 'Estimated flights 900, hotels 700, trains 250, food and activities 400; total 2250 USD' }, finalized: true };
+const complete = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour'], cityActivities: { Tokyo: 'Food tour', Kyoto: 'Temple walk', Osaka: 'Market visit' }, budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days', route: 'Tokyo 3 days, Kyoto 3 days, Osaka 3 days', transport: 'Trains between cities', lodging: 'Midrange hotels near stations', costs: 'Estimated flights 900, hotels 700, trains 250, food and activities 400; total 2250 USD' }, finalized: true };
 test('completion requires destination choices, confirmed budget and finalized logistics', () => {
   assert.equal(tripReady(normalizeChoices(complete)), true);
   assert.equal(tripReady(normalizeChoices({ ...complete, countries: [] })), false);
-  assert.equal(tripReady(normalizeChoices({ ...complete, cities: ['Tokyo', 'Kyoto'] })), false);
-  assert.equal(tripReady(normalizeChoices({ ...complete, activities: [] })), false);
+  assert.equal(tripReady(normalizeChoices({ ...complete, cities: ['Tokyo'] })), false);
+  assert.equal(tripReady(normalizeChoices({ ...complete, cityActivities: {} })), false);
   assert.equal(tripReady(normalizeChoices({ ...complete, activities: ['Food tour', 'Hiking'] })), true);
-  assert.equal(tripReady(normalizeChoices({ ...complete, activities: ['Food tour', 'Hiking', 'Museums'] })), false);
+  assert.equal(tripReady(normalizeChoices({ ...complete, activities: ['Food tour', 'Hiking', 'Museums'] })), true);
 });
 test('duplicate cities and malformed choices cannot satisfy the target', () => {
   const result = normalizeChoices({ ...complete, cities: ['Tokyo', 'tokyo', ' Tokyo '] });
@@ -24,7 +24,7 @@ test('notes service returns server-checked progress and instructs extraction to 
     const response = await notesTurn(request, { OPENAI_API_KEY: 'test' }, {}); const data = await response.json();
     assert.equal(response.status, 200); assert.equal(data.ready, true);
     assert.match(prompt.messages[0].content, /Agent suggestions do not count/);
-    assert.match(prompt.messages[0].content, /Preserve all selected activities even if more than two/);
+    assert.match(prompt.messages[0].content, /one user-confirmed activity assigned to EACH chosen city/);
   } finally { globalThis.fetch = original; }
 });
 
@@ -49,4 +49,15 @@ test('new final approval requires Astra, and changes invalidate existing approva
     const revised = await (await notesTurn(request('astra', complete), {}, {})).json();
     assert.equal(revised.ready, false); assert.equal(revised.choices.finalized, false);
   } finally { globalThis.fetch = original; }
+});
+
+
+test('two cities require their own confirmed activities, with no guessed assignment from legacy lists', () => {
+  const two = { ...complete, cities: ['Tokyo', 'Kyoto'], cityActivities: { Tokyo: 'Food tour', Kyoto: 'Temple walk' } };
+  assert.equal(tripReady(normalizeChoices(two)), true);
+  assert.equal(tripReady(normalizeChoices({ ...two, cityActivities: { Tokyo: 'Food tour' } })), false);
+  assert.equal(tripReady(normalizeChoices({ ...two, cityActivities: undefined })), false);
+  assert.equal(tripReady(normalizeChoices({ ...two, cityActivities: { Tokyo: 'Food tour', Osaka: 'Market' } })), false);
+  assert.throws(() => normalizeChoices({ ...two, cityActivities: { Kyoto: '' } }));
+  assert.deepEqual(normalizeChoices({ ...two, cityActivities: { tokyo: 'Food tour', KYOTO: 'Temple walk' } }).cityActivities, two.cityActivities);
 });

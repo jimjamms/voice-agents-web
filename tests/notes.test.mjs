@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import worker from '../worker/src/index.mjs';
-import { notesTurn, includeSelectedCities } from '../worker/src/notes.mjs';
+import { notesTurn, includeSelectedCities, formatChecklist } from '../worker/src/notes.mjs';
 const source = readFileSync(new URL('../docs/notes.js', import.meta.url), 'utf8');
 function setup(storage = new Map(), fetcher = async () => Response.json({ notes: 'Destination: Kyoto' })) {
   const element = () => ({ value: '', textContent: '', listeners: {}, addEventListener(type, fn) { this.listeners[type] = fn; }, focus() {}, select() {} });
@@ -81,7 +81,7 @@ test('notepad is read-only and has no user edit listener', () => {
 });
 
 test('confirmed choices persist and publish completion with the notepad', async () => {
-  const storage = new Map(); const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour', 'Hiking'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days', route: 'Tokyo, Kyoto, Osaka', transport: 'Train', lodging: 'Hotels near stations', costs: 'Estimated total 2250 USD' }, finalized: true };
+  const storage = new Map(); const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Food tour', 'Hiking'], cityActivities: { Tokyo: 'Food tour', Kyoto: 'Hiking', Osaka: 'Market visit' }, budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days', route: 'Tokyo, Kyoto, Osaka', transport: 'Train', lodging: 'Hotels near stations', costs: 'Estimated total 2250 USD' }, finalized: true };
   const app = setup(storage, async () => Response.json({ notes: 'Confirmed Japan itinerary', choices }));
   await app.notes.update(turn);
   assert.equal(app.notifications.at(-1).ready, true); assert.equal(app.notifications.at(-1).updated, true);
@@ -123,4 +123,13 @@ test('browser sends the preceding conversation along with the current turn', asy
   const app = setup(new Map(), async (_url, init) => { sent = JSON.parse(init.body); return Response.json({ notes: 'Need to know\n- Cities: Kyoto' }); });
   await app.notes.update({ ...turn, priorConversation: [{ role: 'assistant', content: 'Would you like Kyoto?', agent: 'sage' }] });
   assert.equal(sent.priorConversation[0].content, 'Would you like Kyoto?');
+});
+
+
+test('notepad separates sections and includes each confirmed city activity without duplicate city rows', () => {
+  const notes = formatChecklist('Need to know\n- Tokyo: old activity\nTo do\n[ ] Book trains\nStill undecided\n- Dates', { Tokyo: 'Food tour', Kyoto: 'Temple walk' });
+  assert.match(notes, /Tokyo: Food tour/); assert.match(notes, /Kyoto: Temple walk/);
+  assert.match(notes, /\n\nTo do\n/); assert.match(notes, /\n\nStill undecided\n/);
+  assert.equal(notes.includes('old activity'), false);
+  assert.equal((notes.match(/Tokyo:/g) || []).length, 1);
 });

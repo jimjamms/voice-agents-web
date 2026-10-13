@@ -49,7 +49,7 @@ test('stage three requires completed choices and displays the completed notes', 
   const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
   page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto', ready: false, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto'], activities: ['Hiking'] } });
   page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, true);
-  page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto, Osaka. Hiking.', ready: true, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days' }, finalized: true } });
+  page.event('trip-notes:updated', { key: 'jenny', notes: 'Japan: Tokyo, Kyoto, Osaka. Hiking.', ready: true, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], cityActivities: { Tokyo: 'Hiking', Kyoto: 'Temple walk', Osaka: 'Market visit' }, budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days' }, finalized: true } });
   page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, false);
   assert.equal(page.get('planning-stage').hidden, true); assert.match(page.get('completed-notes').value, /Osaka/);
   assert.equal(page.get('google-form-link').hidden, true);
@@ -63,11 +63,11 @@ test('only configured Google Form URLs are shown', () => {
 
 test('budget and approval remain visible requirements and revisions return to planning', () => {
   const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
-  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], budget: null, finalized: false };
+  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], cityActivities: { Tokyo: 'Hiking', Kyoto: 'Temple walk', Osaka: 'Market visit' }, budget: null, finalized: false };
   page.event('trip-notes:updated', { key: 'jenny', notes: 'Trip', choices, ready: false });
   page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, true);
-  assert.equal(page.get('budget-check').textContent, 'Budget pending');
-  assert.match(page.get('trip-goal-hint').textContent, /spending limit/);
+  assert.equal(page.get('budget-check').textContent, '○ Confirm your budget');
+  assert.match(page.get('trip-goal-hint').textContent, /budget/);
   const completed = { ...choices, budget: { amount: 2000, currency: 'USD', scope: 'whole trip' }, itinerary: { timing: '9 days' }, finalized: true };
   page.event('trip-notes:updated', { key: 'jenny', notes: 'Final trip', choices: completed, ready: true });
   page.event('trip-goal:complete'); assert.equal(page.get('review-stage').hidden, false);
@@ -85,7 +85,7 @@ test('a deleted active name ID returns to setup and clears the completed notepad
 
 test('after returning from the form, agent replies never force another automatic redirect', () => {
   const page = setup(); page.get('speaker-name').value = 'Jenny'; page.get('access-code').value = 'demo'; page.submit();
-  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days' }, finalized: true };
+  const choices = { countries: ['Japan'], cities: ['Tokyo', 'Kyoto', 'Osaka'], activities: ['Hiking'], cityActivities: { Tokyo: 'Hiking', Kyoto: 'Temple walk', Osaka: 'Market visit' }, budget: { amount: 2500, currency: 'USD', scope: 'per person' }, itinerary: { timing: '9 days' }, finalized: true };
   const update = (ready, notes) => page.event('trip-notes:updated', { key: 'jenny', notes, ready, choices });
   update(true, 'Complete trip'); page.event('trip-goal:complete');
   assert.equal(page.document.body.dataset.stage, 'review');
@@ -115,4 +115,15 @@ test('the form-return preference survives refresh and restores on a different de
   otherDevice.get('back-to-planning').listeners.click();
   otherDevice.event('trip-profile:loaded', { name: 'jenny', reviewed: false, generation: 1 }); ready(otherDevice); otherDevice.event('trip-goal:complete');
   assert.equal(otherDevice.document.body.dataset.stage, 'review');
+});
+
+
+test('goal checklist shows the missing activity city and independent completion marks', () => {
+  const page = setup(); page.get('speaker-name').value = 'Jenny';
+  page.event('trip-notes:updated', { key: 'jenny', notes: '', ready: false, choices: { countries: ['Japan'], cities: ['Tokyo', 'Kyoto'], activities: ['Food tour'], cityActivities: { Tokyo: 'Food tour' } } });
+  assert.equal(page.get('country-count').dataset.complete, 'true');
+  assert.equal(page.get('city-count').dataset.complete, 'true');
+  assert.equal(page.get('activity-count').dataset.complete, 'false');
+  assert.match(page.get('activity-count').textContent, /1 activity per city \(1\/2 cities\)/);
+  assert.match(page.get('trip-goal-hint').textContent, /Kyoto/);
 });

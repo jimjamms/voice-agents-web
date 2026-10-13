@@ -21,7 +21,7 @@
     key(speaker = this.options.speaker()) { return speaker.trim().toLowerCase() || 'unknown'; }
     text(key) {
       const value = this.saved[key];
-      return (typeof value === 'string' ? value : typeof value?.notes === 'string' ? value.notes : '').slice(0, 6000);
+      return (typeof value === 'string' ? value : typeof value?.notes === 'string' ? value.notes : '').slice(0, 6000).replace(/\n*(Need to know|To do|Still undecided)\s*:?\n/g, '\n\n$1\n').trim();
     }
     choices(key = this.key()) {
       const value = this.saved[key]?.choices || {};
@@ -32,6 +32,12 @@
           if (typeof item !== 'string' || !item.trim()) return false;
           const id = item.trim().toLowerCase(); if (seen.has(id)) return false; seen.add(id); return true;
         }).map(item => item.trim());
+      }
+      result.cityActivities = {};
+      for (const city of result.cities) {
+        const key = Object.keys(value.cityActivities || {}).find(item => item.trim().toLowerCase() === city.toLowerCase());
+        const activity = value.cityActivities?.[key];
+        if (typeof activity === 'string' && activity.trim()) result.cityActivities[city] = activity.trim();
       }
       const budget = value.budget;
       result.budget = budget && typeof budget.amount === 'number' && Number.isFinite(budget.amount) && budget.amount > 0 &&
@@ -44,7 +50,7 @@
     publish(updated) {
       const choices = this.choices();
       this.options.onChange?.({ key: this.key(), notes: this.text(this.key()), choices, updated,
-        ready: choices.countries.length >= 1 && choices.cities.length >= 3 && choices.activities.length >= 1 && choices.activities.length <= 2 && Boolean(choices.budget) && Boolean(choices.itinerary) && choices.finalized });
+        ready: choices.countries.length >= 1 && choices.cities.length >= 2 && choices.cities.every(city => choices.cityActivities[city]) && Boolean(choices.budget) && Boolean(choices.itinerary) && choices.finalized });
     }
     snapshot(speaker) { const key = this.key(speaker); return { notes: this.text(key), choices: this.choices(key) }; }
     restore(speaker, profile) {
@@ -81,7 +87,7 @@
             this.status('Your edits were kept. Auto-update skipped this turn.', key); return;
           }
           this.saved[key] = { notes: result.notes, choices: result.choices || { countries: [], cities: [], activities: [] } }; this.bump(key); this.persist(key);
-          if (key === this.key()) { this.options.textarea.value = result.notes; this.publish(true); }
+          if (key === this.key()) { this.options.textarea.value = this.text(key); this.publish(true); }
         } catch { this.status('Could not auto-update. Your saved notes are unchanged.', key); }
         finally { clearTimeout(timer); }
       });
