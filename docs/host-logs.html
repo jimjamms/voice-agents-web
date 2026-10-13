@@ -44,21 +44,20 @@
 footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.12em;color:#516a5a}
 @media(max-width:600px){.topbar{height:68px}}
 
-    .delete-card{max-width:930px;margin-top:24px;padding:28px 32px;background:#fffaf1;border:1px solid #ddcabc;border-radius:16px;box-shadow:0 10px 30px #294d400b}
-    .delete-card h2{font:800 20px Manrope,sans-serif;letter-spacing:-.03em;margin:0 0 10px}
-    .delete-card p{font-size:12px;line-height:1.7;color:#786c60;margin:0 0 20px}
+    .users-delete{margin-top:24px;padding-top:24px;border-top:1px solid #ddcabc}
+    .users-delete h3{font:800 18px Manrope,sans-serif;letter-spacing:-.03em;margin:0 0 10px}
+    .users-delete p{font-size:12px;line-height:1.7;color:#786c60;margin:0 0 20px}
     .delete-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.delete-options{display:flex;flex-wrap:wrap;gap:18px;border:0;padding:0;margin:0 0 20px}
     .delete-options legend{font-size:12px;font-weight:700;margin-bottom:12px}.delete-options label{display:flex;align-items:center;gap:8px;margin:0;font-weight:500}
     .delete-options input{width:16px;min-height:16px;height:16px;padding:0;accent-color:#94603c}
     #delete-user{background:#f1ded0;border-color:#d8b49a;color:#804b33;max-width:300px}#delete-user:hover{background:#e9cbb7}
     #delete-status{margin:16px 0 0;overflow-wrap:anywhere}
-    @media(max-width:650px){.delete-card{padding:25px}.delete-grid{grid-template-columns:1fr;gap:0}#delete-user{max-width:none}}
-/* Center the archive and deletion panels together, with matching page gutters. */
+    @media(max-width:650px){.delete-grid{grid-template-columns:1fr;gap:0}#delete-user{max-width:none}}
+/* Center host panels with matching page gutters. */
 .shell{width:100%;max-width:1240px;margin-inline:auto;padding-inline:clamp(20px,4vw,48px)}
 .topbar,footer{width:100%;max-width:1120px;margin-inline:auto}
 .intro{width:100%;max-width:930px;margin-inline:auto}
 .host-card{width:100%;margin-inline:auto;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr)}
-.delete-card{width:100%;margin-inline:auto}
 .archive,.export-panel,.delete-grid>*{min-width:0}
 @media(max-width:650px){.host-card{grid-template-columns:minmax(0,1fr)}}
 
@@ -142,10 +141,9 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
         </div>
         <p id="users-status" role="status" aria-live="polite"></p>
         <button id="users-more" type="button" hidden>Load more users</button>
-      </section>
 
-      <section class="delete-card" aria-labelledby="delete-heading">
-        <h2 id="delete-heading">Delete tester data</h2>
+        <section class="users-delete" aria-labelledby="delete-heading">
+        <h3 id="delete-heading">Delete tester data</h3>
         <p>Uses the private host key entered above. The selected saved data is erased. The tester can reuse the same name ID for a fresh trip. Older trip saves and queued logs are prevented from restoring the erased data.</p>
         <form id="user-delete">
           <div class="delete-grid"><div class="field"><label for="delete-name">Name ID</label><input id="delete-name" type="text" maxlength="40" placeholder="Exact tester name ID" autocomplete="off" required></div><div class="field"><label for="delete-confirm">Type the ID again to confirm</label><input id="delete-confirm" type="text" maxlength="40" autocomplete="off" required></div></div>
@@ -153,6 +151,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
           <button id="delete-user" type="submit"><span>Delete selected data</span><span aria-hidden="true">×</span></button>
           <p id="delete-status" role="status" aria-live="polite"></p>
         </form>
+        </section>
       </section>
     </main>
     <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>
