@@ -8,6 +8,7 @@ function setup(frameTools = {}) {
   function element(id) {
     return { id, children: [], listeners: {}, value: id === 'memory-mode' ? 'shared' : '', disabled: false,
       dataset: {}, scrollTop: 0, scrollHeight: 100, classList: { toggle() {}, remove() {} },
+      click() { this.listeners.click?.(); },
       setAttribute() {}, addEventListener(type, handler) { this.listeners[type] = handler; },
       append(...children) { this.children.push(...children); }, replaceChildren() { this.children = []; },
       querySelector() { return null; }, pause() {}, focus() {},
@@ -75,4 +76,17 @@ test('Realtime hides partial words until their boundary arrives', () => {
   assert.equal(bubble.textContent, 'Visit ');
   app.event({ type: 'response.output_audio_transcript.delta', item_id: 'words', delta: 'to.' });
   assert.equal(bubble.textContent, 'Visit Kyoto.');
+});
+
+test('Switch agent shows only the active companion and preserves each chat', () => {
+  const app = setup();
+  assert.equal(app.get('sage').hidden, false); assert.equal(app.get('astra').hidden, true);
+  app.options.onMessage('user', 'Sage trip ideas');
+  app.click('switch-agent');
+  assert.equal(app.get('sage').hidden, true); assert.equal(app.get('astra').hidden, false);
+  assert.equal(app.options.history().length, 0);
+  app.options.onMessage('user', 'Astra itinerary');
+  app.click('switch-agent');
+  assert.equal(app.get('sage').hidden, false); assert.equal(app.get('astra').hidden, true);
+  assert.equal(app.options.history()[0].content, 'Sage trip ideas');
 });

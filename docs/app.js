@@ -1,4 +1,5 @@
 (() => {
+  const switchAgent = document.querySelector('#switch-agent');
   const cards = [...document.querySelectorAll('[data-agent]')];
   const messages = document.querySelector('#messages');
   const record = document.querySelector('#record');
@@ -75,7 +76,10 @@
     document.querySelector('.conversation').dataset.agent = agent;
     const locked = enrolling || (engine === 'pipeline' ? pipeline.isLocked() : connecting || connected);
     realtimeEngine.disabled = pipelineEngine.disabled = locked;
-    cards.forEach(card => { card.disabled = locked; });
+    cards.forEach(card => { card.disabled = locked; card.hidden = card.dataset.agent !== agent; });
+    document.querySelector('.agent-options').dataset.companion = agent;
+    switchAgent.disabled = enrolling;
+    switchAgent.setAttribute('aria-label', `Switch to ${agent === 'sage' ? 'Astra' : 'Sage'}`);
     if (engine === 'pipeline') {
       tapMode.disabled = handsfreeMode.disabled = locked;
       disconnectButton.hidden = true;
@@ -206,6 +210,12 @@
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
   }));
+  switchAgent.addEventListener('click', () => {
+    if (enrolling) return;
+    if (responseActive || pipeline.playing) markInterrupted();
+    pipeline.stop(); endSession('Ready when you are');
+    cards.find(card => card.dataset.agent !== agent).click();
+  });
   document.querySelector('#reset').addEventListener('click', reset);
   disconnectButton.addEventListener('click', () => endSession());
   document.querySelector('#download').addEventListener('click', () => {

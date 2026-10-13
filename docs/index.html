@@ -8,7 +8,7 @@
   <meta name="description" content="Plan your next trip with Sage for ideas and Astra for practical itineraries.">
   <link rel="stylesheet" href="styles.css?v=travel-background-4">
   <link rel="stylesheet" href="notes.css?v=1">
-  <link rel="stylesheet" href="stages.css?v=1">
+  <link rel="stylesheet" href="stages.css?v=2">
   <script src="config.js" defer></script><script src="memory.js" defer></script><script src="notes.js" defer></script><script src="pipeline.js" defer></script><script src="app.js" defer></script><script src="stages.js" defer></script>
 </head>
 <body data-stage="setup">
@@ -54,11 +54,14 @@
       <section id="planning-stage" aria-label="Trip planning" hidden>
         <div class="planning-toolbar"><h2 id="traveler-title" tabindex="-1">Your trip</h2><button id="change-setup" type="button" class="text-button">Change setup</button></div>
       <section class="workspace" aria-label="Voice conversation">
-        <div class="chooser"><div class="agent-options" role="group" aria-label="Choose an agent">
-          <button class="agent-card active sage" type="button" data-agent="sage" aria-pressed="true"><span class="card-top">CHOOSE YOUR TRIP <span class="select-indicator">●</span></span><span class="orb" aria-hidden="true"><span></span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><strong>Sage<span class="arrow">↗</span></strong><small>Find your destination and must-do experiences.</small></button>
-          <button class="agent-card astra" type="button" data-agent="astra" aria-pressed="false"><span class="card-top">FINALIZE YOUR PLAN <span class="select-indicator">○</span></span><span class="orb" aria-hidden="true"><span></span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><strong>Astra<span class="arrow">↗</span></strong><small>Work out your itinerary, timing, and budget.</small></button>
-        </div>
+        <div class="chooser">
           <section class="trip-notepad" aria-labelledby="notes-heading"><div class="notes-head"><h2 id="notes-heading">Trip notepad</h2><div><button id="copy-notes" type="button" class="text-button">Copy</button><button id="clear-notes" type="button" class="text-button">Clear</button></div></div><label class="sr-only" for="trip-notes">Important itinerary details</label><textarea id="trip-notes" readonly maxlength="6000" placeholder="Your destination, dates, budget, and itinerary will collect here as you talk." spellcheck="true"></textarea><small id="notes-status" role="status">Automatically updated with important trip details.</small></section>
+        <div class="agent-options" role="group" aria-label="Choose an agent">
+          <button class="agent-card active sage" type="button" data-agent="sage" aria-pressed="true"><span class="card-top">CHOOSE YOUR TRIP <span class="select-indicator">●</span></span><span class="orb" aria-hidden="true"><span></span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><strong>Sage<span class="arrow">↗</span></strong><small>Find your destination and must-do experiences.</small></button>
+          <button class="agent-card astra" type="button" data-agent="astra" aria-pressed="false" hidden><span class="card-top">FINALIZE YOUR PLAN <span class="select-indicator">○</span></span><span class="orb" aria-hidden="true"><span></span></span><span class="card-landscape" aria-hidden="true"><svg viewBox="0 0 370 100" preserveAspectRatio="none"><path class="far-hill" d="M0 80Q60 15 132 53T270 32T370 44V100H0Z"/><path class="near-hill" d="M0 91Q95 39 193 74T370 56V100H0Z"/></svg></span><strong>Astra<span class="arrow">↗</span></strong><small>Work out your itinerary, timing, and budget.</small></button>
+          <button id="switch-agent" class="switch-agent-button" type="button" aria-label="Switch to Astra">Switch agent <span aria-hidden="true">⇄</span></button>
+        </div>
+
         </div>
         <div class="conversation">
           <div class="conversation-head"><div><span class="live-dot"></span><span id="conversation-title">Talking with Sage</span></div><button id="reset" type="button" class="text-button">New chat ↺</button></div>
