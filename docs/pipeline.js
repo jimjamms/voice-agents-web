@@ -278,6 +278,8 @@
       const mode = this.options.memoryMode();
       const form = new FormData();
       form.set('agent', selectedAgent);
+      form.set('trip_choices', JSON.stringify(this.options.tripChoices?.() || {}));
+      form.set('trip_notes', String(this.options.tripNotes?.() || '').slice(0, 6000));
       form.set('planning_round', this.options.planningRound?.() || '');
       form.set('defer_memory', 'true');
       form.set('speaker', speaker.name);

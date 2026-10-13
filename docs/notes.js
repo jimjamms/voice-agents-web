@@ -1,4 +1,4 @@
-/* User-visible itinerary notes; these are never injected into either agent's chat. */
+/* User-visible itinerary notes; only their basic itinerary facts are shared as public checklist context. */
 (() => {
   // Render read-only notes as text nodes so headings can be styled safely.
   function renderTripNotes(textarea, text) {

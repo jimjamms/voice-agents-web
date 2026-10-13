@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-import { memoryContext, extractFact, sharedTurnContext } from '../worker/src/memory.mjs';
+import { memoryContext, extractFact, sharedTurnContext, checklistContext } from '../worker/src/memory.mjs';
 import worker, { sessionConfig } from '../worker/src/index.mjs';
 import { notesTurn } from '../worker/src/notes.mjs';
 import agents from '../worker/src/agents.json' with { type: 'json' };
@@ -111,7 +111,7 @@ test('Recorded reply streams word groups without waiting for audio and cancels o
 
 test('Realtime session receives shared, isolated or unavailable handoff instructions', () => {
   assert.match(sessionConfig(agents.sage, 'tap', 'model', 'shared').instructions, /Do not give a message to repeat or copy/);
-  assert.match(sessionConfig(agents.astra, 'tap', 'model', 'isolated').instructions, /provide a short summary/);
+  assert.match(sessionConfig(agents.astra, 'tap', 'model', 'isolated').instructions, /Personal memories and private chat histories stay separate/);
   assert.match(sessionConfig(agents.sage, 'tap', 'model', 'invalid').instructions, /Cross-agent memory is unavailable/);
 });
 
@@ -231,5 +231,40 @@ test('GPT-6 memory and checklist requests use low reasoning without changing the
     const response = await notesTurn(new Request('https://worker.test/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ agent: 'sage', userText: 'Japan', reply: 'Great.', notes: '' }) }), env, {});
     assert.equal(response.status, 200); assert.equal(bodies.length, 2);
     for (const body of bodies) { assert.equal(body.model, 'gpt-6-astra'); assert.equal(body.reasoning_effort, 'low'); }
+  } finally { globalThis.fetch = original; }
+});
+
+
+test('public checklist context includes basic itinerary facts and excludes personal memories, unrelated notes and tasks', () => {
+  const choices = { countries: ['Japan'], cities: ['Tokyo'], cityActivities: { Tokyo: 'Food tour' }, budget: { amount: 2500, currency: 'USD', scope: 'per person', privateFact: 'secret hobby' }, memories: { sage: ['secret hobby'] }, recentShared: [{ transcript: 'private conversation' }], finalized: false };
+  const notes = 'Need to know\n- Duration: 9 days\n- Preference: private hobby\nTo do\n[ ] Book trains\nStill undecided\nBudget: tentative figure';
+  const context = checklistContext(choices, notes);
+  assert.match(context, /BOTH agents/); assert.match(context, /Tokyo/); assert.match(context, /9 days/); assert.match(context, /2500/);
+  for (const privateText of ['secret hobby', 'private hobby', 'private conversation', 'Book trains', 'tentative figure']) assert.equal(context.includes(privateText), false);
+  assert.equal(browser().checklistContext(choices, notes), context);
+  assert.equal(checklistContext({}, ''), '');
+});
+
+test('isolated pipeline can read the public notepad without receiving the other agent’s recent conversation', async () => {
+  const original = globalThis.fetch; let chat;
+  globalThis.fetch = async (url, init) => {
+    if (url.endsWith('/audio/transcriptions')) return Response.json({ text: 'Can we plan the timing?' });
+    if (url.endsWith('/audio/speech')) return new Response(new Uint8Array([1]));
+    chat = JSON.parse(init.body);
+    return Response.json({ choices: [{ message: { content: 'The trip notes say nine days. Let’s check the route.' } }] });
+  };
+  try {
+    const fd = new FormData(); fd.set('agent', 'astra'); fd.set('speaker', 'Jenny'); fd.set('memory_mode', 'isolated'); fd.set('defer_memory', 'true');
+    fd.set('trip_choices', JSON.stringify({ countries: ['Japan'], cities: ['Tokyo'], cityActivities: { Tokyo: 'Food tour' }, budget: { amount: 2500, currency: 'USD', scope: 'per person' } }));
+    fd.set('trip_notes', 'Need to know\n- Duration: 9 days\n- Private preference: quiet galleries');
+    fd.set('shared_turns', JSON.stringify([{ agent: 'sage', transcript: 'My private preference is quiet galleries.', reply: 'Okay.' }]));
+    fd.set('audio', new Blob(['audio'], { type: 'audio/webm' }), 'turn.webm');
+    const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
+    const response = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
+    assert.equal(response.status, 200);
+    const context = JSON.stringify(chat.messages);
+    assert.match(context, /Public trip notepad/); assert.match(context, /Tokyo/); assert.match(context, /9 days/);
+    assert.equal(context.includes('quiet galleries'), false);
+    assert.equal(context.includes('Recent shared conversations for Jenny'), false);
   } finally { globalThis.fetch = original; }
 });

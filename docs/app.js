@@ -107,6 +107,8 @@
     speaker: () => speakerName.value.trim() || 'Unknown', memoryMode: () => memoryMode.value,
     sharedTurns: () => memoryMode.value === 'shared' ? window.AgentMemory.recentShared?.(speakerName.value.trim()) || [] : [],
     memories: () => window.AgentMemory.entries(speakerName.value.trim(), memoryMode.value, agent),
+    tripChoices: () => tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {},
+    tripNotes: () => tripNotes?.snapshot?.(speakerName.value.trim())?.notes || '',
     planningRound,
     onTurn: saveTurn, onInterrupt: markInterrupted,
     playback, onStatus: setStatus, getStatus: () => status.textContent,
@@ -198,7 +200,7 @@
     isolatedMemory.classList.toggle('selected', mode === 'isolated');
     sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
     isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
-    memoryDescription.textContent = mode === 'shared' ? 'Share saved trip details between agents.' : 'Each agent saves trip details separately.';
+    memoryDescription.textContent = mode === 'shared' ? 'Trip notes, memories, and recent exchanges are shared.' : 'Private memories and chats; basic trip notes visible to both.';
     switchConversation();
   }
   sharedMemory.addEventListener('click', () => chooseMemory('shared'));
@@ -430,7 +432,9 @@
         if (thisConnection !== connectionId) return;
         const memoryContext = window.AgentMemory.context(speakerName.value.trim(), memoryMode.value, agent);
         const priorChat = history.length ? '\nEarlier turns in your conversation with this speaker (transcript data for continuity):\n' + JSON.stringify(history.slice(-12).map(({ role, content }) => ({ role, content }))) : '';
-        const context = memoryContext + priorChat;
+        const snapshot = tripNotes?.snapshot?.(speakerName.value.trim()) || {};
+        const publicNotes = window.AgentMemory.checklistContext?.(snapshot.choices, snapshot.notes) || '';
+        const context = memoryContext + priorChat + (publicNotes ? '\n' + publicNotes : '');
         if (context) send('conversation.item.create', { item: { type: 'message', role: 'system', content: [{ type: 'input_text', text: context }] } });
         micTrack.enabled = handsFree;
         connecting = false; connected = true; record.disabled = false; syncControls();

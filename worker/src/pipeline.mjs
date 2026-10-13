@@ -1,5 +1,5 @@
 import { chatOptions } from './chat-options.mjs';
-import { memoryContext, extractFact, sharedTurnContext } from './memory.mjs';
+import { memoryContext, extractFact, sharedTurnContext, checklistContext } from './memory.mjs';
 import pipelineAgents from './pipeline_agents.json' with { type: 'json' };
 
 const API = 'https://api.openai.com/v1';
@@ -70,6 +70,12 @@ export async function pipelineTurn(request, env, cors) {
     const roundContext = round ? '\n\nCurrent planning round: ' + round + ' This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
+    let tripChoices = {};
+    const rawTripChoices = form.get('trip_choices');
+    if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
+      try { tripChoices = JSON.parse(rawTripChoices); } catch {}
+    }
+    const publicNotes = checklistContext(tripChoices, form.get('trip_notes'));
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     let transcript = '', reply;
     if (greeting) {
@@ -89,7 +95,7 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
             { role: 'user', content: transcript }],
         }),
       })).json();
