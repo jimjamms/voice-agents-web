@@ -10,6 +10,7 @@ export function cleanTurn(turn) {
   return { turn_id: turn.turn_id, participant_id: turn.participant_id, session_id: turn.session_id,
     timestamp: new Date(turn.timestamp).toISOString(), agent: turn.agent, agent_name: agents[turn.agent].name,
     agent_traits: agents[turn.agent].traits, engine: turn.engine, memory_sharing_mode: turn.memory_sharing_mode,
+    ...(['text', 'voice', 'greeting'].includes(turn.inputMode || turn.input_mode) ? { input_mode: turn.inputMode || turn.input_mode } : {}),
     speaker: turn.speaker.trim() || 'Unknown', user_text: turn.user_text, agent_reply: turn.agent_reply, interrupted: turn.interrupted === true };
 }
 export async function saveLogs(request, env, cors) {

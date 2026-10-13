@@ -9,6 +9,10 @@
   const cards = [...document.querySelectorAll('[data-agent]')];
   const messages = document.querySelector('#messages');
   const record = document.querySelector('#record');
+  const textForm = document.querySelector('#text-chat');
+  const textInput = document.querySelector('#chat-text');
+  const textSend = document.querySelector('#send-text');
+  const readTextReply = document.querySelector('#read-text-reply');
   const recordLabel = document.querySelector('#record-label');
   const status = document.querySelector('#status');
   const hint = document.querySelector('#hint');
@@ -162,6 +166,10 @@
         handsFree ? (pipeline.active ? 'Stop hands-free' : 'Start hands-free') :
         pipeline.playing ? 'Interrupt & talk' : pipeline.pendingPlayback ? 'Hear greeting / reply' : pipeline.busy ? 'Thinking…' : pipeline.recording ? 'Stop & send' : 'Start talking';
     }
+    textForm.hidden = engine !== 'pipeline';
+    textSend.disabled = enrolling || pipeline.busy || pipeline.connecting || pipeline.recording || pipeline.active;
+    textSend.textContent = pipeline.busy ? 'Sending…' : 'Send';
+    textInput.placeholder = `Message ${agent === 'sage' ? 'Sage' : 'Astra'}…`;
     sharedMemory.disabled = isolatedMemory.disabled = locked;
     speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
     maybeCompleteTrip();
@@ -283,18 +291,19 @@
   }
   function switchConversation() {
     switchAgent.dataset.suggested = 'false';
-    conversations.set(activeConversationKey, { history, sessionId, scrollTop: messages.scrollTop });
+    conversations.set(activeConversationKey, { history, sessionId, scrollTop: messages.scrollTop, draft: textInput.value });
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
     activeConversationKey = conversationKey();
     const saved = conversations.get(activeConversationKey);
     history = saved?.history || [];
     sessionId = saved?.sessionId || crypto.randomUUID();
+    textInput.value = saved?.draft || '';
     renderConversation(saved?.scrollTop);
   }
   function reset() {
     switchAgent.dataset.suggested = 'false';
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
-    history = []; sessionId = crypto.randomUUID();
+    history = []; textInput.value = ''; sessionId = crypto.randomUUID();
     const name = speakerName.value.trim().toLowerCase() || 'unknown';
     const starts = chatStartsByName.get(name) || {};
     starts[`${memoryMode.value}:${engine}:${agent}`] = new Date().toISOString();
@@ -456,6 +465,20 @@
       endSession(error.name === 'NotAllowedError' ? 'Allow microphone access to connect.' : error.name === 'TypeError' ? 'Cannot reach the Worker. Check its URL and PUBLIC_ORIGIN.' : error.message || 'Could not connect.');
     }
   }
+  textForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (textSend.disabled || engine !== 'pipeline') return;
+    const text = textInput.value.trim(), key = activeConversationKey;
+    if (!text) { textInput.focus(); return; }
+    if (pipeline.playing) markInterrupted();
+    const sent = await pipeline.sendText(text, readTextReply.checked);
+    if (sent && activeConversationKey === key && textInput.value.trim() === text) textInput.value = '';
+  });
+  textInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !event.repeat) {
+      event.preventDefault(); if (!textSend.disabled) textForm.requestSubmit();
+    }
+  });
   record.addEventListener('click', async () => {
     if (engine === 'pipeline') { await pipeline.press(); return; }
     if (connecting) return;

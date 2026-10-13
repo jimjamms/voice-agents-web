@@ -92,3 +92,11 @@ test('user list pagination and case-insensitive literal search cover every saved
   data = await (await listUsers(userRequest('?q=alex'), env, {})).json(); assert.equal(data.users[0].tripStatus, 'Trip reset');
   db.db.close();
 });
+
+
+test('typed input provenance is retained in the host JSON log', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'host-only' };
+  await saveLogs(post([{ ...turn, input_mode: 'text' }]), env, {});
+  const data = await (await exportLogs(admin(), env, {})).json();
+  assert.equal(data.turns[0].input_mode, 'text'); assert.equal(data.turns[0].user_text, turn.user_text); db.db.close();
+});

@@ -269,9 +269,16 @@
       if (generation !== this.generation) return;
       await this.submit(null, generation);
     }
-    async submit(blob, generation) {
+    async sendText(text, speakReply = false) {
+      text = String(text || '').trim();
+      if (!text || text.length > 1600 || this.busy || this.connecting || this.recording || this.active) return false;
+      if (!this.options.code()) { this.status('Enter the demo access code first.'); this.options.focusCode(); return false; }
+      this.stopPlayback();
+      return Boolean(await this.submit(null, ++this.generation, text, speakReply));
+    }
+    async submit(blob, generation, text = null, speakReply = true) {
       this.busy = true; this.notify();
-      this.status(blob ? 'Preparing your reply…' : 'Preparing your welcome…', 'Your agent will speak when the reply is ready.');
+      this.status(blob || text !== null ? 'Preparing your reply…' : 'Preparing your welcome…', text !== null && !speakReply ? 'Your agent will answer here in text.' : 'Your agent will speak when the reply is ready.');
       this.request = new AbortController();
       const speaker = { name: this.options.speaker(), score: 1 };
       const selectedAgent = this.options.agent();
@@ -287,7 +294,8 @@
       form.set('memories', JSON.stringify(this.options.memories()));
       form.set('shared_turns', JSON.stringify(mode === 'shared' ? this.options.sharedTurns?.() || [] : []));
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
-      if (!blob) form.set('greeting', 'true');
+      if (text !== null) { form.set('text', text); form.set('reply_audio', String(speakReply)); }
+      else if (!blob) form.set('greeting', 'true');
       const extension = blob?.type.includes('mp4') ? 'm4a' : blob?.type.includes('ogg') ? 'ogg' : 'webm';
       if (blob) form.set('audio', blob, `turn.${extension}`);
       let shouldResume = false;
@@ -305,6 +313,9 @@
         if (generation !== this.generation) return;
         this.options.onMessage('user', result.transcript, speaker);
         this.beginReply(result.reply);
+        if (!result.audio) {
+          this.finishReply(); this.status('Your turn', 'Type a message or tap Start talking.'); return true;
+        }
         const bytes = Uint8Array.from(atob(result.audio), char => char.charCodeAt(0));
         this.audioUrl = URL.createObjectURL(new Blob([bytes], { type: result.mimeType || 'audio/mpeg' }));
         this.options.playback.src = this.audioUrl;
@@ -317,6 +328,7 @@
           if (this.active) this.resume();
           this.status('Tap play to hear the reply.', 'Your browser paused automatic playback.');
         }
+        return true;
       } catch (error) {
         if (generation !== this.generation) return;
         this.status(error.name === 'TypeError' ? 'Cannot reach the Worker. Check its URL and PUBLIC_ORIGIN.' : error.message || 'Voice request failed.', 'Check your connection and try again.');

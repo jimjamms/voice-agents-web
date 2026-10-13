@@ -37,7 +37,7 @@ async function upstream(path, options) {
 }
 export async function pipelineTurn(request, env, cors) {
   if (!(request.headers.get('content-type') || '').startsWith('multipart/form-data'))
-    return json({ error: 'Expected recorded audio.' }, 415, cors);
+    return json({ error: 'Expected a voice or text turn.' }, 415, cors);
   if (Number(request.headers.get('content-length')) > MAX_AUDIO_BYTES + 100000)
     return json({ error: 'Recording is too large.' }, 413, cors);
   try {
@@ -46,12 +46,18 @@ export async function pipelineTurn(request, env, cors) {
     const agent = Object.hasOwn(pipelineAgents, name) ? pipelineAgents[name] : null;
     const audio = form.get('audio');
     const greeting = form.get('greeting') === 'true';
+    const hasText = form.has('text');
+    const text = form.get('text');
+    if (hasText && (typeof text !== 'string' || !text.trim() || text.length > MAX_TEXT)) return json({ error: 'Enter a message of up to 1600 characters.' }, 400, cors);
+    if (hasText && (audio || greeting)) return json({ error: 'Send either text or recorded audio.' }, 400, cors);
+    const inputMode = greeting ? 'greeting' : hasText ? 'text' : 'voice';
+    const speakReply = !hasText || form.get('reply_audio') === 'true';
     const memoryDeferred = !greeting && form.get('defer_memory') === 'true';
     if (!agent) return json({ error: 'Unknown agent.' }, 400, cors);
-    if (!greeting && (!(audio instanceof Blob) || !audio.size || audio.size > MAX_AUDIO_BYTES))
+    if (!greeting && !hasText && (!(audio instanceof Blob) || !audio.size || audio.size > MAX_AUDIO_BYTES))
       return json({ error: 'Recording is missing or too large.' }, 400, cors);
-    const format = greeting ? null : formats.get(audio.type.split(';')[0]);
-    if (!greeting && !format) return json({ error: 'Unsupported recording format.' }, 415, cors);
+    const format = greeting || hasText ? null : formats.get(audio.type.split(';')[0]);
+    if (!greeting && !hasText && !format) return json({ error: 'Unsupported recording format.' }, 415, cors);
     const speaker = String(form.get('speaker') || 'Unknown').trim().slice(0, 40) || 'Unknown';
     let memories = [];
     const rawMemories = form.get('memories');
@@ -82,15 +88,18 @@ export async function pipelineTurn(request, env, cors) {
       const returning = safeHistory(form.get('history')).length > 0;
       reply = returning ? (name === 'sage' ? "Welcome back! It’s Sage. What would you like to explore for your trip today?" : "Welcome back. It’s Astra. What part of your itinerary would you like to work on?") : name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. Which country would you like to visit?" : "Hi, I’m Astra. I’ll help check how your trip ideas fit your time and budget. What would you like to check first?";
     } else {
-      const input = new FormData();
-      input.set('file', audio, `turn.${format}`);
-      input.set('model', 'whisper-1');
-      input.set('language', 'en');
-      const transcription = await (await upstream('/audio/transcriptions', {
-        method: 'POST', headers: authorization, body: input,
-      })).json();
-      transcript = String(transcription.text || '').trim().slice(0, MAX_TEXT);
-      if (!transcript) return json({ error: 'I could not hear anything. Try speaking again.' }, 422, cors);
+      if (hasText) transcript = text.trim();
+      else {
+        const input = new FormData();
+        input.set('file', audio, `turn.${format}`);
+        input.set('model', 'whisper-1');
+        input.set('language', 'en');
+        const transcription = await (await upstream('/audio/transcriptions', {
+          method: 'POST', headers: authorization, body: input,
+        })).json();
+        transcript = String(transcription.text || '').trim().slice(0, MAX_TEXT);
+        if (!transcript) return json({ error: 'I could not hear anything. Try speaking again.' }, 422, cors);
+      }
       const chat = await (await upstream('/chat/completions', {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -103,12 +112,13 @@ export async function pipelineTurn(request, env, cors) {
       if (!reply) throw new Error('Empty model reply.');
     }
     const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
+    if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, fact: await factPromise, traits: agent.traits, audio: null }, 200, cors);
     const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: agent.voice,
         instructions: agent.instructions, input: reply, response_format: 'mp3' }),
     });
-    return json({ transcript, reply, greeting, memoryDeferred, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
+    return json({ transcript, reply, greeting, inputMode, memoryDeferred, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
   } catch (error) {
     console.error('Pipeline turn failed:', error);
     return json({ error: 'Could not complete this turn. Check API billing and try again.' }, 502, cors);

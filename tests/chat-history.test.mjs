@@ -219,3 +219,24 @@ test('switch label names the target agent and follows switching while recommenda
   app.options.onMessage('assistant', 'Switch back to Sage to choose the next city.');
   assert.equal(app.get('switch-agent').dataset.suggested, 'true');
 });
+
+
+test('text composer clears successful sends, keeps failed drafts, and preserves drafts separately by agent', async () => {
+  const app = setup(); const sent = [];
+  app.transport.sendText = async (text, audio) => { sent.push({ text, audio }); return true; };
+  app.get('chat-text').value = 'Tokyo and Kyoto'; app.get('read-text-reply').checked = false;
+  await app.get('text-chat').listeners.submit({ preventDefault() {} });
+  assert.deepEqual(sent, [{ text: 'Tokyo and Kyoto', audio: false }]); assert.equal(app.get('chat-text').value, '');
+  app.transport.sendText = async () => false;
+  app.get('chat-text').value = 'Unsaved Sage draft';
+  await app.get('text-chat').listeners.submit({ preventDefault() {} }); assert.equal(app.get('chat-text').value, 'Unsaved Sage draft');
+  app.click('astra'); assert.equal(app.get('chat-text').value, '');
+  app.get('chat-text').value = 'Astra draft'; app.click('sage'); assert.equal(app.get('chat-text').value, 'Unsaved Sage draft');
+});
+test('Enter sends text while Shift+Enter and IME confirmation do not send', () => {
+  const app = setup(); let submitted = 0;
+  app.get('text-chat').requestSubmit = () => submitted++;
+  const key = values => app.get('chat-text').listeners.keydown({ key: 'Enter', preventDefault() {}, ...values });
+  key({ shiftKey: true }); key({ isComposing: true }); key({ repeat: true }); assert.equal(submitted, 0);
+  key({}); assert.equal(submitted, 1);
+});

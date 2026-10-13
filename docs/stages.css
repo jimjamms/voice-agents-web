@@ -196,3 +196,21 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
 .switch-agent-button strong{font:inherit}
 .switch-agent-button[data-suggested="true"]:not(:disabled)::before{content:'Suggested next';position:absolute;top:-11px;left:12px;padding:3px 9px;border-radius:20px;background:#476e53;color:#fffaf2;font-size:10px;font-weight:700;line-height:1.4;box-shadow:0 2px 5px #36553f25;pointer-events:none}
 .agent-options[data-companion="astra"] .switch-agent-button[data-suggested="true"]:not(:disabled)::before{background:#94603c;box-shadow:0 2px 5px #69482f25}
+
+/* Typed messages share the same conversation and planning state as voice turns. */
+.text-chat{margin:0 0 18px;padding-bottom:16px;border-bottom:1px solid #d5dfce}
+.text-chat-row{display:flex;align-items:flex-end;gap:10px}
+#chat-text{flex:1;min-width:0;resize:vertical;min-height:66px;max-height:170px;padding:12px 14px;border:1px solid #b5ccb0;border-radius:10px;background:#f3f8ef;color:#36553f;font:14px/1.6 'DM Sans',sans-serif}
+#chat-text:focus{outline:2px solid #476e53;outline-offset:2px}
+#chat-text::placeholder{color:#73836b}
+#send-text{flex-shrink:0;padding:12px 18px;min-height:44px;border:1px solid #8ba786;border-radius:9px;background:#b6ceb0;color:#293d31;font:700 12px 'DM Sans',sans-serif;cursor:pointer}
+#send-text:disabled{cursor:wait}
+.text-chat-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-top:9px;font-size:10px;color:#73836b}
+.text-chat-meta label{display:flex;align-items:center;gap:6px;cursor:pointer}
+#read-text-reply{accent-color:#476e53}
+.conversation[data-agent="sage"] .text-chat{border-color:#dec6a7}
+.conversation[data-agent="sage"] #chat-text{border-color:#dec6a7;background:#fff7ec;color:#654c35}
+.conversation[data-agent="sage"] #chat-text:focus{outline-color:#94603c}
+.conversation[data-agent="sage"] #chat-text::placeholder,.conversation[data-agent="sage"] .text-chat-meta{color:#88735d}
+.conversation[data-agent="sage"] #send-text{border-color:#c79e78;background:#e7b98b;color:#493324}
+.conversation[data-agent="sage"] #read-text-reply{accent-color:#94603c}
