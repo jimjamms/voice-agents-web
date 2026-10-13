@@ -57,7 +57,7 @@ test('pipeline injects saved facts and extracts new ones with configured chat mo
     const fd = new FormData(); fd.set('agent', 'astra'); fd.set('speaker', 'Jenny');
     fd.set('memories', JSON.stringify([{ fact: 'Jenny likes games.', learned_by: 'Sage' }]));
     fd.set('audio', new Blob(['audio'], { type: 'audio/webm' }), 'turn.webm');
-    const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', PIPELINE_CHAT_MODEL: 'configured-model', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
+    const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', VOICE_CHAT_MODEL: 'configured-model', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
     const response = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
     const data = await response.json();
     assert.equal(response.status, 200); assert.equal(data.fact, 'Jenny likes Hanabi.');
@@ -187,4 +187,28 @@ test('blocked greeting playback is retried before starting the microphone', asyn
   await transport.press();
   assert.equal(played, 1); assert.equal(transport.pendingPlayback, false);
   assert.equal(transport.recording, false); assert.equal(transport.playing, true);
+});
+
+
+test('browser voice replies skip memory extraction and retain the configured GPT-6 Astra model', async () => {
+  const original = globalThis.fetch; const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    if (url.endsWith('/audio/transcriptions')) return Response.json({ text: 'I want to visit Tokyo and Kyoto.' });
+    if (url.endsWith('/audio/speech')) return new Response(new Uint8Array([1]));
+    const body = JSON.parse(init.body);
+    assert.equal(body.messages[0].content.startsWith('Extract'), false);
+    assert.equal(body.model, 'gpt-6-astra');
+    return Response.json({ choices: [{ message: { content: 'What activity would you like in Tokyo?' } }] });
+  };
+  try {
+    const fd = new FormData(); fd.set('agent', 'sage'); fd.set('speaker', 'Jenny'); fd.set('defer_memory', 'true');
+    fd.set('audio', new Blob(['audio'], { type: 'audio/webm' }), 'turn.webm');
+    const env = { PUBLIC_ORIGIN: 'https://example.github.io', DEMO_ACCESS_CODE: 'test', OPENAI_API_KEY: 'key', PIPELINE_CHAT_MODEL: 'gpt-6-astra', DEMO_RATE_LIMITER: { async limit() { return { success: true }; } } };
+    const response = await worker.fetch(new Request('https://worker.test/turn', { method: 'POST', headers: { origin: env.PUBLIC_ORIGIN, 'x-demo-code': 'test' }, body: fd }), env);
+    const data = await response.json();
+    assert.equal(response.status, 200); assert.equal(data.memoryDeferred, true); assert.equal(data.fact, null);
+    assert.ok(data.audio); assert.equal(calls.length, 3);
+    assert.equal(calls.filter(call => call.url.endsWith('/chat/completions')).length, 1);
+  } finally { globalThis.fetch = original; }
 });

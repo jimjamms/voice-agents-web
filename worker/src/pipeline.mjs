@@ -45,6 +45,7 @@ export async function pipelineTurn(request, env, cors) {
     const agent = Object.hasOwn(pipelineAgents, name) ? pipelineAgents[name] : null;
     const audio = form.get('audio');
     const greeting = form.get('greeting') === 'true';
+    const memoryDeferred = !greeting && form.get('defer_memory') === 'true';
     if (!agent) return json({ error: 'Unknown agent.' }, 400, cors);
     if (!greeting && (!(audio instanceof Blob) || !audio.size || audio.size > MAX_AUDIO_BYTES))
       return json({ error: 'Recording is missing or too large.' }, 400, cors);
@@ -83,7 +84,7 @@ export async function pipelineTurn(request, env, cors) {
       const chat = await (await upstream('/chat/completions', {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: env.PIPELINE_CHAT_MODEL || 'gpt-4.1-mini',
+          model: env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra',
           messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []),
             { role: 'user', content: transcript }],
         }),
@@ -91,13 +92,13 @@ export async function pipelineTurn(request, env, cors) {
       reply = String(chat.choices?.[0]?.message?.content || '').trim().slice(0, 3500);
       if (!reply) throw new Error('Empty model reply.');
     }
-    const factPromise = greeting ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
+    const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
     const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: agent.voice,
         instructions: agent.instructions, input: reply, response_format: 'mp3' }),
     });
-    return json({ transcript, reply, greeting, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
+    return json({ transcript, reply, greeting, memoryDeferred, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
   } catch (error) {
     console.error('Pipeline turn failed:', error);
     return json({ error: 'Could not complete this turn. Check API billing and try again.' }, 502, cors);
