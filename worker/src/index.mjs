@@ -1,6 +1,6 @@
 import { profileRequest } from './profiles.mjs';
 import agents from './agents.json' with { type: 'json' };
-import { saveLogs, exportLogs, deleteUserData } from './logs.mjs';
+import { saveLogs, exportLogs, deleteUserData, listUsers } from './logs.mjs';
 import { notesTurn } from './notes.mjs';
 import { memoryTurn } from './memory.mjs';
 import { pipelineTurn } from './pipeline.mjs';
@@ -46,9 +46,10 @@ export default {
       return json({ status: 'ok', modes: ['realtime', 'pipeline'] }, 200, { 'cache-control': 'no-store' });
     }
     const allowedOrigin = env.PUBLIC_ORIGIN?.replace(/\/$/, '');
-    if ((url.pathname === '/logs/export' && request.method === 'GET') || (url.pathname === '/logs/delete' && request.method === 'POST')) {
+    if ((['/logs/export', '/logs/users'].includes(url.pathname) && request.method === 'GET') || (url.pathname === '/logs/delete' && request.method === 'POST')) {
       const origin = request.headers.get('origin');
       if (origin && origin !== allowedOrigin) return json({ error: 'Origin not allowed.' }, 403);
+      if (url.pathname === '/logs/users') return listUsers(request, env, origin ? corsFor(allowedOrigin) : {});
       return url.pathname === '/logs/delete' ? deleteUserData(request, env, origin ? corsFor(allowedOrigin) : {}) : exportLogs(request, env, origin ? corsFor(allowedOrigin) : {});
     }
     if (!allowedOrigin || request.headers.get('origin') !== allowedOrigin) {
@@ -61,7 +62,7 @@ export default {
       return json({ error: 'Voice service is not configured.' }, 503, cors);
     }
     const ip = request.headers.get('cf-connecting-ip') || 'unknown';
-    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: ['/notes', '/logs', '/profile', '/profile-status'].includes(url.pathname) ? `${ip}:${url.pathname.slice(1)}` : ip });
+    const { success } = await env.DEMO_RATE_LIMITER.limit({ key: ['/memory', '/notes', '/logs', '/profile', '/profile-status'].includes(url.pathname) ? `${ip}:${url.pathname.slice(1)}` : ip });
     if (!success) return json({ error: 'Too many new sessions. Wait a minute and try again.' }, 429, cors);
     if (!validCode(request.headers.get('x-demo-code'), env.DEMO_ACCESS_CODE)) {
       return json({ error: 'Invalid demo access code.' }, 401, cors);

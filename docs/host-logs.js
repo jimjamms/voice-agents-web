@@ -41,7 +41,64 @@
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not delete data.');
       deleteStatus.textContent = `Deleted ${data.profilesDeleted} saved trip profile(s) and ${data.turnsDeleted} chat turn(s) for ${name}. The same name ID can now be reused for a fresh trip.`;
       document.querySelector('#delete-confirm').value = '';
+      const listed = users.find(user => user.nameId === name.toLowerCase());
+      if (listed) {
+        if (trip) listed.tripStatus = 'Trip reset';
+        if (logs) listed.chatTurns = 0;
+        if (trip) listed.lastSaved = new Date().toISOString();
+        if (logs && listed.tripStatus === 'Logs only') { users = users.filter(user => user !== listed); userTotal--; }
+        renderUsers();
+        userStatus.textContent = 'User list updated. Reset Name IDs remain reusable.';
+      }
     } catch (error) { deleteStatus.textContent = error.message || 'Could not delete data.'; }
     finally { deleteButton.disabled = button.disabled = false; keyInput.value = ''; }
   });
+  const userForm = document.querySelector('#user-list-form'), userButton = document.querySelector('#load-users');
+  const userRows = document.querySelector('#users-rows'), userStatus = document.querySelector('#users-status'), moreUsers = document.querySelector('#users-more');
+  let users = [], nextUser = null, userSearch = '', userTotal = 0;
+  function renderUsers() {
+    userRows.replaceChildren();
+    if (!users.length) {
+      const row = document.createElement('tr'), cell = document.createElement('td'); cell.colSpan = 5;
+      cell.textContent = 'No saved users match this search.'; row.append(cell); userRows.append(row); return;
+    }
+    for (const user of users) {
+      const row = document.createElement('tr');
+      const date = user.lastSaved ? new Date(user.lastSaved) : null;
+      const values = [user.nameId, user.chatTurns, date && Number.isFinite(date.getTime()) ? date.toLocaleString() : '—', user.tripStatus];
+      values.forEach((value, index) => { const cell = document.createElement('td'); cell.textContent = String(value); if (!index) cell.className = 'user-id'; row.append(cell); });
+      const actions = document.createElement('td'), use = document.createElement('button');
+      use.type = 'button'; use.className = 'user-use'; use.textContent = 'Use ID'; use.setAttribute('aria-label', `Use ${user.nameId} for export or deletion`);
+      use.addEventListener('click', () => {
+        document.querySelector('#log-speaker').value = user.nameId;
+        document.querySelector('#delete-name').value = user.nameId;
+        document.querySelector('#delete-confirm').value = '';
+        userStatus.textContent = `Selected ${user.nameId}. Export and deletion fields are filled; deletion still requires confirmation.`;
+      });
+      actions.append(use); row.append(actions); userRows.append(row);
+    }
+  }
+  async function loadUsers(append = false) {
+    if (userButton.disabled || button.disabled || deleteButton.disabled) return;
+    const keyInput = document.querySelector('#host-key'), key = keyInput.value.trim(), base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
+    if (!key || !base) { userStatus.textContent = 'Enter your private host key above to load users.'; keyInput.focus(); return; }
+    const query = append ? userSearch : document.querySelector('#user-search').value.trim();
+    userButton.disabled = moreUsers.disabled = button.disabled = deleteButton.disabled = true;
+    userStatus.textContent = 'Loading users…';
+    try {
+      const url = new URL(`${base.replace(/\/$/, '')}/logs/users`);
+      if (query) url.searchParams.set('q', query);
+      if (append && nextUser) url.searchParams.set('cursor', nextUser);
+      const response = await fetch(url, { headers: { authorization: `Bearer ${key}` } });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not load users.');
+      if (!Array.isArray(data.users)) throw new Error('Invalid user list.');
+      users = append ? [...users, ...data.users.filter(user => !users.some(old => old.nameId === user.nameId))] : data.users;
+      nextUser = data.nextCursor; userTotal = data.total; userSearch = query;
+      renderUsers(); moreUsers.hidden = !nextUser;
+      userStatus.textContent = `${users.length} of ${userTotal} users shown.${nextUser ? ' Re-enter your host key to load more.' : ''}`;
+    } catch (error) { userStatus.textContent = error.message || 'Could not load users.'; }
+    finally { userButton.disabled = moreUsers.disabled = button.disabled = deleteButton.disabled = false; keyInput.value = ''; }
+  }
+  userForm.addEventListener('submit', event => { event.preventDefault(); void loadUsers(); });
+  moreUsers.addEventListener('click', () => { if (nextUser) void loadUsers(true); });
 })();

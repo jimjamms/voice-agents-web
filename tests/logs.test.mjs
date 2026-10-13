@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { saveLogs, exportLogs, cleanTurn } from '../worker/src/logs.mjs';
+import { saveLogs, exportLogs, cleanTurn, listUsers } from '../worker/src/logs.mjs';
 import worker from '../worker/src/index.mjs';
 const turn = { turn_id:'turn-1',participant_id:'participant-1',session_id:'session-1',timestamp:'2026-10-13T05:00:00Z',agent:'sage',engine:'pipeline',memory_sharing_mode:'shared',speaker:'Jenny',user_text:'I chose Kyoto.',agent_reply:'We can plan your trip.',interrupted:false };
 function database() {
@@ -51,4 +51,44 @@ test('an interruption update made during upload is kept for the next upload',asy
   let release;const app=logger(new Map(),()=>new Promise(resolve=>{release=resolve}));const current={...turn};app.value.record(current);app.setCode('demo');const pending=app.value.flush();
   current.interrupted=true;app.value.record(current);release(Response.json({saved:[turn.turn_id]}));await pending;
   assert.equal(app.value.queue.length,1);assert.equal(app.value.queue[0].interrupted,true);
+});
+
+
+const userRequest = (query = '', key = 'host-only', origin) => new Request('https://worker.test/logs/users' + query, { headers: { authorization: `Bearer ${key}`, ...(origin ? { origin } : {}) } });
+test('host user list combines profiles and logs, deduplicates IDs, and exposes only summary metadata', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'host-only' };
+  await saveLogs(post([turn, { ...turn, turn_id: 'turn-2', speaker: 'JENNY' }]), env, {});
+  const insert = db.db.prepare('INSERT INTO trip_profiles(name_id,payload) VALUES(?,?)');
+  insert.run('jenny', JSON.stringify({ notes: 'PRIVATE itinerary text', memories: { sage: ['PRIVATE personal memory'] } }));
+  insert.run('alex', JSON.stringify({ notes: '', memories: {} }));
+  const response = await listUsers(userRequest(), env, {}), data = await response.json();
+  assert.equal(response.status, 200); assert.equal(data.total, 2);
+  assert.deepEqual(data.users.map(user => user.nameId), ['alex', 'jenny']);
+  assert.equal(data.users[1].chatTurns, 2); assert.equal(data.users[1].tripStatus, 'Saved trip');
+  assert.ok(Number.isFinite(Date.parse(data.users[1].lastSaved)));
+  assert.equal(JSON.stringify(data).includes('PRIVATE'), false); assert.equal(data.nextCursor, null);
+  db.db.close();
+});
+test('user list requires the private host key and rejects a different origin', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'host-only', PUBLIC_ORIGIN: 'https://example.github.io' };
+  assert.equal((await worker.fetch(userRequest('', 'demo-code', env.PUBLIC_ORIGIN), env)).status, 401);
+  assert.equal((await worker.fetch(userRequest('', 'host-only', 'https://other.test'), env)).status, 403);
+  const response = await worker.fetch(userRequest('', 'host-only', env.PUBLIC_ORIGIN), env);
+  assert.equal(response.status, 200); assert.equal(response.headers.get('access-control-allow-origin'), env.PUBLIC_ORIGIN);
+  assert.equal(response.headers.get('cache-control'), 'no-store'); db.db.close();
+});
+test('user list pagination and case-insensitive literal search cover every saved ID', async () => {
+  const db = database(), env = { LOG_DB: db, LOG_ADMIN_KEY: 'host-only' };
+  const insert = db.db.prepare('INSERT INTO trip_profiles(name_id,payload) VALUES(?,?)');
+  for (const name of ['alex', 'jenny', 'jenny_trip']) insert.run(name, JSON.stringify({ notes: '' }));
+  let data = await (await listUsers(userRequest('?limit=2'), env, {})).json();
+  assert.equal(data.total, 3); assert.deepEqual(data.users.map(user => user.nameId), ['alex', 'jenny']); assert.equal(data.nextCursor, 'jenny');
+  data = await (await listUsers(userRequest('?limit=2&cursor=jenny'), env, {})).json();
+  assert.deepEqual(data.users.map(user => user.nameId), ['jenny_trip']); assert.equal(data.nextCursor, null);
+  data = await (await listUsers(userRequest('?q=JENNY'), env, {})).json(); assert.equal(data.total, 2);
+  data = await (await listUsers(userRequest('?q=%25'), env, {})).json(); assert.equal(data.total, 0);
+  assert.equal((await listUsers(userRequest('?limit=101'), env, {})).status, 400);
+  db.db.prepare('INSERT INTO deleted_name_ids(name_id,trip_blocked,logs_blocked,generation) VALUES(?,?,?,?)').run('alex', 0, 1, 1);
+  data = await (await listUsers(userRequest('?q=alex'), env, {})).json(); assert.equal(data.users[0].tripStatus, 'Trip reset');
+  db.db.close();
 });

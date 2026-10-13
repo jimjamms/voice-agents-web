@@ -78,3 +78,38 @@ export async function deleteUserData(request, env, cors) {
     return json({ name, profilesDeleted: data.trip ? result[index++].meta.changes : 0, turnsDeleted: data.logs ? result[index].meta.changes : 0 }, 200, cors);
   } catch { return json({ error: 'Could not delete data. Check the database migrations and try again.' }, 503, cors); }
 }
+
+export async function listUsers(request, env, cors) {
+  if (!env.LOG_ADMIN_KEY) return json({ error: 'Host user listing is not configured.' }, 503, cors);
+  if (!validKey(request.headers.get('authorization')?.replace(/^Bearer /, ''), env.LOG_ADMIN_KEY)) return json({ error: 'Invalid host key.' }, 401, cors);
+  if (!env.LOG_DB) return json({ error: 'User storage is not configured.' }, 503, cors);
+  const url = new URL(request.url);
+  const cursor = (url.searchParams.get('cursor') || '').trim().toLowerCase();
+  const search = (url.searchParams.get('q') || '').trim().toLowerCase();
+  const limit = Number(url.searchParams.get('limit') || 100);
+  if (cursor.length > 40 || search.length > 40 || !Number.isInteger(limit) || limit < 1 || limit > 100) return json({ error: 'Invalid user-list filter.' }, 400, cors);
+  try {
+    const { results } = await env.LOG_DB.prepare(`WITH names AS (
+      SELECT name_id FROM trip_profiles UNION SELECT speaker_lower AS name_id FROM chat_turns
+    ), filtered AS (SELECT name_id FROM names WHERE instr(name_id, ?) > 0), chats AS (
+      SELECT speaker_lower, COUNT(*) AS turn_count, MAX(received_at) AS last_seen FROM chat_turns GROUP BY speaker_lower
+    ) SELECT n.name_id, p.payload, p.updated_at, COALESCE(c.turn_count, 0) AS turn_count,
+      COALESCE(d.generation, 0) AS generation,
+      CASE WHEN c.last_seen IS NULL OR julianday(p.updated_at) >= julianday(c.last_seen)
+        THEN strftime('%Y-%m-%dT%H:%M:%fZ', p.updated_at) ELSE c.last_seen END AS last_saved,
+      (SELECT COUNT(*) FROM filtered) AS total_count
+    FROM filtered n LEFT JOIN trip_profiles p ON p.name_id = n.name_id
+      LEFT JOIN chats c ON c.speaker_lower = n.name_id LEFT JOIN deleted_name_ids d ON d.name_id = n.name_id
+    WHERE n.name_id > ? ORDER BY n.name_id LIMIT ?`).bind(search, cursor, limit + 1).all();
+    const page = results.slice(0, limit);
+    const users = page.map(row => {
+      let profile;
+      try { profile = row.payload ? JSON.parse(row.payload) : null; } catch { profile = null; }
+      const hasTrip = Boolean(profile && (profile.notes?.trim() || profile.choices?.countries?.length || profile.choices?.cities?.length || profile.choices?.budget ||
+        Object.values(profile.memories || {}).some(value => Array.isArray(value) && value.length)));
+      return { nameId: row.name_id, chatTurns: Number(row.turn_count), lastSaved: row.last_saved || null,
+        tripStatus: hasTrip ? 'Saved trip' : row.generation > 0 && profile ? 'Trip reset' : profile ? 'New trip' : 'Logs only' };
+    });
+    return json({ users, total: Number(results[0]?.total_count || 0), nextCursor: results.length > limit ? page.at(-1).name_id : null }, 200, cors);
+  } catch { return json({ error: 'Could not load users. Check the database migrations and try again.' }, 503, cors); }
+}
