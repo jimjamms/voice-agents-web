@@ -83,6 +83,10 @@ export async function deleteUserData(request, env, cors) {
     ON CONFLICT(name_id) DO UPDATE SET payload = excluded.payload, version = trip_profiles.version + 1, updated_at = CURRENT_TIMESTAMP`).bind(name, empty));
   if (data.logs) statements.push(env.LOG_DB.prepare('DELETE FROM chat_turns WHERE speaker_lower = ?').bind(name));
   try {
+    try {
+      await env.LOG_DB.prepare('SELECT name_id FROM metrics_analyses WHERE name_id = ? LIMIT 1').bind(name).all();
+      statements.push(env.LOG_DB.prepare('DELETE FROM metrics_analyses WHERE name_id = ?').bind(name));
+    } catch (error) { if (!/no such table.*metrics_analyses/i.test(error.message || '')) throw error; }
     const result = await env.LOG_DB.batch(statements);
     let index = 1;
     return json({ name, profilesDeleted: data.trip ? result[index++].meta.changes : 0, turnsDeleted: data.logs ? result[index].meta.changes : 0 }, 200, cors);

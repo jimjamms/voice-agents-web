@@ -77,7 +77,8 @@
       evidence.append(section);
     }
     card(objective, 'Cross-agent preference conflicts', scores?.crossAgentConflicts ?? '—', 'Suggestions conflicting with a preference told to the other agent in this session, even if unavailable in separate mode.', 'AI estimate · user experience');
-    analyze.disabled = !s.userTurns; download.disabled = false;
+    analyze.textContent = data.analysis ? 'Reanalyze · API' : 'Analyze this session · API';
+    analyze.disabled = !s.userTurns || data.analysisStorage?.available === false; download.disabled = false;
   }
   async function load(analyzeConversation = false) {
     if (busy) return;
@@ -87,21 +88,26 @@
     const token = ++generation, name = selected;
     status.textContent = analyzeConversation ? 'Analyzing conversation…' : 'Loading metrics…';
     try {
-      const url = new URL(`${base.replace(/\/$/, '')}/logs/metrics`); url.searchParams.set('speaker', name); if (analyzeConversation && sessionId) url.searchParams.set('session', sessionId);
+      const url = new URL(`${base.replace(/\/$/, '')}/logs/metrics`); url.searchParams.set('speaker', name); if (analyzeConversation && sessionId) url.searchParams.set('session', sessionId); if (analyzeConversation) url.searchParams.set('refresh', 'true');
       const response = await fetch(url, { method: analyzeConversation ? 'POST' : 'GET', headers: { authorization: `Bearer ${key}` } });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Metrics failed.');
       if (token !== generation || name !== selected) return;
       retainSessionAnalyses(data, cache.get(name));
       cache.set(name, data); render(data);
-      status.textContent = analyzeConversation ? 'Analysis ready. Review the evidence below.' : 'Counts ready. AI analysis estimates the other metrics and uses API credits.';
+      status.textContent = analysisStatus(data);
     } catch (error) { if (token === generation) status.textContent = error.message || 'Could not load metrics.'; }
-    finally { busy = false; if (token === generation) { const active = report?.sessions?.find(s => s.id === sessionId); analyze.disabled = report ? !(active ? active.userTurns : report.summary.userTurns) : false; download.disabled = !report; } }
+    finally { busy = false; if (token === generation) { const active = report?.sessions?.find(s => s.id === sessionId); analyze.disabled = report ? (!(active ? active.userTurns : report.summary.userTurns) || report.analysisStorage?.available === false) : false; download.disabled = !report; } }
+  }
+  function analysisStatus(data) {
+    if (data.analysisStorage?.message) return data.analysisStorage.message;
+    if (data.analysisStorage?.status === 'saved') return `Saved analysis loaded · ${new Date(data.analysisStorage.savedAt).toLocaleString()}. Reanalyze only when needed; it uses API credits.`;
+    return data.analysis ? 'Analysis ready. Review the evidence below.' : 'Counts ready. Analysis uses API credits and will be saved.';
   }
   function retainSessionAnalyses(data, previous) {
     data.sessionAnalyses = {};
     for (const session of data.sessions || []) {
       const older = previous?.sessions?.find(s => s.id === session.id);
-      if (!session.analysis && older?.analysis && session.fingerprint === older.fingerprint) {
+      if (!data.analysisStorage && !session.analysis && older?.analysis && session.fingerprint === older.fingerprint) {
         session.analysis = older.analysis; data.sessionAnalyses[session.id] = previous.sessionAnalyses?.[session.id];
       } else if (session.analysis && data.analysis) {
         const ids = new Set(session.turnIds);
@@ -119,7 +125,7 @@
     document.querySelector('#interaction-metrics').replaceChildren(); document.querySelector('#objective-metrics').replaceChildren(); document.querySelector('#subjective-metrics').replaceChildren(); document.querySelector('#metrics-evidence').replaceChildren();
     document.querySelector('#metrics-coverage').textContent = '';
     if (!dialog.open) dialog.showModal?.();
-    if (cache.has(name)) { render(cache.get(name)); status.textContent = 'Saved for this page session. Analyze again to refresh.'; return; }
+    if (cache.has(name)) { render(cache.get(name)); status.textContent = analysisStatus(cache.get(name)); return; }
     await load();
   };
   window.invalidateUserMetrics = name => { cache.delete(name); if (selected === name) { report = null; download.disabled = true; } };
@@ -152,7 +158,7 @@
     }
     table.append(body);
     const sessions = document.querySelector('#comparison-sessions'); sessions.replaceChildren();
-    sessions.append(node('p', 'Each Name ID is one session, across agents, devices and time gaps. Reports stay in this page until refresh; download them to keep results. Percentage differences are percentage points (pp).'));
+    sessions.append(node('p', 'Each Name ID is one session, across agents, devices and time gaps. Completed analyses are saved in Cloudflare and restored when loaded. New records require updated analysis; downloads remain available. Percentage differences are percentage points (pp).'));
     for (const session of comparisonData.sessions) {
       const entry = node('div', '', 'comparison-session');
       entry.append(node('strong', `${session.nameId} · ${session.condition === 'isolated' ? 'Separate' : session.condition === 'shared' ? 'Shared' : 'Unknown'}`));
@@ -198,7 +204,7 @@
         try { if (!cache.has(name)) await fetchReport(name); } catch (error) { failures.push(`${name}: ${error.message}`); }
         renderComparison();
       }
-      comparisonStatus.textContent = cancelComparison ? 'Loading stopped. Loaded reports are retained.' : failures.length ? `Could not load ${failures.length} users: ${failures.join('; ')}` : 'Counts loaded. Analyze sessions to compare conversation estimates.';
+      comparisonStatus.textContent = cancelComparison ? 'Loading stopped. Loaded reports are retained.' : failures.length ? `Could not load ${failures.length} users: ${failures.join('; ')}` : 'Saved reports loaded. Existing analyses are restored; analyze sessions that still need results.';
     } catch (error) { comparisonStatus.textContent = error.message; }
     finally { comparisonBusy(false); renderComparison(); }
   }
@@ -212,7 +218,8 @@
         comparisonStatus.textContent = `Analyzing session ${index + 1}/${queue.length} · ${session.nameId}…`;
         await fetchReport(session.nameId, session.id); renderComparison();
       }
-      comparisonStatus.textContent = cancelComparison ? 'Analysis stopped. Completed results are retained.' : 'Comparison ready. Review the evidence; these are descriptive estimates, not a significance test.';
+      const unsaved = [...cache.values()].filter(data => data.analysisStorage?.status === 'not_saved');
+      comparisonStatus.textContent = unsaved.length ? unsaved.map(data => `${data.nameId}: ${data.analysisStorage.message}`).join(' ') : cancelComparison ? 'Analysis stopped. Saved results are retained.' : 'Comparison ready. Completed analyses are saved; review the supporting evidence.';
     } catch (error) { comparisonStatus.textContent = `${error.message} Completed results are retained; press Analyze sessions to continue the remaining queue.`; }
     finally { comparisonBusy(false); renderComparison(); }
   }

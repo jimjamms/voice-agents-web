@@ -1,3 +1,4 @@
+import { analysisFingerprint, readAnalysis, saveAnalysis } from './analysis-cache.mjs';
 import { OPPORTUNITY_GUIDANCE, validateOpportunities } from './opportunity-metrics.mjs';
 import { tagSessions, sessionReports } from './session-metrics.mjs';
 import { validKey } from './logs.mjs';
@@ -105,16 +106,12 @@ export async function userMetrics(request, env, cors) {
   if (!validKey(request.headers.get('authorization')?.replace(/^Bearer /, ''), env.LOG_ADMIN_KEY)) return json({ error: 'Invalid host key.' }, 401, cors);
   const url = new URL(request.url), name = (url.searchParams.get('speaker') || '').trim().toLowerCase(), analyze = request.method === 'POST';
   if (!name || name.length > 40) return json({ error: 'Choose one Name ID.' }, 400, cors);
-  if (analyze && !env.OPENAI_API_KEY) return json({ error: 'Conversation analysis is not configured.' }, 503, cors);
-  if (analyze && env.DEMO_RATE_LIMITER) {
-    const limit = await env.DEMO_RATE_LIMITER.limit({ key: `${request.headers.get('cf-connecting-ip') || 'host'}:host-metrics` });
-    if (!limit.success) return json({ error: 'Please wait before another analysis.' }, 429, cors);
-  }
   try {
-    const [{ results: records }, { results: profiles }, { results: totals }] = await Promise.all([
+    const [{ results: records }, { results: profiles }, { results: totals }, { results: markers }] = await Promise.all([
       env.LOG_DB.prepare('SELECT id, payload, interrupted FROM chat_turns WHERE speaker_lower = ? ORDER BY id DESC LIMIT 1001').bind(name).all(),
-      env.LOG_DB.prepare('SELECT payload FROM trip_profiles WHERE name_id = ?').bind(name).all(),
-      env.LOG_DB.prepare('SELECT COUNT(*) AS total FROM chat_turns WHERE speaker_lower = ?').bind(name).all(),
+      env.LOG_DB.prepare('SELECT payload, version FROM trip_profiles WHERE name_id = ?').bind(name).all(),
+      env.LOG_DB.prepare('SELECT COUNT(*) AS total, COALESCE(MAX(id),0) AS latest, COALESCE(SUM(interrupted),0) AS interrupted FROM chat_turns WHERE speaker_lower = ?').bind(name).all(),
+      env.LOG_DB.prepare('SELECT generation FROM deleted_name_ids WHERE name_id = ?').bind(name).all(),
     ]);
     const selected = []; let storedSize = 0;
     for (const record of records.slice(0, 1000)) {
@@ -125,9 +122,21 @@ export async function userMetrics(request, env, cors) {
     const profile = profiles[0] ? JSON.parse(profiles[0].payload) : null;
     const summary = summarizeMetrics(rows, profile);
     const report = { schema_version: 3, sessionDefinition: 'One session per Name ID across agents, devices, refreshes and time gaps. All sessions are retained and grouped by the last recorded memory mode; inconsistent records are flagged.', sessions: sessionReports(rows), nameId: name, generatedAt: new Date().toISOString(), totalRecords: Number(totals[0]?.total || 0), countedRecords: rows.length, summary, analysis: null };
-    if (analyze) {
-      const requestedSession = url.searchParams.get('session');
-      if (requestedSession && !report.sessions.some(s => s.id === requestedSession)) return json({ error: 'This session is no longer in the counted window. Reload metrics.' }, 400, cors);
+    const requestedSession = analyze ? url.searchParams.get('session') : null;
+    if (requestedSession && !report.sessions.some(s => s.id === requestedSession)) return json({ error: 'This session is no longer in the counted window. Reload metrics.' }, 400, cors);
+    const model = env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra';
+    const fingerprint = await analysisFingerprint(selected, profiles[0]?.payload || null, report.totalRecords, model);
+    const stored = await readAnalysis(env.LOG_DB, name, fingerprint, model);
+    const { analysis: savedAnalysis, ...storageInfo } = stored;
+    report.analysisStorage = storageInfo;
+    if (savedAnalysis && !(analyze && url.searchParams.get('refresh') === 'true')) report.analysis = savedAnalysis;
+    if (analyze && !report.analysis) {
+      if (!stored.available) return json({ error: stored.message }, 503, cors);
+      if (!env.OPENAI_API_KEY) return json({ error: 'Conversation analysis is not configured.' }, 503, cors);
+      if (env.DEMO_RATE_LIMITER) {
+        const limit = await env.DEMO_RATE_LIMITER.limit({ key: `${request.headers.get('cf-connecting-ip') || 'host'}:host-metrics` });
+        if (!limit.success) return json({ error: 'Please wait before another analysis.' }, 429, cors);
+      }
       let sample = (requestedSession ? rows.filter(t => t.research_session === requestedSession) : rows).slice(-180);
       while (JSON.stringify(sample).length > 150000 && sample.length > 1) sample = sample.slice(1);
       if (!sample.some(t => t.user_text?.trim())) return json({ error: 'No user conversation to analyze yet.' }, 400, cors);
@@ -138,7 +147,8 @@ export async function userMetrics(request, env, cors) {
         signal: AbortSignal.timeout(90000) });
       if (!response.ok) throw new Error('Conversation analysis failed. Please retry.');
       const output = await response.json();
-      report.analysis = { ...validateAnalysis(JSON.parse(output.choices?.[0]?.message?.content || ''), sample, sampleSummary), sampledRecords: sample.length, analyzedTurnIds: sample.map(t => t.turn_id), model: env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra', method: 'AI estimate; evidence review required' };
+      report.analysis = { ...validateAnalysis(JSON.parse(output.choices?.[0]?.message?.content || ''), sample, sampleSummary), generatedAt: new Date().toISOString(), sampledRecords: sample.length, analyzedTurnIds: sample.map(t => t.turn_id), model: env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra', method: 'AI estimate; evidence review required' };
+      report.analysisStorage = await saveAnalysis(env.LOG_DB, name, fingerprint, model, report.analysis, { total: report.totalRecords, latest: Number(records[0]?.id || 0), interrupted: Number(totals[0]?.interrupted || 0), profileVersion: Number(profiles[0]?.version || 0), generation: Number(markers[0]?.generation || 0) });
     }
     if (report.analysis) report.sessions = sessionReports(rows, report.analysis, rows.filter(t => report.analysis.analyzedTurnIds.includes(t.turn_id)));
     return json(report, 200, cors);
