@@ -66,17 +66,17 @@
     finally { setHostBusy(false); }
   }
   memoryButton.addEventListener('click', () => { void downloadMemories(document.querySelector('#log-speaker').value.trim()); });
-  async function deleteUser(name) {
+  async function deleteUser(name, removeId = false) {
     if (deleting || button.disabled || userButton.disabled) return;
     const keyInput = document.querySelector('#host-key'), key = keyInput.value.trim(), base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
-    const trip = document.querySelector('#delete-trip').checked, logs = document.querySelector('#delete-logs').checked;
+    const trip = removeId || document.querySelector('#delete-trip').checked, logs = removeId || document.querySelector('#delete-logs').checked;
     if (!key || !base) { deleteStatus.textContent = 'Enter your private host key above to delete data.'; keyInput.focus(); return; }
     if (!trip && !logs) { deleteStatus.textContent = 'Select the data to delete above the list.'; return; }
     const scope = [trip && 'memories and trip notes', logs && 'chat logs'].filter(Boolean).join(' and ');
-    if (!window.confirm(`Permanently delete ${scope} for "${name}"? The saved data cannot be recovered. This ID can be reused for a fresh trip.`)) return;
+    if (!window.confirm(`Permanently ${removeId ? "delete this Name ID and all saved data" : "delete " + scope} for "${name}"? The saved data cannot be recovered. This ID can be reused for a fresh trip.`)) return;
     deleting = true; setHostBusy(true); deleteStatus.textContent = `Deleting data for ${name}…`;
     try {
-      const response = await fetch(`${base.replace(/\/$/, '')}/logs/delete`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify({ name, confirm: name, trip, logs }) });
+      const response = await fetch(`${base.replace(/\/$/, '')}/logs/delete`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify({ name, confirm: name, trip, logs, ...(removeId ? { remove_id: true } : {}) }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not delete data.');
       deleteStatus.textContent = `Deleted ${data.profilesDeleted} saved trip profile(s) and ${data.turnsDeleted} log record(s) for ${name}. This Name ID can be reused.`;
       const listed = users.find(user => user.nameId === name);
@@ -85,7 +85,7 @@
         if (logs) { listed.chatTurns = 0; listed.trackedSwitches = 0; }
         if (trip) listed.progress = { completed: 0, ready: false };
         window.invalidateUserMetrics?.(name);
-        if (logs && listed.tripStatus === 'Logs only') { users = users.filter(user => user !== listed); userTotal--; }
+        if (removeId || (logs && listed.tripStatus === 'Logs only')) { users = users.filter(user => user !== listed); userTotal--; }
         renderUsers(); userStatus.textContent = 'User list updated. Reset Name IDs remain reusable.';
       }
     } catch (error) { deleteStatus.textContent = error.message || 'Could not delete data.'; }
@@ -111,10 +111,14 @@
           cell.className = 'user-id';
           const wrap = document.createElement('div'), name = document.createElement('span'), remove = document.createElement('button');
           wrap.className = 'user-name-actions'; name.className = 'user-name'; name.textContent = String(value);
-          remove.type = 'button'; remove.className = 'user-delete-button'; remove.textContent = 'Delete';
+          remove.type = 'button'; remove.className = 'user-delete-button'; remove.textContent = 'Clear data';
           remove.disabled = deleting; remove.setAttribute('aria-label', `Delete selected data for ${user.nameId}`);
           remove.addEventListener('click', () => { void deleteUser(user.nameId); }); rowActionButtons.push(remove);
-          wrap.append(name, remove); cell.append(wrap);
+          const deleteId = document.createElement('button');
+          deleteId.type = 'button'; deleteId.className = 'user-delete-button'; deleteId.textContent = 'Delete ID';
+          deleteId.disabled = deleting; deleteId.setAttribute('aria-label', `Delete Name ID and all saved data for ${user.nameId}`);
+          deleteId.addEventListener('click', () => { void deleteUser(user.nameId, true); }); rowActionButtons.push(deleteId);
+          wrap.append(name, remove, deleteId); cell.append(wrap);
         } else cell.textContent = String(value);
         row.append(cell);
       });

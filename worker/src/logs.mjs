@@ -72,8 +72,9 @@ export async function deleteUserData(request, env, cors) {
   if (!data || typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 40 ||
       data.confirm !== data.name.trim() || typeof data.trip !== 'boolean' || typeof data.logs !== 'boolean' || (!data.trip && !data.logs))
     return json({ error: 'Enter and confirm one name ID, and select data to delete.' }, 400, cors);
+  if (data.remove_id !== undefined && (typeof data.remove_id !== 'boolean' || (data.remove_id && (!data.trip || !data.logs)))) return json({ error: 'Deleting an ID requires deleting its trip and logs.' }, 400, cors);
   const name = data.name.trim().toLowerCase();
-  const empty = JSON.stringify({ notes: '', choices: { countries: [], cities: [], activities: [], budget: null, itinerary: null, finalized: false }, memories: { shared: [], sage: [], astra: [] } });
+  const empty = JSON.stringify({ ...(data.remove_id ? { host_deleted: true } : {}), notes: '', choices: { countries: [], cities: [], activities: [], budget: null, itinerary: null, finalized: false }, memories: { shared: [], sage: [], astra: [] } });
   const statements = [env.LOG_DB.prepare(`INSERT INTO deleted_name_ids(name_id, trip_blocked, logs_blocked, generation, deleted_at) VALUES(?, 0, ?, ?, ?)
     ON CONFLICT(name_id) DO UPDATE SET trip_blocked = 0, logs_blocked = MAX(deleted_name_ids.logs_blocked, excluded.logs_blocked),
     generation = deleted_name_ids.generation + excluded.generation,
@@ -99,7 +100,7 @@ export async function listUsers(request, env, cors) {
   if (cursor.length > 40 || search.length > 40 || !Number.isInteger(limit) || limit < 1 || limit > 100) return json({ error: 'Invalid user-list filter.' }, 400, cors);
   try {
     const { results } = await env.LOG_DB.prepare(`WITH names AS (
-      SELECT name_id FROM trip_profiles UNION SELECT speaker_lower AS name_id FROM chat_turns
+      SELECT name_id FROM trip_profiles WHERE COALESCE(json_extract(payload, '$.host_deleted'), 0) != 1 UNION SELECT speaker_lower AS name_id FROM chat_turns
     ), filtered AS (SELECT name_id FROM names WHERE instr(name_id, ?) > 0), chats AS (
       SELECT speaker_lower, SUM(CASE WHEN json_extract(payload, '$.event_type') = 'agent_switch' THEN 0 ELSE 1 END) AS turn_count,
         SUM(CASE WHEN json_extract(payload, '$.event_type') = 'agent_switch' THEN 1 ELSE 0 END) AS switch_count, MAX(received_at) AS last_seen FROM chat_turns GROUP BY speaker_lower
