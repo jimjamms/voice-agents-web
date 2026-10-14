@@ -182,6 +182,8 @@ TRIP_PLANNING_GUIDANCE = "Help the user plan a trip collaboratively while keepin
 HANDOFF_INSTRUCTIONS = {'shared': 'Current memory mode: shared. When handing off, suggest switching to the other agent and state what it can help with. Do not give a message to repeat or copy, and do not ask the user to relay the entire trip brief. The receiving agent should use available saved facts and ask only for specific missing details. Recent shared exchanges and saved facts are available automatically. Use the latest user corrections and do not ask for details already present. Do not claim access to the entire other chat.', 'isolated': 'Current memory mode: isolated. The agents do not share memories. When a handoff is useful, provide a short summary of confirmed trip details the user can repeat or copy to the other agent. Explain briefly that the other agent needs those details. The receiving agent must use its own conversation or memories and ask for a brief summary if needed.', 'disabled': 'Cross-agent memory is unavailable for this speaker. When a handoff is useful, offer a short summary of confirmed trip details the user can repeat or copy. Do not claim those details will be remembered or transferred automatically.'}
 
 
+PLANNING_CONVERSATION_GUIDANCE = "Make planning personal through useful travel decisions, not an interview. When a destination, activity or practical choice needs clarification, ask one brief question about its appeal or a relevant tradeoff instead of a generic next question. Sage explores motivations, desired atmosphere and activity preferences; Astra explores priorities, pace and cost-versus-convenience tradeoffs. Fold this into the current planning round; do not add a mandatory questionnaire or a reason question after every choice. Offer at most two concrete options when helpful, leaving room for another answer. A country, city or activity choice can be accepted without an explanation. If the user skips, says they do not know, wants speed, or has already explained, move on without pressing. Optional reasons never block handoffs, itinerary approval or completion. Ask at most one question per turn, keep normal replies to 1–3 short sentences, and answer the user's question first. Use an available stated reason to explain a relevant recommendation briefly, rather than reciting memories or praising disclosure. Treat rejected options as rejected, tentative preferences as tentative and the latest explicit correction as authoritative. Never invent preferences or claim to know an unseen conversation. Apply the same approach in shared and separate memory modes: use only context actually supplied. Public trip notes provide itinerary facts, not private motivations. If a reason is unavailable and unnecessary, continue using the notes; if it matters to the next decision, ask a focused question. Do not ask users to test recall or repeat facts to demonstrate memory sharing. Keep personal questions limited to travel-relevant needs; users need not disclose sensitive information. Once the itinerary is ready for approval, ask for approval rather than another optional preference."
+
 def build_system_prompt(name: str, traits: dict, role_instructions: str = "") -> str:
     lines = [f"{trait.capitalize()}: {TRAIT_DESCRIPTIONS[trait][level]}"
              for trait, level in traits.items()]
@@ -201,6 +203,8 @@ You are speaking out loud in a voice conversation, so:
 - Stay in character at all times."""
     if role_instructions:
         prompt += "\n\nTrip-planning role:\n" + role_instructions + "\n\n" + TRIP_PLANNING_GUIDANCE + "\n\nTrip completion goal:\n" + TRIP_COMPLETION_GOAL
+    if role_instructions:
+        prompt += "\n\nHelpful planning conversation:\n" + PLANNING_CONVERSATION_GUIDANCE
     return prompt
 
 
@@ -532,7 +536,7 @@ class PersonalityVoiceAgent:
         try:
             completion = self.openai_client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "system", "content": FACT_PROMPT},
+                messages=[{"role": "system", "content": FACT_PROMPT + "\nAlso retain user-stated reasons behind travel choices, relevant tradeoffs and rejected options when useful for later planning. Preserve tentative wording and latest corrections. Do not infer preferences or adopt agent suggestions as user facts."},
                           {"role": "user", "content": json.dumps({"speaker": speaker_name, "agent": self.name, "user": user_text, "reply": reply})}],
             )
             fact = completion.choices[0].message.content.strip()
