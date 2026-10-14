@@ -411,6 +411,11 @@
     if (textInput.value.trim() || pipeline?.busy || pipeline?.playing || pipeline?.recording || pipeline?.isLocked()) return false;
     const choices = tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {};
     if (choices.finalized) { pendingHandoffKey = null; return false; }
+    const lastReply = history.at(-1);
+    // A normal planning question can be pending too, not only a scripted opener.
+    if (lastReply?.role === 'assistant' && /[?？]/.test(lastReply.content || '')) {
+      pendingHandoffKey = null; return false;
+    }
     const round = planningRound();
     const step = agent === 'astra' ? ({ 'first-choice': 'early-budget', 'first-review': 'first-review', 'second-choice': 'interim-logistics', 'final-plan': 'final-plan' }[round]) :
       ({ 'first-choice': 'first-choice', 'first-review': 'refine-first-stop', 'second-choice': (choices.cities?.length || 0) < 2 ? 'second-city' : 'second-activity', 'final-plan': 'review-discovery' }[round]);
