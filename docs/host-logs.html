@@ -87,7 +87,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 .user-downloads>button+button{margin-top:6px}
   </style>
   <link rel="stylesheet" href="mobile.css?v=1">
-  <link rel="stylesheet" href="host-metrics.css?v=1">
+  <link rel="stylesheet" href="host-metrics.css?v=2">
 </head>
 <body>
 <div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -112,14 +112,25 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 <g transform="translate(536 51)"><circle r="17" fill="#fffdf2" stroke="#b7c7b1"/><path d="m-6 6 3-10 9-3-3 10Z" fill="#57816b"/></g>
 </svg><div class="scene-wash"></div></div>
   <div class="shell">
-    <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 6-6"/></svg></span> SAGE &amp; ASTRA</div></header>
+    <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 6-6"/></svg></span> Travel AIgents</div></header>
     <main>
       <div class="intro"><p class="eyebrow">HOST DESK</p><h1>Users &amp; metrics</h1></div>
       <section class="host-card" aria-label="Download chats and agent memories">
+        <aside class="archive">
+          <svg viewBox="0 0 240 190" fill="none" aria-hidden="true">
+            <circle cx="186" cy="40" r="23" fill="#e7b98b"/><path d="m12 145 48-60 30 36 42-71 89 95" fill="#b3c9a4"/><path d="m100 104 32-54 33 54-21-10-12 11-10-15Z" fill="#f9f6e9"/>
+            <rect x="43" y="36" width="112" height="131" rx="10" transform="rotate(-8 43 36)" fill="#adc399"/>
+            <rect x="62" y="27" width="112" height="139" rx="10" fill="#fffaf0" stroke="#8ba17a" stroke-width="1.5"/>
+            <path d="M83 57h56M83 70h70M83 118h70M83 131h50" stroke="#c8d2b7" stroke-width="3" stroke-linecap="round"/>
+            <path d="M84 93h18l9-13 14 21 12-10h16" stroke="#779268" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="163" cy="147" r="27" fill="#e7b98b" stroke="#fffaf0" stroke-width="4"/><path d="M163 135v23m-8-8 8 8 8-8" stroke="#69482f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <div><h2>Trip archive</h2></div>
+        </aside>
         <div class="export-panel">
           <h2>Saved data</h2>
           <form id="log-export">
-            <div class="field"><label for="host-key">Private host key</label><input id="host-key" type="password" autocomplete="off" placeholder="Enter your host key" required aria-describedby="key-help"><small id="key-help">Your LOG_ADMIN_KEY, separate from the demo code.</small></div>
+            <div class="field"><label for="host-key">Private host key</label><input id="host-key" type="password" autocomplete="off" placeholder="Enter your host key" required></div>
             <div class="field"><label for="log-speaker">Name ID <span>optional</span></label><input id="log-speaker" type="text" maxlength="40" placeholder="Leave blank for everyone"></div>
             <div class="export-actions"><button id="export-logs" type="submit"><span>Download chat logs</span><span aria-hidden="true">↓</span></button><button id="export-memories" type="button"><span>Download memories</span><span aria-hidden="true">↓</span></button></div>
           </form>
@@ -153,7 +164,6 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
         <details class="metric-evidence"><summary>Evidence &amp; definitions</summary><div id="metrics-evidence"></div></details>
       </dialog>
     </main>
-    <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>
   </div>
 </body>
 </html>
