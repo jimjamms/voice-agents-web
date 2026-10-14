@@ -262,12 +262,12 @@
       } else this.ambient = Math.max(.002, this.ambient * .97 + rms * .03);
       if (this.recording && now - this.startedAt >= 30000) this.finishRecording();
     }
-    async greet() {
+    async greet(handoffStep = '') {
       if (this.isLocked()) return;
       const generation = ++this.generation;
       await this.audioUnlock;
       if (generation !== this.generation) return;
-      await this.submit(null, generation);
+      await this.submit(null, generation, null, true, handoffStep);
     }
     async sendText(text, speakReply = false) {
       text = String(text || '').trim();
@@ -276,7 +276,7 @@
       this.stopPlayback();
       return Boolean(await this.submit(null, ++this.generation, text, speakReply));
     }
-    async submit(blob, generation, text = null, speakReply = true) {
+    async submit(blob, generation, text = null, speakReply = true, handoffStep = '') {
       this.busy = true; this.notify();
       this.status(blob || text !== null ? 'Preparing your reply…' : 'Preparing your welcome…', text !== null && !speakReply ? 'Your agent will answer here in text.' : 'Your agent will speak when the reply is ready.');
       this.request = new AbortController();
@@ -295,7 +295,7 @@
       form.set('shared_turns', JSON.stringify(mode === 'shared' ? this.options.sharedTurns?.() || [] : []));
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
       if (text !== null) { form.set('text', text); form.set('reply_audio', String(speakReply)); }
-      else if (!blob) form.set('greeting', 'true');
+      else if (!blob) { form.set('greeting', 'true'); if (handoffStep) form.set('handoff_step', handoffStep); }
       const extension = blob?.type.includes('mp4') ? 'm4a' : blob?.type.includes('ogg') ? 'ogg' : 'webm';
       if (blob) form.set('audio', blob, `turn.${extension}`);
       let shouldResume = false;

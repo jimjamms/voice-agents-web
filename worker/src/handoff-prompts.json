@@ -1,0 +1,22 @@
+{
+  "first-review": {
+    "agent": "astra",
+    "round": "first-review",
+    "reply": "Let’s check your first stop against your time and budget. Is there anything you want me to prioritize?"
+  },
+  "second-city": {
+    "agent": "sage",
+    "round": "second-choice",
+    "reply": "Let’s choose your second city. What kind of place would you like to visit next?"
+  },
+  "second-activity": {
+    "agent": "sage",
+    "round": "second-choice",
+    "reply": "Let’s choose an activity for your next city. What would you most enjoy doing there?"
+  },
+  "final-plan": {
+    "agent": "astra",
+    "round": "final-plan",
+    "reply": "Let’s put your stops together and check the full itinerary and budget. Is there anything you want adjusted before we finalize?"
+  }
+}
