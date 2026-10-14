@@ -317,7 +317,7 @@
         this.options.onMessage('user', result.transcript, speaker);
         this.beginReply(result.reply);
         if (!speakReply || this.options.shouldSpeak?.() === false || !result.audio) {
-          this.finishReply(); this.status(result.audioError ? 'Reply ready in text' : 'Your turn', result.audioError ? `Voice unavailable: ${result.audioError}` : 'Type a message or tap Start talking.'); return true;
+          this.finishReply(); this.status('Your turn', 'Type a message or tap Start talking.'); return true;
         }
         const bytes = Uint8Array.from(atob(result.audio), char => char.charCodeAt(0));
         this.audioUrl = URL.createObjectURL(new Blob([bytes], { type: result.mimeType || 'audio/mpeg' }));

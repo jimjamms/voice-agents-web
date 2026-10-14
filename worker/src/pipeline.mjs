@@ -29,23 +29,11 @@ function encode(buffer) {
   for (let i = 0; i < bytes.length; i += 8192) text += String.fromCharCode(...bytes.subarray(i, i + 8192));
   return btoa(text);
 }
-class PipelineServiceError extends Error {}
 async function upstream(path, options) {
-  let response;
-  try { response = await fetch(`${API}${path}`, options); }
-  catch { throw new PipelineServiceError('Could not reach the AI service. Please try again.'); }
+  const response = await fetch(`${API}${path}`, options);
   if (!response.ok) {
-    let code = '';
-    try { code = String((await response.json())?.error?.code || ''); } catch {}
-    console.error('OpenAI pipeline request failed:', path, response.status, code);
-    const message = response.status === 401 ? 'The AI service key was rejected. The host needs to check the Worker API key.' :
-      response.status === 403 ? 'The AI service denied access. The host needs to check model and project permissions.' :
-      response.status === 429 && code === 'insufficient_quota' ? 'The AI project has no available API quota. The host needs to check billing and usage limits.' :
-      response.status === 429 ? 'The AI service is busy or rate-limited. Wait a moment, then try again.' :
-      response.status === 404 ? 'The configured AI model or service was not found. The host needs to check the Worker model settings.' :
-      response.status === 400 ? 'The AI service rejected the request settings. The host can check Worker logs for the failing service.' :
-      'The AI service could not complete the request. Please try again.';
-    throw new PipelineServiceError(message);
+    console.error('OpenAI pipeline request failed:', path, response.status);
+    throw new Error('Voice service unavailable. Please try again.');
   }
   return response;
 }
@@ -135,23 +123,18 @@ export async function pipelineTurn(request, env, cors) {
         }),
       })).json();
       reply = String(chat.choices?.[0]?.message?.content || '').trim().slice(0, 3500);
-      if (!reply) throw new PipelineServiceError('The AI returned an empty reply. Please try again.');
+      if (!reply) throw new Error('Empty model reply.');
     }
     const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
     if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: null }, 200, cors);
-    let speech;
-    try { speech = await upstream('/audio/speech', {
+    const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: agent.voice,
         instructions: agent.instructions, input: reply, response_format: 'mp3' }),
     });
-    } catch (error) {
-      console.error('Speech generation failed; preserving text reply.');
-      return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: null, audioError: error instanceof PipelineServiceError ? error.message : 'Voice generation failed. Your text reply is available.' }, 200, cors);
-    }
     return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
   } catch (error) {
     console.error('Pipeline turn failed:', error);
-    return json({ error: error instanceof PipelineServiceError ? error.message : 'Could not complete this turn. Please try again; the host can check Worker logs for the cause.' }, 502, cors);
+    return json({ error: 'Could not complete this turn. Check API billing and try again.' }, 502, cors);
   }
 }
