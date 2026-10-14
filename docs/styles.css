@@ -93,3 +93,29 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 #planning-stage:has(.conversation[data-agent="astra"]) .plan-ready-notice #continue-review{background:#476e53}
 @media(max-width:850px){.mobile-goal-summary[data-ready="true"]{display:none!important}}
 @media(max-width:600px){.plan-ready-notice{flex-wrap:wrap;gap:10px}.plan-ready-copy{flex:1 1 100%}.plan-ready-notice #continue-review{width:100%}}
+
+/* Small interaction cues without fading cards or shifting text layout. */
+.record-button,#send-text,.setup-next,.text-button,.mobile-planning-nav button{transition:translate .16s ease,scale .16s ease,background-color .18s ease,box-shadow .18s ease}
+.record-button:not(:disabled):active,#send-text:not(:disabled):active,.setup-next:not(:disabled):active,.text-button:not(:disabled):active,.mobile-planning-nav button:active{scale:.985;translate:0 1px}
+@media(hover:hover) and (pointer:fine){
+ .record-button:not(:disabled):hover,#send-text:not(:disabled):hover,.setup-next:not(:disabled):hover{translate:0 -1px}
+ .brand-mark svg{transition:transform .22s ease}
+ .brand:hover .brand-mark svg{transform:translateY(-1px) rotate(-6deg)}
+}
+#planning-stage .agent-card:not([hidden]){animation:companion-card-enter .22s ease-out}
+#setup-stage:not([hidden]) .setup-card,#review-stage:not([hidden]) .review-grid{animation:travel-panel-enter .24s ease-out}
+.plan-ready-notice:not([hidden]){animation:travel-panel-enter .22s ease-out}
+.plan-ready-notice:not([hidden]) .plan-ready-check{animation:ready-check-settle .3s ease-out}
+.record-button.recording .mic svg{animation:recording-mic-breathe 1.4s ease-in-out infinite;transform-origin:center}
+.text-chat-row{transition:box-shadow .18s ease}
+.text-chat-row:focus-within{box-shadow:0 0 0 2px var(--chat-border,#dec6a7);border-radius:10px}
+@keyframes companion-card-enter{from{translate:0 4px}to{translate:0 0}}
+@keyframes travel-panel-enter{from{translate:0 3px}to{translate:0 0}}
+@keyframes ready-check-settle{from{scale:.9}to{scale:1}}
+@keyframes recording-mic-breathe{0%,100%{scale:1}50%{scale:1.08}}
+@media(prefers-reduced-motion:reduce){
+ .record-button,#send-text,.setup-next,.text-button,.mobile-planning-nav button,.text-chat-row,.brand-mark svg{transition:none}
+ .record-button:active,#send-text:active,.setup-next:active,.text-button:active,.mobile-planning-nav button:active{scale:1;translate:0 0}
+ .record-button:hover,#send-text:hover,.setup-next:hover,.brand:hover .brand-mark svg{translate:0 0;transform:none}
+ #planning-stage .agent-card:not([hidden]),#setup-stage:not([hidden]) .setup-card,#review-stage:not([hidden]) .review-grid,.plan-ready-notice:not([hidden]),.plan-ready-notice:not([hidden]) .plan-ready-check,.record-button.recording .mic svg{animation:none}
+}

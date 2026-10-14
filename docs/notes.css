@@ -60,3 +60,17 @@
 @media(min-width:851px){
   #planning-stage .trip-planner #planner-notes-panel{resize:vertical;overflow:hidden;min-height:180px}
 }
+
+/* Gentle movement, with opaque paper and stable text. */
+.planner-views{position:relative;isolation:isolate}
+.planner-views::before{content:'';position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 16px)/2);border-radius:8px;background:var(--planner-accent);transition:transform .2s ease;pointer-events:none;z-index:-1}
+.planner-views:has(#planner-notes-view[aria-pressed="true"])::before{transform:translateX(calc(100% + 4px))}
+.planner-views button{position:relative;transition:color .16s ease}
+.planner-views button[aria-pressed="true"]{background:transparent}
+#planning-stage .trip-planner>section:not([hidden]){animation:planner-view-enter .2s ease-out}
+.trip-planner .goal-counts span{transition:background-color .2s ease,color .2s ease}
+@keyframes planner-view-enter{from{transform:translateY(4px)}to{transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){
+ .planner-views::before,.planner-views button,.trip-planner .goal-counts span{transition:none}
+ #planning-stage .trip-planner>section:not([hidden]){animation:none}
+}

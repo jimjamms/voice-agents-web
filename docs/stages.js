@@ -47,8 +47,12 @@
     ];
     for (const [id, done, label] of requirements) {
       const item = document.querySelector(`#${id}`);
+      const newlyComplete = done && item.dataset.complete === 'false';
       item.textContent = `${done ? '✓' : '○'} ${label}`;
       item.dataset.complete = String(done);
+      if (newlyComplete && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        item.animate?.([{ transform: 'translateX(0)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(0)' }], { duration: 320, easing: 'ease-out' });
+      }
     }
     document.querySelector('#goal-progress').textContent = `${requirements.filter(([, done]) => done).length} of 5 complete`;
     const completeCount = requirements.filter(([, done]) => done).length;

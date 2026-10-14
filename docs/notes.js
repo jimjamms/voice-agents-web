@@ -2,6 +2,7 @@
 (() => {
   // Render read-only notes as text nodes so headings can be styled safely.
   function renderTripNotes(textarea, text) {
+    const changed = Boolean(textarea.value) && textarea.value !== text;
     textarea.value = text;
     const view = textarea.nextElementSibling;
     if (!view?.classList?.contains('notes-content')) return;
@@ -26,6 +27,9 @@
         } else row.textContent = line || '\u00a0';
       }
       view.append(row);
+    }
+    if (changed && text.trim() && view.getClientRects?.().length && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      view.animate?.([{ boxShadow: 'inset 0 0 0 0 transparent' }, { boxShadow: 'inset 0 0 0 2px var(--note-accent, #476e53)' }, { boxShadow: 'inset 0 0 0 0 transparent' }], { duration: 500, easing: 'ease-out' });
     }
   }
   function selectTripNotes(textarea) {
