@@ -1,3 +1,4 @@
+import { planningContext } from './planning-context.mjs';
 import handoffPrompts from './handoff-prompts.json' with { type: 'json' };
 import { chatOptions } from './chat-options.mjs';
 import { memoryContext, extractFact, sharedTurnContext, checklistContext } from './memory.mjs';
@@ -87,6 +88,7 @@ export async function pipelineTurn(request, env, cors) {
       try { tripChoices = JSON.parse(rawTripChoices); } catch {}
     }
     const publicNotes = checklistContext(tripChoices, form.get('trip_notes'));
+    const switchContext = planningContext(name, tripChoices);
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     let transcript = '', reply;
     if (greeting) {
@@ -116,7 +118,7 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
             { role: 'user', content: transcript }],
         }),
       })).json();
