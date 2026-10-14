@@ -127,9 +127,12 @@ export async function userMetrics(request, env, cors) {
     const model = env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra';
     const fingerprint = await analysisFingerprint(selected, profiles[0]?.payload || null, report.totalRecords, model);
     const stored = await readAnalysis(env.LOG_DB, name, fingerprint, model);
-    const { analysis: savedAnalysis, ...storageInfo } = stored;
+    const { analysis: savedAnalysis, savedReport, ...storageInfo } = stored;
     report.analysisStorage = storageInfo;
-    if (savedAnalysis && !(analyze && url.searchParams.get('refresh') === 'true')) report.analysis = savedAnalysis;
+    if (savedAnalysis && !(analyze && url.searchParams.get('refresh') === 'true')) {
+      if (savedReport) return json({ ...savedReport, analysis: savedAnalysis, analysisStorage: storageInfo }, 200, cors);
+      report.analysis = savedAnalysis;
+    }
     if (analyze && !report.analysis) {
       if (!stored.available) return json({ error: stored.message }, 503, cors);
       if (!env.OPENAI_API_KEY) return json({ error: 'Conversation analysis is not configured.' }, 503, cors);
@@ -148,7 +151,9 @@ export async function userMetrics(request, env, cors) {
       if (!response.ok) throw new Error('Conversation analysis failed. Please retry.');
       const output = await response.json();
       report.analysis = { ...validateAnalysis(JSON.parse(output.choices?.[0]?.message?.content || ''), sample, sampleSummary), generatedAt: new Date().toISOString(), sampledRecords: sample.length, analyzedTurnIds: sample.map(t => t.turn_id), model: env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra', method: 'AI estimate; evidence review required' };
-      report.analysisStorage = await saveAnalysis(env.LOG_DB, name, fingerprint, model, report.analysis, { total: report.totalRecords, latest: Number(records[0]?.id || 0), interrupted: Number(totals[0]?.interrupted || 0), profileVersion: Number(profiles[0]?.version || 0), generation: Number(markers[0]?.generation || 0) });
+      report.sessions = sessionReports(rows, report.analysis, rows.filter(t => report.analysis.analyzedTurnIds.includes(t.turn_id)));
+      const { analysis: snapshotAnalysis, analysisStorage: snapshotStorage, ...savedReport } = report;
+      report.analysisStorage = await saveAnalysis(env.LOG_DB, name, fingerprint, model, { ...report.analysis, savedReport }, { total: report.totalRecords, latest: Number(records[0]?.id || 0), interrupted: Number(totals[0]?.interrupted || 0), profileVersion: Number(profiles[0]?.version || 0), generation: Number(markers[0]?.generation || 0) });
     }
     if (report.analysis) report.sessions = sessionReports(rows, report.analysis, rows.filter(t => report.analysis.analyzedTurnIds.includes(t.turn_id)));
     return json(report, 200, cors);

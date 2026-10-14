@@ -100,7 +100,7 @@
   }
   function analysisStatus(data) {
     if (data.analysisStorage?.message) return data.analysisStorage.message;
-    if (data.analysisStorage?.status === 'saved') return `Saved analysis loaded · ${new Date(data.analysisStorage.savedAt).toLocaleString()}. Reanalyze only when needed; it uses API credits.`;
+    if (data.analysisStorage?.status === 'saved') return `Saved analysis loaded · ${new Date(data.analysisStorage.savedAt).toLocaleString()}. Kept unchanged until you press Reanalyze · API.`;
     return data.analysis ? 'Analysis ready. Review the evidence below.' : 'Counts ready. Analysis uses API credits and will be saved.';
   }
   function retainSessionAnalyses(data, previous) {

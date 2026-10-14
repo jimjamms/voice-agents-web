@@ -10,12 +10,11 @@ export async function readAnalysis(db, name, fingerprint, model) {
   try { row = await db.prepare('SELECT data_fingerprint, analysis_version, model, payload, created_at FROM metrics_analyses WHERE name_id = ?').bind(name).first(); }
   catch { return { available: false, status: 'unavailable', message: 'Saved analysis storage is unavailable. Apply migration 0005_metrics_analyses.sql before analyzing.' }; }
   if (!row) return { available: true, status: 'none' };
-  if (row.data_fingerprint !== fingerprint || row.analysis_version !== ANALYSIS_VERSION || row.model !== model)
-    return { available: true, status: 'stale', savedAt: row.created_at, message: 'Saved analysis is out of date. Analyze the updated records to replace it.' };
   try {
     const analysis = JSON.parse(row.payload);
     if (!analysis || !Array.isArray(analysis.analyzedTurnIds) || !analysis.scores || !analysis.opportunityAssessment) throw new Error();
-    return { available: true, status: 'saved', savedAt: row.created_at, analysis };
+    const { savedReport, ...result } = analysis;
+    return { available: true, status: 'saved', savedAt: row.created_at, analysis: result, savedReport }; 
   } catch { return { available: true, status: 'none', message: 'The saved result could not be read. Analyze again to replace it.' }; }
 }
 export async function saveAnalysis(db, name, fingerprint, model, analysis, snapshot) {
