@@ -278,8 +278,9 @@
       return Boolean(await this.submit(null, ++this.generation, text, speakReply));
     }
     async submit(blob, generation, text = null, speakReply = true, handoffStep = '') {
+      speakReply = speakReply && this.options.shouldSpeak?.() !== false;
       this.busy = true; this.notify();
-      this.status(blob || text !== null ? 'Preparing your reply…' : 'Preparing your welcome…', text !== null && !speakReply ? 'Your agent will answer here in text.' : 'Your agent will speak when the reply is ready.');
+      this.status(blob || text !== null ? 'Preparing your reply…' : 'Preparing your welcome…', !speakReply ? 'Your agent will answer here in text.' : 'Your agent will speak when the reply is ready.');
       this.request = new AbortController();
       const speaker = { name: this.options.speaker(), score: 1 };
       const selectedAgent = this.options.agent();
@@ -295,7 +296,8 @@
       form.set('memories', JSON.stringify(this.options.memories()));
       form.set('shared_turns', JSON.stringify(mode === 'shared' ? this.options.sharedTurns?.() || [] : []));
       form.set('history', JSON.stringify(this.options.history().slice(-12)));
-      if (text !== null) { form.set('text', text); form.set('reply_audio', String(speakReply)); }
+      form.set('reply_audio', String(speakReply));
+      if (text !== null) { form.set('text', text); }
       else if (!blob) { form.set('greeting', 'true'); if (handoffStep) form.set('handoff_step', handoffStep); }
       const extension = blob?.type.includes('mp4') ? 'm4a' : blob?.type.includes('ogg') ? 'ogg' : 'webm';
       if (blob) { form.set('audio', blob, `turn.${extension}`); if (this.clipDurationMs) form.set('speech_duration_ms', String(this.clipDurationMs)); }
@@ -314,7 +316,7 @@
         if (generation !== this.generation) return;
         this.options.onMessage('user', result.transcript, speaker);
         this.beginReply(result.reply);
-        if (!result.audio) {
+        if (!speakReply || this.options.shouldSpeak?.() === false || !result.audio) {
           this.finishReply(); this.status('Your turn', 'Type a message or tap Start talking.'); return true;
         }
         const bytes = Uint8Array.from(atob(result.audio), char => char.charCodeAt(0));

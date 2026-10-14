@@ -52,7 +52,7 @@ export async function pipelineTurn(request, env, cors) {
     if (hasText && (typeof text !== 'string' || !text.trim() || text.length > MAX_TEXT)) return json({ error: 'Enter a message of up to 1600 characters.' }, 400, cors);
     if (hasText && (audio || greeting)) return json({ error: 'Send either text or recorded audio.' }, 400, cors);
     const inputMode = greeting ? 'greeting' : hasText ? 'text' : 'voice';
-    const speakReply = !hasText || form.get('reply_audio') === 'true';
+    const speakReply = hasText ? form.get('reply_audio') === 'true' : form.get('reply_audio') !== 'false';
     const memoryDeferred = !greeting && form.get('defer_memory') === 'true';
     if (!agent) return json({ error: 'Unknown agent.' }, 400, cors);
     if (!greeting && !hasText && (!(audio instanceof Blob) || !audio.size || audio.size > MAX_AUDIO_BYTES))

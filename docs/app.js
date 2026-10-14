@@ -145,7 +145,7 @@
     memories: () => window.AgentMemory.entries(speakerName.value.trim(), memoryMode.value, agent),
     tripChoices: () => tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {},
     tripNotes: () => tripNotes?.snapshot?.(speakerName.value.trim())?.notes || '',
-    planningRound,
+    planningRound, shouldSpeak: () => readTextReply.checked,
     onTurn: saveTurn, onInterrupt: markInterrupted,
     playback, onStatus: setStatus, getStatus: () => status.textContent,
     onReplyStart: reply => {
@@ -153,6 +153,9 @@
       return text => { body.textContent = text || '…'; messages.scrollTop = messages.scrollHeight; };
     },
     onMessage: addMessage, onState: () => { syncControls(); maybeSpeakHandoff(); },
+  });
+  readTextReply.addEventListener('change', () => {
+    if (!readTextReply.checked) { pipeline.stopPlayback(); pipeline.notify(); }
   });
   const tripCloud = window.createTripCloud?.({
     base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
