@@ -50,3 +50,8 @@
 .trip-planner .planning-checklist .goal-counts span{display:block;padding:8px 10px;min-height:0;font-size:12px;line-height:1.5}
 .trip-planner .trip-notepad{border:0;border-radius:0;box-shadow:none}
 .trip-planner .notes-head{flex-wrap:wrap}
+
+/* Keep both views the same height; long notes scroll inside the panel. */
+#planning-stage .trip-planner #planner-notes-panel{display:flex;flex-direction:column;height:var(--planner-body-height,300px);min-height:0}
+#planning-stage .trip-planner #planner-notes-panel .notes-head,#planning-stage .trip-planner #notes-status{flex-shrink:0}
+#planning-stage .trip-planner #trip-notes-display{flex:1 1 auto;height:auto;min-height:0;max-height:none;resize:none;overflow:auto;overscroll-behavior-y:contain}

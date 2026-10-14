@@ -506,7 +506,17 @@
   let mobileTripOpen = false;
   let currentMobileLayout = false;
   let plannerView = 'checklist';
+  function syncPlannerHeight() {
+    const checklist = document.querySelector('#planner-checklist-panel');
+    const wasHidden = checklist.hidden;
+    // Measure the reference view synchronously, without changing the selected tab.
+    checklist.hidden = false;
+    const height = checklist.getBoundingClientRect?.().height || 0;
+    checklist.hidden = wasHidden;
+    if (height > 0) document.querySelector('.trip-planner').style.setProperty('--planner-body-height', `${height}px`);
+  }
   function selectPlannerView(view) {
+    syncPlannerHeight();
     plannerView = view;
     document.querySelector('#planner-checklist-panel').hidden = view !== 'checklist';
     document.querySelector('#planner-notes-panel').hidden = view !== 'notes';
@@ -516,6 +526,9 @@
   document.querySelector('#planner-checklist-view').addEventListener('click', () => selectPlannerView('checklist'));
   document.querySelector('#planner-notes-view').addEventListener('click', () => selectPlannerView('notes'));
   selectPlannerView(plannerView);
+  if (window.ResizeObserver) new window.ResizeObserver(syncPlannerHeight).observe(document.querySelector('.trip-planner'));
+  document.fonts?.ready.then(syncPlannerHeight);
+  window.addEventListener('trip-notes:updated', () => window.queueMicrotask?.(syncPlannerHeight));
   function syncMobileNotes() {
     const isMobile = Boolean(mobileLayout?.matches);
     if (isMobile !== currentMobileLayout) {
@@ -529,6 +542,7 @@
     document.querySelector('.mobile-start-guide').hidden = isMobile && mobileTripOpen;
     document.querySelector('#mobile-chat-view').setAttribute('aria-pressed', String(!mobileTripOpen));
     document.querySelector('#mobile-details-view').setAttribute('aria-pressed', String(mobileTripOpen));
+    syncPlannerHeight();
   }
   document.querySelector('#mobile-chat-view').addEventListener('click', () => {
     mobileTripOpen = false;
