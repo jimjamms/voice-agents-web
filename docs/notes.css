@@ -55,3 +55,8 @@
 #planning-stage .trip-planner #planner-notes-panel{display:flex;flex-direction:column;height:var(--planner-body-height,300px);min-height:0}
 #planning-stage .trip-planner #planner-notes-panel .notes-head,#planning-stage .trip-planner #notes-status{flex-shrink:0}
 #planning-stage .trip-planner #trip-notes-display{flex:1 1 auto;height:auto;min-height:0;max-height:none;resize:none;overflow:auto;overscroll-behavior-y:contain}
+
+/* Start at checklist height, then retain the user's chosen vertical size. */
+@media(min-width:851px){
+  #planning-stage .trip-planner #planner-notes-panel{resize:vertical;overflow:hidden;min-height:180px}
+}
