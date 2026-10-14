@@ -1,6 +1,6 @@
 /* Desktop refinements only; phone and tablet layouts remain in mobile.css. */
 @media(min-width:851px){
-  .shell{width:94vw;max-width:none;margin-inline:auto;padding-left:0;padding-right:0}
+  .shell{width:100%;max-width:1350px;margin-inline:auto;padding-left:clamp(28px,4vw,60px);padding-right:clamp(28px,4vw,60px)}
   body[data-stage="planning"] .topbar{height:72px}
   body[data-stage="planning"] .stage-progress{max-width:none;margin:24px 0 20px}
   .planning-toolbar{margin-bottom:16px}
@@ -12,7 +12,7 @@
   .planning-checklist .goal-counts span{padding:5px 8px;border:0;display:block;min-height:0;line-height:1.5;background:transparent}
   .planning-checklist #continue-review{display:inline-flex;align-items:center;min-height:40px;padding:10px 16px;border-radius:8px;background:var(--note-accent,#476e53);color:#fffdf7;font-weight:700}
   .planning-checklist #continue-review:hover{filter:brightness(.94);text-decoration:none}
-  #planning-stage .workspace{grid-template-columns:minmax(300px,28%) minmax(0,1fr);gap:24px;align-items:stretch}
+  #planning-stage .workspace{grid-template-columns:minmax(300px,330px) minmax(0,1fr);gap:24px;align-items:stretch}
   #planning-stage .chooser{gap:16px}
   #planning-stage .notes-head{padding:14px 18px}
   #planning-stage .notes-head h2{font-size:16px}
@@ -51,12 +51,12 @@
   .memory-row{font-size:12px}
   .memory-detail small{font-size:11px}
   #planning-stage{padding-bottom:24px}
-  .setup-card{width:clamp(560px,48vw,100%);max-width:100%;padding:clamp(24px,2.5vw,48px)}
-  .setup-field input{min-height:46px;font-size:clamp(14px,1.05vw,22px)}
+  .setup-card{width:100%;max-width:600px;padding:30px 36px}
+  .setup-field input{min-height:46px;font-size:14px}
   .setup-role{padding:18px 16px}
   .setup-role small{font-size:12px}
   .setup-data-note{font-size:11px}
-  .setup-next{min-height:48px;font-size:clamp(14px,1.05vw,22px)}
+  .setup-next{min-height:48px;font-size:14px}
 }
 @media(min-width:851px) and (max-width:1050px){
   #planning-stage .workspace{grid-template-columns:300px minmax(0,1fr);gap:20px}
