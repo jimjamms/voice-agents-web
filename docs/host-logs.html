@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#f4f1e9">
   <title>Chat logs · Sage & Astra</title>
   <script src="config.js" defer></script>
-  <script src="memory-comparison.js?v=1" defer></script>
-  <script src="host-metrics.js?v=conditions-2" defer></script>
+  <script src="memory-comparison.js?v=opportunities-3" defer></script>
+  <script src="host-metrics.js?v=opportunities-4" defer></script>
   <script src="host-logs.js?v=delete-id-metrics-6" defer></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
@@ -89,7 +89,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 .user-downloads>button+button{margin-top:6px}
   </style>
   <link rel="stylesheet" href="mobile.css?v=1">
-  <link rel="stylesheet" href="host-metrics.css?v=conditions-3">
+  <link rel="stylesheet" href="host-metrics.css?v=opportunities-4">
 </head>
 <body>
 <div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -162,7 +162,8 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
         <div class="metrics-actions"><button id="analyze-metrics" type="button">Analyze this session</button><button id="download-metrics" type="button">Download metrics</button></div>
         <div class="session-picker"><label for="metrics-session">Session</label><select id="metrics-session"></select><span id="metrics-condition"></span></div>
         <p id="metrics-status" role="status" aria-live="polite"></p><p id="metrics-coverage"></p>
-        <h3>Objective metrics</h3><div id="objective-metrics" class="metrics-grid"></div>
+        <h3>Cross-agent memory</h3><div id="interaction-metrics" class="metrics-grid"></div>
+        <h3>Conversation measures</h3><div id="objective-metrics" class="metrics-grid"></div>
         <h3>Behavior &amp; self-report</h3><div id="subjective-metrics" class="metrics-grid"></div>
         <details class="metric-evidence"><summary>Evidence &amp; definitions</summary><div id="metrics-evidence"></div></details>
       </dialog>

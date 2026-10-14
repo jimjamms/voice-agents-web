@@ -1,3 +1,4 @@
+import { OPPORTUNITY_GUIDANCE, validateOpportunities } from './opportunity-metrics.mjs';
 import { tagSessions, sessionReports } from './session-metrics.mjs';
 import { validKey } from './logs.mjs';
 import { chatOptions } from './chat-options.mjs';
@@ -84,6 +85,7 @@ export function validateAnalysis(raw, turns, summary) {
     });
     result[key] = dedup(result[key], v => key === 'memory_use' ? `${v.turn_id}:${norm(v.fact)}` : key === 'volunteered' ? `${v.research_session}:${norm(v.fact)}` : v.turn_id);
   }
+  Object.assign(result, validateOpportunities(raw, turns));
   result.task_outcomes.sort((a, b) => map.get(a.turn_id).index - map.get(b.turn_id).index);
   const questionIds = new Set(result.question_turn_ids);
   result.reasks = result.reasks.filter(v => questionIds.has(v.turn_id));
@@ -122,7 +124,7 @@ export async function userMetrics(request, env, cors) {
     const rows = tagSessions(selected.reverse().map(r => ({ ...JSON.parse(r.payload), interrupted: Boolean(r.interrupted), log_id: r.id })).sort((a, b) => Date.parse(a.timestamp) - Date.parse(b.timestamp) || a.log_id - b.log_id));
     const profile = profiles[0] ? JSON.parse(profiles[0].payload) : null;
     const summary = summarizeMetrics(rows, profile);
-    const report = { schema_version: 2, sessionDefinition: 'Inferred per browser/device; a gap of 30 minutes starts another session. Agent switches do not start sessions. All sessions are retained and grouped by the last recorded memory mode; inconsistent records are flagged.', sessions: sessionReports(rows), nameId: name, generatedAt: new Date().toISOString(), totalRecords: Number(totals[0]?.total || 0), countedRecords: rows.length, summary, analysis: null };
+    const report = { schema_version: 3, sessionDefinition: 'One session per Name ID across agents, devices, refreshes and time gaps. All sessions are retained and grouped by the last recorded memory mode; inconsistent records are flagged.', sessions: sessionReports(rows), nameId: name, generatedAt: new Date().toISOString(), totalRecords: Number(totals[0]?.total || 0), countedRecords: rows.length, summary, analysis: null };
     if (analyze) {
       const requestedSession = url.searchParams.get('session');
       if (requestedSession && !report.sessions.some(s => s.id === requestedSession)) return json({ error: 'This session is no longer in the counted window. Reload metrics.' }, 400, cors);
@@ -132,7 +134,7 @@ export async function userMetrics(request, env, cors) {
       const sampleSummary = summarizeMetrics(sample, profile);
       const response = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
         body: JSON.stringify({ ...chatOptions(env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'), response_format: { type: 'json_object' }, max_completion_tokens: 12000,
-          messages: [{ role: 'system', content: REVIEW_PROMPT }, { role: 'user', content: JSON.stringify({ turns: sample, handoffs: sampleSummary.handoffs, current_memory_snapshot: summary.memory.current }) }] }),
+          messages: [{ role: 'system', content: REVIEW_PROMPT + '\n\n' + OPPORTUNITY_GUIDANCE }, { role: 'user', content: JSON.stringify({ turns: sample, handoffs: sampleSummary.handoffs, current_memory_snapshot: summary.memory.current }) }] }),
         signal: AbortSignal.timeout(90000) });
       if (!response.ok) throw new Error('Conversation analysis failed. Please retry.');
       const output = await response.json();

@@ -66,3 +66,6 @@ main{padding-top:36px;padding-bottom:40px}
 #comparison-coverage,.comparison-note{font-size:12px;line-height:1.7;color:#657361}
 .comparison-session{padding:10px 0;border-bottom:1px dashed #d4ddc9;font-size:12px;line-height:1.7}
 @media(max-width:560px){#comparison-dialog{padding:18px}.users-heading-row{align-items:flex-start}.session-picker{align-items:flex-start;flex-direction:column}#comparison-table th,#comparison-table td{padding:10px}}
+
+#interaction-metrics .metric-card>strong{font-size:20px;line-height:1.4;overflow-wrap:anywhere}
+@media(min-width:780px){#interaction-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}

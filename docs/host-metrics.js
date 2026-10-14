@@ -19,18 +19,27 @@
     const current = data.sessions?.find(s => s.id === sessionId), ids = new Set(current?.turnIds || []);
     const picker = document.querySelector('#metrics-session'); picker.replaceChildren();
     for (const session of data.sessions || []) { const option = node('option', `${new Date(session.startedAt).toLocaleString()} · ${session.condition === 'isolated' ? 'Separate' : session.condition === 'shared' ? 'Shared' : 'Unknown'}`); option.value = session.id; picker.append(option); }
-    picker.value = sessionId;
+    picker.value = sessionId; picker.hidden = (data.sessions?.length || 0) <= 1;
     document.querySelector('#metrics-condition').textContent = current ? `${current.condition === 'isolated' ? 'Separate' : current.condition === 'shared' ? 'Shared' : 'Unknown'} · last mode used` : 'No chat session recorded';
     const s = current ? { ...data.summary, userTurns: current.userTurns, userWords: current.userWords, wordsPerTurn: current.wordsPerTurn == null ? null : Math.round(current.wordsPerTurn * 10) / 10,
       switches: { tracked: current.switches, suggested: current.suggestedSwitches, manual: current.switches - current.suggestedSwitches, inferred: data.summary.handoffs.filter(h => h.inferred && ids.has(h.turn_id)).length, events: data.summary.switches.events.filter(e => ids.has(e.id)) }, task: null } : data.summary;
     const a = current ? data.sessionAnalyses?.[current.id] || null : data.analysis, scores = current ? current.analysis : a?.scores;
     const objective = document.querySelector('#objective-metrics'), subjective = document.querySelector('#subjective-metrics');
     objective.replaceChildren(); subjective.replaceChildren();
+    const interaction = document.querySelector('#interaction-metrics'); interaction.replaceChildren();
     const waiting = '—';
+    const opportunityCard = (title, key, description) => {
+      const value = scores?.[key];
+      const label = !value ? 'Not analyzed' : !value.opportunities ? 'No relevant opportunities' : !value.assessed ? 'Unclear evidence' : ratio(value.successful, value.assessed);
+      card(interaction, title, label, description + (value ? ` ${value.opportunities} opportunities; ${value.unclear} unclear.` : ''), 'AI estimate · review session evidence');
+    };
+    opportunityCard('Cross-agent preference application', 'preferenceApplication', 'Concrete use of a relevant personal preference told to the other agent, beyond public trip notes.');
+    opportunityCard('Correction carryover', 'correctionCarryover', 'Later recommendations that respect a revised preference told to the other agent.');
+    opportunityCard('Missing-context handling', 'contextHandling', 'Relevant clarification or an honest provisional suggestion when personal context is missing.');
     card(objective, 'Re-ask rate', scores ? ratio(scores.reasks, scores.questions) : waiting, 'Question turns that re-ask facts given to the other agent, divided by all analyzed question turns.', 'AI estimate');
     card(objective, 'Handoff continuity', scores ? ratio(scores.continuityCorrect, scores.continuityAssessed) : waiting, 'First replies after a switch that continue the previous conversation correctly.', 'AI estimate · unassessable replies excluded');
     card(objective, 'Preference violations', scores ? scores.violations : waiting, 'Agent turns suggesting something that conflicts with a fact available at that point.', 'AI estimate');
-    card(objective, 'Memory utilization', scores ? ratio(scores.memoriesUsed, scores.memoriesAvailable) : waiting, 'Relevant uses of stored memory facts captured per response. Older turns without snapshots are excluded.', 'AI estimate · per-turn memory context');
+    card(objective, 'Saved-entry use', scores ? ratio(scores.memoriesUsed, scores.memoriesAvailable) : waiting, 'Use of captured saved entries only; recent shared chats and other conversation context are not counted. Older turns without snapshots are unassessable.', 'AI estimate · per-turn memory context');
     card(objective, 'Agent switches', s.switches.tracked, `${s.switches.suggested} with a suggestion highlighted · ${s.switches.manual} without. ${s.switches.inferred} additional untracked transitions (inferred).`, 'Tracked count · every recorded switch is user initiated');
     card(subjective, 'User words per turn', s.wordsPerTurn ?? 'No user turns', `${s.userWords} words across ${s.userTurns} user turns. Excludes greetings and switch events.`, 'Counted from transcripts');
     card(subjective, 'Volunteered facts', scores ? scores.volunteeredFacts : waiting, 'Distinct user facts volunteered without a preceding request. This is a proxy for self-disclosure.', 'AI estimate');
@@ -49,12 +58,15 @@
     evidence.append(timeline);
     if (s.task) evidence.append(node('p', s.task.requirements.map(r => `${r.complete ? '✓' : '○'} ${r.label}`).join(' · ')));
     if (!current) for (const group of s.byAgentAndMode) evidence.append(node('p', `${group.agent} · ${group.mode === 'isolated' ? 'separate' : 'shared'}: ${group.wordsPerTurn} words/turn across ${group.turns} turns.`));
-    if (a) for (const [key, title] of [['reasks','Re-asks'], ['continuity','Continuity'], ['violations','Preference violations'], ['memory_use','Memory used'], ['volunteered','Volunteered facts'], ['wasted','Re-explanations'], ['satisfaction','Satisfaction'], ['cross_agent_conflicts','Cross-agent preference conflicts'], ['task_outcomes','Session task outcome']]) {
+    if (a) for (const [key, title] of [['reasks','Re-asks'], ['continuity','Continuity'], ['violations','Preference violations'], ['memory_use','Memory used'], ['volunteered','Volunteered facts'], ['wasted','Re-explanations'], ['satisfaction','Satisfaction'], ['cross_agent_conflicts','Cross-agent preference conflicts'], ['task_outcomes','Session task outcome'], ['preference_opportunities','Preference application opportunities'], ['correction_opportunities','Correction carryover opportunities'], ['context_handling','Missing-context opportunities']]) {
       const section = node('details', '', 'finding-group'); section.append(node('summary', `${title} (${a[key]?.length || 0})`));
       if (!a[key]?.length) section.append(node('p', 'No supported findings in the analyzed window.'));
       for (const item of a[key] || []) {
         const entry = node('article', '', 'metric-finding');
         entry.append(node('strong', `${item.agent} · ${item.mode === 'isolated' ? 'separate' : 'shared'} · ${item.turn_id}`));
+        if ('applied' in item || 'respected' in item) { const value = 'applied' in item ? item.applied : item.respected; entry.append(node('p', value === null ? 'Unclear application' : value ? 'Applied in the recommendation' : 'Not applied')); }
+        if (item.behavior) entry.append(node('p', `${item.behavior.replaceAll('_', ' ')} · ${item.needed_detail}`));
+        if (item.prior_user_text) entry.append(node('blockquote', `Before correction: ${item.prior_user_text}`));
         if (item.fact || item.quote) entry.append(node('p', item.fact || item.quote));
         if (item.reason) entry.append(node('p', item.reason));
         if (item.source_user_text) entry.append(node('blockquote', `Earlier user: ${item.source_user_text}`));
@@ -94,7 +106,7 @@
       } else if (session.analysis && data.analysis) {
         const ids = new Set(session.turnIds);
         const scoped = { ...data.analysis, scores: session.analysis };
-        for (const key of ['reasks','continuity','violations','memory_use','volunteered','wasted','satisfaction','cross_agent_conflicts','task_outcomes']) scoped[key] = (data.analysis[key] || []).filter(v => ids.has(v.turn_id));
+        for (const key of ['reasks','continuity','violations','memory_use','volunteered','wasted','satisfaction','cross_agent_conflicts','task_outcomes','preference_opportunities','correction_opportunities','context_handling']) scoped[key] = (data.analysis[key] || []).filter(v => ids.has(v.turn_id));
         data.sessionAnalyses[session.id] = scoped;
       }
     }
@@ -104,7 +116,7 @@
     if (busy) { status.textContent = 'Finish the current metrics request before selecting another user.'; if (!dialog.open) dialog.showModal?.(); return; }
     selected = name; sessionId = requestedId; report = null; analyze.disabled = download.disabled = true;
     document.querySelector('#metrics-heading').textContent = name;
-    document.querySelector('#objective-metrics').replaceChildren(); document.querySelector('#subjective-metrics').replaceChildren(); document.querySelector('#metrics-evidence').replaceChildren();
+    document.querySelector('#interaction-metrics').replaceChildren(); document.querySelector('#objective-metrics').replaceChildren(); document.querySelector('#subjective-metrics').replaceChildren(); document.querySelector('#metrics-evidence').replaceChildren();
     document.querySelector('#metrics-coverage').textContent = '';
     if (!dialog.open) dialog.showModal?.();
     if (cache.has(name)) { render(cache.get(name)); status.textContent = 'Saved for this page session. Analyze again to refresh.'; return; }
@@ -132,7 +144,7 @@
     head.append(header); table.append(head); const body = node('tbody', '');
     for (let i = 0; i < groups.shared.metrics.length; i++) {
       const row = node('tr', ''), metric = groups.shared.metrics[i], label = node('th', metric.label); label.append(node('small', metric.basis)); row.append(label);
-      for (const mode of modes) { const value = groups[mode].metrics[i]; const cell = node('td', value.mean == null ? 'Not assessed' : `${value.mean.toFixed(1)}${value.format === 'percent' ? '%' : ''}`); cell.append(node('small', `n = ${value.n} sessions`)); row.append(cell); }
+      for (const mode of modes) { const value = groups[mode].metrics[i]; const cell = node('td', value.mean == null ? 'Not assessed' : `${value.mean.toFixed(1)}${value.format === 'percent' ? '%' : ''}`); cell.append(node('small', `n = ${value.n} sessions${value.opportunities != null ? ' · ' + value.assessedOpportunities + '/' + value.opportunities + ' assessable opportunities' : ''}`)); row.append(cell); }
       const shared = groups.shared.metrics[i], separate = groups.isolated.metrics[i];
       const delta = shared.mean == null || separate.mean == null ? null : shared.mean - separate.mean;
       row.append(node('td', delta == null ? 'Not assessed' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}${metric.format === 'percent' ? ' pp' : ''}`));
@@ -140,7 +152,7 @@
     }
     table.append(body);
     const sessions = document.querySelector('#comparison-sessions'); sessions.replaceChildren();
-    sessions.append(node('p', 'Sessions are inferred per device with a 30-minute inactivity gap. Reports stay in this page until refresh; download them to keep results. Percentage differences are percentage points (pp).'));
+    sessions.append(node('p', 'Each Name ID is one session, across agents, devices and time gaps. Reports stay in this page until refresh; download them to keep results. Percentage differences are percentage points (pp).'));
     for (const session of comparisonData.sessions) {
       const entry = node('div', '', 'comparison-session');
       entry.append(node('strong', `${session.nameId} · ${session.condition === 'isolated' ? 'Separate' : session.condition === 'shared' ? 'Shared' : 'Unknown'}`));
@@ -150,7 +162,7 @@
     const analyzed = comparisonData.sessions.filter(s => s.analysis).length;
     document.querySelector('#comparison-coverage').textContent = `${cache.size} users loaded · ${comparisonData.sessions.length} sessions retained · ${analyzed} sessions analyzed. Counts use each report’s available window; estimates use its analyzed sample.`;
     document.querySelector('#download-comparison').disabled = !cache.size;
-    document.querySelector('#analyze-comparison').disabled = busy || !comparisonData.sessions.some(s => s.userTurns && !s.analysis);
+    document.querySelector('#analyze-comparison').disabled = busy || !comparisonData.sessions.some(s => s.userTurns && window.MemoryComparison.needsAnalysis(s));
   }
   function comparisonBusy(value) {
     busy = value; document.querySelector('#load-comparison').disabled = value;
@@ -192,7 +204,7 @@
   }
   async function analyzeGroups() {
     if (busy) return; cancelComparison = false;
-    const queue = window.MemoryComparison.build([...cache.values()]).sessions.filter(s => s.userTurns && !s.analysis);
+    const queue = window.MemoryComparison.build([...cache.values()]).sessions.filter(s => s.userTurns && window.MemoryComparison.needsAnalysis(s));
     comparisonBusy(true);
     try {
       for (const [index, session] of queue.entries()) {

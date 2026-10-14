@@ -1,15 +1,9 @@
+import { opportunityScores } from './opportunity-metrics.mjs';
 const words = text => String(text || '').trim().match(/\S+/gu)?.length || 0;
 const mode = row => ['shared', 'isolated'].includes(row.memory_sharing_mode) ? row.memory_sharing_mode : 'unknown';
-// Agent session_id changes on switches. Infer a research session per device instead.
+// One research session per Name ID, across agents, devices and time gaps.
 export function tagSessions(rows) {
-  const previous = new Map();
-  return rows.map(row => {
-    const device = row.participant_id || 'legacy';
-    const time = Date.parse(row.timestamp), last = previous.get(device);
-    const id = row.research_session || (!last || (Number.isFinite(time) && Number.isFinite(last.time) && time - last.time >= 30 * 60_000) ? `${device}:${row.turn_id}` : last.id);
-    previous.set(device, { time, id });
-    return { ...row, research_session: id };
-  });
+  return rows.map(row => ({ ...row, research_session: String(row.speaker || 'user-session').trim().toLowerCase() }));
 }
 export function sessionReports(rows, analysis = null, analyzedRows = []) {
   const tagged = tagSessions(rows), groups = new Map();
@@ -36,7 +30,7 @@ export function sessionReports(rows, analysis = null, analyzedRows = []) {
       const wasted = new Set(findings('wasted').map(v => v.turn_id));
       const recordedWasted = sample.filter(t => wasted.has(t.turn_id) && Number.isFinite(t.speech_duration_ms));
       const outcomes = findings('task_outcomes');
-      estimates = { sampledRecords: entries.filter(t => sampled.has(t.turn_id)).length, userTurns: sample.filter(t => t.user_text?.trim()).length,
+      estimates = { ...opportunityScores(analysis, ids), sampledRecords: entries.filter(t => sampled.has(t.turn_id)).length, userTurns: sample.filter(t => t.user_text?.trim()).length,
         assistantTurns: sample.filter(t => t.agent_reply?.trim()).length,
         reasks: findings('reasks').length, questions, continuityCorrect: continuity.filter(v => v.picked_up).length, continuityAssessed: continuity.length,
         violations: findings('violations').length, crossAgentConflicts: analysis.crossAgentConflictsAssessed ? findings('cross_agent_conflicts').length : null,
