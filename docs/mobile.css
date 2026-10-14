@@ -1,5 +1,5 @@
 /* Desktop keeps the existing layout. Notes disclosure is only shown below 850px. */
-#toggle-trip-notes,.mobile-start-guide,#mobile-trip-details,.mobile-planning-nav,#mobile-memory-settings{display:none}
+.mobile-goal-summary,#toggle-trip-notes,.mobile-start-guide,#mobile-trip-details,.mobile-planning-nav,#mobile-memory-settings{display:none}
 @media(max-width:850px){
   .shell{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
   .topbar{height:52px;gap:10px}
@@ -124,4 +124,23 @@
   .record-row{flex-wrap:wrap}
   .record-button{flex:1;justify-content:center}
   .record-help{width:100%}
+}
+
+@media(max-width:850px){
+  .mobile-goal-summary{display:flex;flex-direction:column;gap:7px;width:100%;min-width:0;margin:0 0 14px;padding:12px 14px;text-align:left;white-space:normal;border:1px solid #d2b28f;border-radius:12px;background:#fff5e8;color:#654c35;font:inherit;cursor:pointer}
+  .mobile-goal-heading{display:flex;align-items:center;gap:10px;font-size:13px;line-height:1.4}
+  .mobile-goal-heading strong{flex:1;min-width:0}
+  #mobile-goal-count{font-weight:700;font-variant-numeric:tabular-nums}
+  .mobile-goal-summary progress{display:block;width:100%;height:5px;border:0;border-radius:8px;overflow:hidden;appearance:none;background:#e9d6c2;accent-color:#a85b24}
+  .mobile-goal-summary progress::-webkit-progress-bar{background:#e9d6c2;border-radius:8px}
+  .mobile-goal-summary progress::-webkit-progress-value{background:#a85b24;border-radius:8px}
+  .mobile-goal-summary progress::-moz-progress-bar{background:#a85b24;border-radius:8px}
+  #mobile-goal-next{font-size:12px;line-height:1.5;font-weight:600}
+  .mobile-goal-summary small{font-size:11px;line-height:1.5}
+  .mobile-goal-summary:focus-visible{outline:3px solid currentColor;outline-offset:3px}
+  #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary{background:#edf4e9;border-color:#9fb596;color:#36553f}
+  #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary progress{accent-color:#466d45;background:#d6e2cf}
+  #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary progress::-webkit-progress-bar{background:#d6e2cf}
+  #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary progress::-webkit-progress-value{background:#466d45}
+  #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary progress::-moz-progress-bar{background:#466d45}
 }

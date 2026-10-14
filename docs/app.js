@@ -634,6 +634,8 @@
     document.querySelector('.workspace').hidden = isMobile && mobileTripOpen;
     document.querySelector('#mobile-trip-details').hidden = !isMobile || !mobileTripOpen;
     document.querySelector('.mobile-start-guide').hidden = isMobile && mobileTripOpen;
+    const goalSummary = document.querySelector('#mobile-goal-summary');
+    if (goalSummary) goalSummary.hidden = !isMobile || mobileTripOpen;
     document.querySelector('#mobile-chat-view').setAttribute('aria-pressed', String(!mobileTripOpen));
     document.querySelector('#mobile-details-view').setAttribute('aria-pressed', String(mobileTripOpen));
     syncPlannerHeight();
@@ -645,6 +647,12 @@
   document.querySelector('#mobile-details-view').addEventListener('click', () => {
     mobileTripOpen = true;
     syncMobileNotes();
+  });
+  document.querySelector('#mobile-goal-summary')?.addEventListener('click', () => {
+    selectPlannerView('checklist');
+    mobileTripOpen = true;
+    syncMobileNotes();
+    document.querySelector('#planner-checklist-view').focus();
   });
   mobileLayout?.addEventListener?.('change', syncMobileNotes);
   // Keep primary conversation actions ahead of optional settings on both layouts.

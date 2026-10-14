@@ -51,6 +51,17 @@
       item.dataset.complete = String(done);
     }
     document.querySelector('#goal-progress').textContent = `${requirements.filter(([, done]) => done).length} of 5 complete`;
+    const completeCount = requirements.filter(([, done]) => done).length;
+    const mobileSummary = document.querySelector('#mobile-goal-summary');
+    if (mobileSummary) {
+      document.querySelector('#mobile-goal-count').textContent = `${completeCount}/5`;
+      document.querySelector('#mobile-goal-progress').value = completeCount;
+      mobileSummary.setAttribute('aria-label', `Open trip checklist, ${completeCount} of 5 complete`);
+      const next = requirements.find(([, done]) => !done);
+      document.querySelector('#mobile-goal-next').textContent = snapshot.ready ? 'Your trip is ready to finish.' : `Next: ${next ? next[2] : 'review your itinerary with Astra'}`;
+      document.querySelector('#mobile-goal-caption').textContent = snapshot.ready ? 'Tap to view your checklist and continue.' : 'Complete all 5 steps to reach Finish. Tap to view.';
+    }
+
     document.querySelector('#trip-goal-hint').textContent = snapshot.ready ? 'Your trip is ready. Continue to the form.' :
       countries.length < 1 || cities.length < 1 ? 'Sage: choose your country, first city, and an activity.' :
       !cityActivities[cities[0]] ? `Sage: choose an activity in ${cities[0]}.` :
