@@ -327,6 +327,9 @@
   tapMode.addEventListener('click', () => chooseMode(false));
   handsfreeMode.addEventListener('click', () => chooseMode(true));
   function greetFirstVisit() {
+    // Restored chats already contain the agent's opening or last reply.
+    // A refresh must not append another welcome or replace a pending question.
+    if (history.length) return;
     if (engine === 'pipeline' && document.body.dataset.stage === 'planning' && !welcomedConversations.has(activeConversationKey)) pipeline.greet?.();
   }
   window.addEventListener('trip-planning:open', greetFirstVisit);
