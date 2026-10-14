@@ -43,7 +43,7 @@ export async function profileRequest(request, env, cors) {
     if (data.action === 'load') {
       const row = await env.LOG_DB.prepare('SELECT payload, version FROM trip_profiles WHERE name_id = ?').bind(id).first();
       const profile = row ? JSON.parse(row.payload) : null;
-      const { results } = await env.LOG_DB.prepare('SELECT payload, interrupted FROM chat_turns WHERE speaker_lower = ? ORDER BY id DESC LIMIT 500').bind(id).all();
+      const { results } = await env.LOG_DB.prepare("SELECT payload, interrupted FROM chat_turns WHERE speaker_lower = ? AND COALESCE(json_extract(payload, '$.event_type'), '') != 'agent_switch' ORDER BY id DESC LIMIT 500").bind(id).all();
       const chatTurns = results.reverse().flatMap(item => {
         const turn = JSON.parse(item.payload);
         if (!['sage', 'astra'].includes(turn.agent) || !['shared', 'isolated'].includes(turn.memory_sharing_mode) || !['pipeline', 'realtime'].includes(turn.engine)) return [];

@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#f4f1e9">
   <title>Chat logs · Sage & Astra</title>
   <script src="config.js" defer></script>
-  <script src="host-logs.js?v=mobile-5" defer></script>
+  <script src="host-metrics.js?v=1" defer></script>
+  <script src="host-logs.js?v=metrics-6" defer></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
     :root{font-family:'DM Sans',sans-serif;color:#294b3b;background:#f4f1e9;font-synthesis:none}
@@ -86,6 +87,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 .user-downloads>button+button{margin-top:6px}
   </style>
   <link rel="stylesheet" href="mobile.css?v=1">
+  <link rel="stylesheet" href="host-metrics.css?v=1">
 </head>
 <body>
 <div class="scene-background" aria-hidden="true"><svg class="journey-art" preserveAspectRatio="xMidYMax slice" viewBox="0 0 1120 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
@@ -112,40 +114,29 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
   <div class="shell">
     <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m21 3-7 18-4-7-7-4 18-7Z"/><path d="m10 14 6-6"/></svg></span> SAGE &amp; ASTRA</div></header>
     <main>
-      <div class="intro"><p class="eyebrow">HOST DESK</p><h1>Conversation archive</h1><p>Bring your travelers’ conversations together.</p></div>
+      <div class="intro"><p class="eyebrow">HOST DESK</p><h1>Users &amp; metrics</h1></div>
       <section class="host-card" aria-label="Download chats and agent memories">
-        <aside class="archive">
-          <svg viewBox="0 0 240 190" fill="none" aria-hidden="true">
-            <circle cx="186" cy="40" r="23" fill="#e7b98b"/><path d="m12 145 48-60 30 36 42-71 89 95" fill="#b3c9a4"/><path d="m100 104 32-54 33 54-21-10-12 11-10-15Z" fill="#f9f6e9"/>
-            <rect x="43" y="36" width="112" height="131" rx="10" transform="rotate(-8 43 36)" fill="#adc399"/>
-            <rect x="62" y="27" width="112" height="139" rx="10" fill="#fffaf0" stroke="#8ba17a" stroke-width="1.5"/>
-            <path d="M83 57h56M83 70h70M83 118h70M83 131h50" stroke="#c8d2b7" stroke-width="3" stroke-linecap="round"/>
-            <path d="M84 93h18l9-13 14 21 12-10h16" stroke="#779268" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="163" cy="147" r="27" fill="#e7b98b" stroke="#fffaf0" stroke-width="4"/><path d="M163 135v23m-8-8 8 8 8-8" stroke="#69482f" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <div><span class="archive-tag">SAVED ALONG THE WAY</span><h2>Every journey, in words.</h2><p>Download conversations and agent memories as JSON. Audio is not stored.</p></div>
-        </aside>
         <div class="export-panel">
-          <h2>Download saved data</h2><p>Export chat logs or synced agent memories as JSON.</p>
+          <h2>Saved data</h2>
           <form id="log-export">
             <div class="field"><label for="host-key">Private host key</label><input id="host-key" type="password" autocomplete="off" placeholder="Enter your host key" required aria-describedby="key-help"><small id="key-help">Your LOG_ADMIN_KEY, separate from the demo code.</small></div>
-            <div class="field"><label for="log-speaker">Tester name <span>optional</span></label><input id="log-speaker" type="text" maxlength="40" placeholder="Leave blank for everyone" aria-describedby="name-help"><small id="name-help">Names match regardless of capitalization.</small></div>
+            <div class="field"><label for="log-speaker">Name ID <span>optional</span></label><input id="log-speaker" type="text" maxlength="40" placeholder="Leave blank for everyone"></div>
             <div class="export-actions"><button id="export-logs" type="submit"><span>Download chat logs</span><span aria-hidden="true">↓</span></button><button id="export-memories" type="button"><span>Download memories</span><span aria-hidden="true">↓</span></button></div>
           </form>
-          <p id="export-status" role="status" aria-live="polite">Your key isn’t stored and is cleared after each host action.</p>
+          <p id="export-status" role="status" aria-live="polite">Key stays until refresh. It isn’t saved.</p>
         </div>
       </section>
 
       <section class="users-card" aria-labelledby="users-heading">
         <h2 id="users-heading">Saved users</h2>
-        <p>Find Name IDs with saved trip profiles or chat logs. Use an ID for export, or delete data beside its name.</p>
+        
         <form id="user-list-form" class="users-toolbar">
           <div class="field"><label for="user-search">Search Name IDs <span>optional</span></label><input id="user-search" type="search" maxlength="40" placeholder="Leave blank for everyone" autocomplete="off"></div>
           <button id="load-users" type="submit">Load users ↻</button>
         </form>
-        <fieldset class="delete-options users-delete-options"><legend>Data to delete with each user’s Delete button</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>
+        <fieldset class="delete-options users-delete-options"><legend>Delete options</legend><label><input id="delete-trip" type="checkbox" checked>Memories and trip notes</label><label><input id="delete-logs" type="checkbox" checked>Chat logs</label></fieldset>
         <div class="users-table-wrap" tabindex="0" role="region" aria-label="Saved user list">
-          <table class="users-table" role="table"><thead><tr><th scope="col">Name ID</th><th scope="col">Chat turns</th><th scope="col">Last saved</th><th scope="col">Trip</th><th scope="col">Downloads</th></tr></thead>
+          <table class="users-table" role="table"><thead><tr><th scope="col">Name ID</th><th scope="col">Turns</th><th scope="col">Switches</th><th scope="col">Trip</th><th scope="col">Actions</th></tr></thead>
           <tbody id="users-rows"><tr><td colspan="5">Enter your host key above, then load users.</td></tr></tbody></table>
         </div>
         <p id="users-status" role="status" aria-live="polite"></p>
@@ -153,6 +144,14 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
 
         <p id="delete-status" role="status" aria-live="polite"></p>
       </section>
+      <dialog id="metrics-dialog" aria-labelledby="metrics-heading">
+        <div class="metrics-header"><div><p class="eyebrow">USER METRICS</p><h2 id="metrics-heading">Trip metrics</h2></div><button id="close-metrics" type="button" aria-label="Close metrics">×</button></div>
+        <div class="metrics-actions"><button id="analyze-metrics" type="button">Analyze conversation</button><button id="download-metrics" type="button">Download metrics</button></div>
+        <p id="metrics-status" role="status" aria-live="polite"></p><p id="metrics-coverage"></p>
+        <h3>Objective metrics</h3><div id="objective-metrics" class="metrics-grid"></div>
+        <h3>Behavior &amp; self-report</h3><div id="subjective-metrics" class="metrics-grid"></div>
+        <details class="metric-evidence"><summary>Evidence &amp; definitions</summary><div id="metrics-evidence"></div></details>
+      </dialog>
     </main>
     <footer><span>SAGE &amp; ASTRA</span><span>Ideas to itineraries.</span></footer>
   </div>

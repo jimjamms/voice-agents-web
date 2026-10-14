@@ -1,3 +1,4 @@
+import { tripProgress } from './metrics.mjs';
 import agents from './pipeline_agents.json' with { type: 'json' };
 const json = (value, status, cors) => new Response(JSON.stringify(value), { status, headers: { ...cors, 'content-type': 'application/json', 'cache-control': 'no-store' } });
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
@@ -7,10 +8,17 @@ export function cleanTurn(turn) {
     !['shared','isolated'].includes(turn.memory_sharing_mode) || typeof turn.speaker !== 'string' || turn.speaker.length > 40 ||
     typeof turn.user_text !== 'string' || turn.user_text.length > 3500 || typeof turn.agent_reply !== 'string' || turn.agent_reply.length > 3500 ||
     typeof turn.timestamp !== 'string' || !Number.isFinite(Date.parse(turn.timestamp))) throw new Error('Invalid turn');
+  const isSwitch = turn.event_type === 'agent_switch';
+  if (turn.event_type && !isSwitch) throw new Error('Invalid event type');
+  if (isSwitch && (!['sage','astra'].includes(turn.from_agent) || turn.from_agent === turn.agent || turn.initiated_by !== 'user' || !['button','card'].includes(turn.switch_source) || typeof turn.suggested !== 'boolean' || turn.user_text || turn.agent_reply)) throw new Error('Invalid agent switch');
+  if (turn.memory_facts != null && (!Array.isArray(turn.memory_facts) || turn.memory_facts.length > 20 || turn.memory_facts.some(f => typeof f !== 'string' || !f.trim() || f.length > 600))) throw new Error('Invalid memory context');
   return { turn_id: turn.turn_id, participant_id: turn.participant_id, session_id: turn.session_id,
     timestamp: new Date(turn.timestamp).toISOString(), agent: turn.agent, agent_name: agents[turn.agent].name,
     agent_traits: agents[turn.agent].traits, engine: turn.engine, memory_sharing_mode: turn.memory_sharing_mode,
     ...(['text', 'voice', 'greeting'].includes(turn.inputMode || turn.input_mode) ? { input_mode: turn.inputMode || turn.input_mode } : {}),
+    ...(isSwitch && { event_type: 'agent_switch', from_agent: turn.from_agent, initiated_by: 'user', switch_source: turn.switch_source, suggested: turn.suggested }),
+    ...(Array.isArray(turn.memory_facts) && { memory_facts: [...new Set(turn.memory_facts)] }),
+    ...(Number.isFinite(turn.speech_duration_ms) && turn.speech_duration_ms >= 0 && turn.speech_duration_ms <= 60000 && { speech_duration_ms: Math.round(turn.speech_duration_ms) }),
     speaker: turn.speaker.trim() || 'Unknown', user_text: turn.user_text, agent_reply: turn.agent_reply, interrupted: turn.interrupted === true };
 }
 export async function saveLogs(request, env, cors) {
@@ -93,8 +101,9 @@ export async function listUsers(request, env, cors) {
     const { results } = await env.LOG_DB.prepare(`WITH names AS (
       SELECT name_id FROM trip_profiles UNION SELECT speaker_lower AS name_id FROM chat_turns
     ), filtered AS (SELECT name_id FROM names WHERE instr(name_id, ?) > 0), chats AS (
-      SELECT speaker_lower, COUNT(*) AS turn_count, MAX(received_at) AS last_seen FROM chat_turns GROUP BY speaker_lower
-    ) SELECT n.name_id, p.payload, p.updated_at, COALESCE(c.turn_count, 0) AS turn_count,
+      SELECT speaker_lower, SUM(CASE WHEN json_extract(payload, '$.event_type') = 'agent_switch' THEN 0 ELSE 1 END) AS turn_count,
+        SUM(CASE WHEN json_extract(payload, '$.event_type') = 'agent_switch' THEN 1 ELSE 0 END) AS switch_count, MAX(received_at) AS last_seen FROM chat_turns GROUP BY speaker_lower
+    ) SELECT n.name_id, p.payload, p.updated_at, COALESCE(c.turn_count, 0) AS turn_count, COALESCE(c.switch_count, 0) AS switch_count,
       COALESCE(d.generation, 0) AS generation,
       CASE WHEN c.last_seen IS NULL OR julianday(p.updated_at) >= julianday(c.last_seen)
         THEN strftime('%Y-%m-%dT%H:%M:%fZ', p.updated_at) ELSE c.last_seen END AS last_saved,
@@ -108,7 +117,7 @@ export async function listUsers(request, env, cors) {
       try { profile = row.payload ? JSON.parse(row.payload) : null; } catch { profile = null; }
       const hasTrip = Boolean(profile && (profile.notes?.trim() || profile.choices?.countries?.length || profile.choices?.cities?.length || profile.choices?.budget ||
         Object.values(profile.memories || {}).some(value => Array.isArray(value) && value.length)));
-      return { nameId: row.name_id, chatTurns: Number(row.turn_count), lastSaved: row.last_saved || null,
+      return { nameId: row.name_id, chatTurns: Number(row.turn_count), trackedSwitches: Number(row.switch_count), progress: tripProgress(profile), lastSaved: row.last_saved || null,
         tripStatus: hasTrip ? 'Saved trip' : row.generation > 0 && profile ? 'Trip reset' : profile ? 'New trip' : 'Logs only' };
     });
     return json({ users, total: Number(results[0]?.total_count || 0), nextCursor: results.length > limit ? page.at(-1).name_id : null }, 200, cors);

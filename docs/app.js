@@ -39,6 +39,7 @@
   const conversations = new Map();
   const welcomedConversations = new Set();
   let pendingHandoffKey = null;
+  let switchSource = 'card';
   const handoffPrompts = {
     "first-review": {
       "agent": "astra",
@@ -289,6 +290,7 @@
     if (sharedBootstrapNames.delete(name)) for (const turn of chatTurns.filter(item => item.memory_sharing_mode === 'shared').slice(-6)) window.AgentMemory.recordShared?.(name, 'shared', turn.agent, turn.user_text, turn.agent_reply, turn.timestamp);
     for (const key of conversations.keys()) if (JSON.parse(key)[0] === name) conversations.delete(key);
     for (const turn of chatTurns) {
+      if (turn.event_type === 'agent_switch') continue;
       if (!['sage', 'astra'].includes(turn.agent) || !['pipeline', 'realtime'].includes(turn.engine) || !['shared', 'isolated'].includes(turn.memory_sharing_mode)) continue;
       const key = JSON.stringify([name, turn.memory_sharing_mode, turn.engine, turn.agent]);
       const saved = conversations.get(key) || { history: [], sessionId: turn.session_id || crypto.randomUUID() };
@@ -379,8 +381,14 @@
   window.addEventListener('trip-audio:unlock', () => pipeline.unlockAudio?.());
   cards.forEach(card => card.addEventListener('click', () => {
     if (connected || connecting || pipeline.isLocked() || enrolling) return;
+    const fromAgent = agent, suggested = switchAgent.dataset.suggested === 'true';
     const changedAgent = agent !== card.dataset.agent;
-    if (changedAgent) { agent = card.dataset.agent; switchConversation(); pendingHandoffKey = activeConversationKey; }
+    if (changedAgent) {
+      agent = card.dataset.agent; switchConversation(); pendingHandoffKey = activeConversationKey;
+      if (document.body.dataset.stage === 'planning') remoteLogger?.record({ timestamp: new Date().toISOString(), session_id: sessionId,
+        agent, engine, memory_sharing_mode: memoryMode.value, speaker: speakerName.value.trim() || 'Unknown',
+        event_type: 'agent_switch', from_agent: fromAgent, initiated_by: 'user', switch_source: switchSource, suggested, user_text: '', agent_reply: '' });
+    }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
     if (!maybeSpeakHandoff()) greetFirstVisit();
@@ -389,7 +397,8 @@
     if (switchAgent.disabled || enrolling) return;
     if (responseActive || pipeline.playing) markInterrupted();
     pipeline.stop(); endSession('Ready when you are');
-    cards.find(card => card.dataset.agent !== agent).click();
+    switchSource = 'button';
+    try { cards.find(card => card.dataset.agent !== agent).click(); } finally { switchSource = 'card'; }
   });
   document.querySelector('#reset').addEventListener('click', reset);
   disconnectButton.addEventListener('click', () => endSession());

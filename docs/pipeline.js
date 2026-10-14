@@ -171,6 +171,7 @@
           else this.status('That recording was too short. Try again.');
           this.notify(); return;
         }
+        this.clipDurationMs = Math.max(0, Math.min(60000, Math.round(performance.now() - this.startedAt)));
         await this.submit(blob, generation);
       }, { once: true });
       recorder.start(); this.recording = true; this.startedAt = performance.now();
@@ -297,7 +298,7 @@
       if (text !== null) { form.set('text', text); form.set('reply_audio', String(speakReply)); }
       else if (!blob) { form.set('greeting', 'true'); if (handoffStep) form.set('handoff_step', handoffStep); }
       const extension = blob?.type.includes('mp4') ? 'm4a' : blob?.type.includes('ogg') ? 'ogg' : 'webm';
-      if (blob) form.set('audio', blob, `turn.${extension}`);
+      if (blob) { form.set('audio', blob, `turn.${extension}`); if (this.clipDurationMs) form.set('speech_duration_ms', String(this.clipDurationMs)); }
       let shouldResume = false;
       try {
         const base = this.options.base();

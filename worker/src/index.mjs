@@ -1,3 +1,4 @@
+import { userMetrics } from './metrics.mjs';
 import { profileRequest } from './profiles.mjs';
 import agents from './agents.json' with { type: 'json' };
 import { saveLogs, exportLogs, deleteUserData, listUsers, exportMemories } from './logs.mjs';
@@ -46,9 +47,10 @@ export default {
       return json({ status: 'ok', modes: ['realtime', 'pipeline'] }, 200, { 'cache-control': 'no-store' });
     }
     const allowedOrigin = env.PUBLIC_ORIGIN?.replace(/\/$/, '');
-    if ((['/logs/export', '/logs/users', '/memories/export'].includes(url.pathname) && request.method === 'GET') || (url.pathname === '/logs/delete' && request.method === 'POST')) {
+    if ((['/logs/export', '/logs/users', '/memories/export'].includes(url.pathname) && request.method === 'GET') || (url.pathname === '/logs/delete' && request.method === 'POST') || (url.pathname === '/logs/metrics' && ['GET','POST'].includes(request.method))) {
       const origin = request.headers.get('origin');
       if (origin && origin !== allowedOrigin) return json({ error: 'Origin not allowed.' }, 403);
+      if (url.pathname === '/logs/metrics') return userMetrics(request, env, origin ? corsFor(allowedOrigin) : {});
       if (url.pathname === '/memories/export') return exportMemories(request, env, origin ? corsFor(allowedOrigin) : {});
       if (url.pathname === '/logs/users') return listUsers(request, env, origin ? corsFor(allowedOrigin) : {});
       return url.pathname === '/logs/delete' ? deleteUserData(request, env, origin ? corsFor(allowedOrigin) : {}) : exportLogs(request, env, origin ? corsFor(allowedOrigin) : {});

@@ -20,6 +20,9 @@
       const value={ turn_id:turn.turn_id, participant_id:turn.participant_id, session_id:turn.session_id, timestamp:turn.timestamp,
         agent:turn.agent, engine:turn.engine, memory_sharing_mode:turn.memory_sharing_mode, speaker:turn.speaker,
         ...(['text', 'voice', 'greeting'].includes(turn.inputMode || turn.input_mode) ? { input_mode: turn.inputMode || turn.input_mode } : {}),
+        ...(turn.event_type === 'agent_switch' && { event_type: turn.event_type, from_agent: turn.from_agent, initiated_by: turn.initiated_by, switch_source: turn.switch_source, suggested: turn.suggested }),
+        ...(Array.isArray(turn.memory_facts) && { memory_facts: turn.memory_facts }),
+        ...(Number.isFinite(turn.speech_duration_ms) && { speech_duration_ms: turn.speech_duration_ms }),
         user_text:String(turn.user_text||'').slice(0,3500), agent_reply:String(turn.agent_reply||'').slice(0,3500), interrupted:turn.interrupted===true };
       const index=this.queue.findIndex(item=>item.turn_id===value.turn_id);
       if(index>=0)this.queue[index]=value; else this.queue.push(value);

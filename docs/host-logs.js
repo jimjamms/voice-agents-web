@@ -4,6 +4,8 @@
   const userRows = document.querySelector('#users-rows'), userStatus = document.querySelector('#users-status'), moreUsers = document.querySelector('#users-more');
   const memoryButton = document.querySelector('#export-memories');
   const deleteStatus = document.querySelector('#delete-status');
+  document.querySelector('#host-key').value = '';
+  window.addEventListener?.('pageshow', event => { if (!event.persisted) document.querySelector('#host-key').value = ''; });
   let users = [], nextUser = null, userSearch = '', userTotal = 0, deleting = false, rowActionButtons = [];
 
   form.addEventListener('submit',async event=>{
@@ -28,7 +30,7 @@
       const link=document.createElement('a'),url=URL.createObjectURL(blob);link.href=url;link.download=`chat-logs-${new Date().toISOString().slice(0,10)}.json`;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
       status.textContent=`Downloaded ${turns.length} turns.`;
     } catch(error){status.textContent=error.message||'Could not download logs.';}
-    finally {setHostBusy(false);document.querySelector('#host-key').value='';}
+    finally {setHostBusy(false);}
   });
   async function downloadMemories(speaker = '') {
     if (button.disabled || memoryButton.disabled || deleting) return;
@@ -61,7 +63,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       status.textContent = `Downloaded memories for ${profiles.length} user(s), with shared, Sage, and Astra memories kept separate.`;
     } catch (error) { status.textContent = error.message || 'Could not download memories.'; }
-    finally { setHostBusy(false); keyInput.value = ''; }
+    finally { setHostBusy(false); }
   }
   memoryButton.addEventListener('click', () => { void downloadMemories(document.querySelector('#log-speaker').value.trim()); });
   async function deleteUser(name) {
@@ -76,16 +78,18 @@
     try {
       const response = await fetch(`${base.replace(/\/$/, '')}/logs/delete`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` }, body: JSON.stringify({ name, confirm: name, trip, logs }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not delete data.');
-      deleteStatus.textContent = `Deleted ${data.profilesDeleted} saved trip profile(s) and ${data.turnsDeleted} chat turn(s) for ${name}. This Name ID can be reused.`;
+      deleteStatus.textContent = `Deleted ${data.profilesDeleted} saved trip profile(s) and ${data.turnsDeleted} log record(s) for ${name}. This Name ID can be reused.`;
       const listed = users.find(user => user.nameId === name);
       if (listed) {
         if (trip) { listed.tripStatus = 'Trip reset'; listed.lastSaved = new Date().toISOString(); }
-        if (logs) listed.chatTurns = 0;
+        if (logs) { listed.chatTurns = 0; listed.trackedSwitches = 0; }
+        if (trip) listed.progress = { completed: 0, ready: false };
+        window.invalidateUserMetrics?.(name);
         if (logs && listed.tripStatus === 'Logs only') { users = users.filter(user => user !== listed); userTotal--; }
         renderUsers(); userStatus.textContent = 'User list updated. Reset Name IDs remain reusable.';
       }
     } catch (error) { deleteStatus.textContent = error.message || 'Could not delete data.'; }
-    finally { deleting = false; setHostBusy(false); keyInput.value = ''; }
+    finally { deleting = false; setHostBusy(false); }
   }
   function setHostBusy(busy) {
     button.disabled = memoryButton.disabled = userButton.disabled = moreUsers.disabled = busy;
@@ -99,11 +103,10 @@
     }
     for (const user of users) {
       const row = document.createElement('tr');
-      const date = user.lastSaved ? new Date(user.lastSaved) : null;
-      const values = [user.nameId, user.chatTurns, date && Number.isFinite(date.getTime()) ? date.toLocaleString() : '—', user.tripStatus];
+      const values = [user.nameId, user.chatTurns, `${user.trackedSwitches || 0} tracked`, user.progress ? `${user.progress.completed}/5${user.progress.ready ? ' · Complete' : ''}` : user.tripStatus];
       values.forEach((value, index) => {
         const cell = document.createElement('td');
-        cell.setAttribute('data-label', ['Name ID', 'Chat turns', 'Last saved', 'Trip'][index]);
+        cell.setAttribute('data-label', ['Name ID', 'Turns', 'Switches', 'Trip'][index]);
         if (!index) {
           cell.className = 'user-id';
           const wrap = document.createElement('div'), name = document.createElement('span'), remove = document.createElement('button');
@@ -124,9 +127,12 @@
       const memory = document.createElement('button'); memory.type = 'button'; memory.className = 'user-use'; memory.textContent = 'Memories';
       memory.setAttribute('aria-label', `Download memories for ${user.nameId}`);
       memory.addEventListener('click', () => { void downloadMemories(user.nameId); });
-      rowActionButtons.push(use, memory);
-      actions.setAttribute('data-label', 'Downloads');
-      actions.className = 'user-downloads'; actions.append(use, memory); row.append(actions); userRows.append(row);
+      const metrics = document.createElement('button'); metrics.type = 'button'; metrics.className = 'user-use'; metrics.textContent = 'Metrics';
+      metrics.setAttribute('aria-label', `View metrics for ${user.nameId}`);
+      metrics.addEventListener('click', () => { void window.openUserMetrics?.(user.nameId); });
+      rowActionButtons.push(use, memory, metrics);
+      actions.setAttribute('data-label', 'Actions');
+      actions.className = 'user-downloads'; actions.append(use, memory, metrics); row.append(actions); userRows.append(row);
     }
   }
   async function loadUsers(append = false) {
@@ -144,11 +150,12 @@
       const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not load users.');
       if (!Array.isArray(data.users)) throw new Error('Invalid user list.');
       users = append ? [...users, ...data.users.filter(user => !users.some(old => old.nameId === user.nameId))] : data.users;
+      data.users.forEach(user => window.invalidateUserMetrics?.(user.nameId));
       nextUser = data.nextCursor; userTotal = data.total; userSearch = query;
       renderUsers(); moreUsers.hidden = !nextUser;
-      userStatus.textContent = `${users.length} of ${userTotal} users shown.${nextUser ? ' Re-enter your host key to load more.' : ''}`;
+      userStatus.textContent = `${users.length} of ${userTotal} users`;
     } catch (error) { userStatus.textContent = error.message || 'Could not load users.'; }
-    finally { setHostBusy(false); keyInput.value = ''; }
+    finally { setHostBusy(false); }
   }
   userForm.addEventListener('submit', event => { event.preventDefault(); void loadUsers(); });
   moreUsers.addEventListener('click', () => { if (nextUser) void loadUsers(true); });

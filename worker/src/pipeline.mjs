@@ -78,6 +78,9 @@ export async function pipelineTurn(request, env, cors) {
     const roundContext = round ? '\n\nCurrent planning round: ' + round + ' This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
+    const memoryFacts = greeting || !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
+    const rawDuration = Number(form.get('speech_duration_ms'));
+    const metricsContext = { ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
@@ -121,13 +124,13 @@ export async function pipelineTurn(request, env, cors) {
       if (!reply) throw new Error('Empty model reply.');
     }
     const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
-    if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, fact: await factPromise, traits: agent.traits, audio: null }, 200, cors);
+    if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: null }, 200, cors);
     const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: agent.voice,
         instructions: agent.instructions, input: reply, response_format: 'mp3' }),
     });
-    return json({ transcript, reply, greeting, inputMode, memoryDeferred, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
+    return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
   } catch (error) {
     console.error('Pipeline turn failed:', error);
     return json({ error: 'Could not complete this turn. Check API billing and try again.' }, 502, cors);
