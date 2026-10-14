@@ -268,7 +268,7 @@
       const generation = ++this.generation;
       await this.audioUnlock;
       if (generation !== this.generation) return;
-      await this.submit(null, generation, null, true, handoffStep);
+      return await this.submit(null, generation, null, true, handoffStep);
     }
     async sendText(text, speakReply = false) {
       text = String(text || '').trim();

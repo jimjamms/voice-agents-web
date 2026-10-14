@@ -40,6 +40,9 @@
   const welcomedConversations = new Set();
   let pendingHandoffKey = null;
   let switchSource = 'card';
+  const handoffOpenersByConversation = new Map();
+  const pendingOpeningRequests = new Map();
+  const unansweredOpeningConversations = new Set();
   const handoffPrompts = {
     "first-review": {
       "agent": "astra",
@@ -114,10 +117,13 @@
   const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
-    if (role === 'user') pendingHandoffKey = null;
+    if (role === 'user') { pendingHandoffKey = null; unansweredOpeningConversations.delete(activeConversationKey); }
+    const openingRequest = role === 'assistant' ? pendingOpeningRequests.get(activeConversationKey) : null;
+    if (openingRequest) { openingRequest.received = true; unansweredOpeningConversations.add(activeConversationKey); }
     if (role === 'assistant') highlightHandoff(text);
     const body = renderMessage(role, text, speaker);
     history.push({ role, content: text, at: new Date().toISOString(),
+      ...(role === 'assistant' && unansweredOpeningConversations.has(activeConversationKey) && { opening: true }),
       ...(speaker && { speaker: speaker.name, speaker_score: Math.round(speaker.score * 1000) / 1000 }) });
     return body;
   };
@@ -156,6 +162,9 @@
     chats: restoreChats,
     onDeleted: (name, message) => {
       deletedNames.add(name); remoteLogger?.forget(name);
+      for (const state of [handoffOpenersByConversation, pendingOpeningRequests, unansweredOpeningConversations, welcomedConversations]) {
+        for (const key of state.keys()) if (JSON.parse(key)[0] === name) state.delete(key);
+      }
       for (const key of conversations.keys()) if (JSON.parse(key)[0] === name) conversations.delete(key);
       if (speakerName.value.trim().toLowerCase() !== name) return;
       tripCompletionPending = false; reset();
@@ -206,7 +215,12 @@
   }
   function saveTurn(turn) {
     if (deletedNames.has(turn.speaker?.trim().toLowerCase())) return;
-    if (turn.greeting) welcomedConversations.add(activeConversationKey);
+    if (turn.greeting) {
+      welcomedConversations.add(activeConversationKey);
+      unansweredOpeningConversations.add(activeConversationKey);
+      const request = pendingOpeningRequests.get(activeConversationKey);
+      if (request) request.received = true;
+    }
     const sharedTurns = turn.mode === 'shared' ? window.AgentMemory.recentShared?.(turn.speaker) || [] : [];
     const priorConversation = sharedTurns.length ?
       sharedTurns.slice(-4).flatMap(item => [
@@ -295,9 +309,14 @@
       const key = JSON.stringify([name, turn.memory_sharing_mode, turn.engine, turn.agent]);
       const saved = conversations.get(key) || { history: [], sessionId: turn.session_id || crypto.randomUUID() };
       if (turn.user_text) saved.history.push({ role: 'user', content: turn.user_text, speaker: turn.speaker, at: turn.timestamp });
-      if (turn.agent_reply) saved.history.push({ role: 'assistant', content: turn.agent_reply, at: turn.timestamp, interrupted: turn.interrupted });
+      if (turn.agent_reply) saved.history.push({ role: 'assistant', content: turn.agent_reply, at: turn.timestamp, interrupted: turn.interrupted, opening: turn.input_mode === 'greeting' || turn.inputMode === 'greeting' || turn.greeting === true });
       saved.sessionId = turn.session_id || saved.sessionId;
       conversations.set(key, saved);
+    }
+    for (const [key, saved] of conversations) {
+      if (JSON.parse(key)[0] !== name) continue;
+      if (saved.history.at(-1)?.opening) unansweredOpeningConversations.add(key);
+      else unansweredOpeningConversations.delete(key);
     }
     if (speakerName.value.trim().toLowerCase() === name) {
       activeConversationKey = conversationKey();
@@ -318,6 +337,8 @@
     messages.append(empty);
   }
   function switchConversation() {
+    // Stop callbacks must not evaluate a handoff against the old conversation key.
+    pendingHandoffKey = null;
     switchAgent.dataset.suggested = 'false';
     conversations.set(activeConversationKey, { history, sessionId, scrollTop: messages.scrollTop, draft: textInput.value });
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
@@ -330,6 +351,9 @@
   }
   function reset() {
     pendingHandoffKey = null;
+    handoffOpenersByConversation.delete(activeConversationKey);
+    pendingOpeningRequests.delete(activeConversationKey);
+    unansweredOpeningConversations.delete(activeConversationKey);
     switchAgent.dataset.suggested = 'false';
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
     history = []; textInput.value = ''; sessionId = crypto.randomUUID();
@@ -363,18 +387,28 @@
     let step = round === 'second-choice' ? (choices.cities.length < 2 ? 'second-city' : 'second-activity') : round;
     const prompt = handoffPrompts[step];
     if (!prompt || prompt.agent !== agent) return false;
-    if (history.some(entry => entry.role === 'assistant' && entry.content === prompt.reply)) {
+    if (unansweredOpeningConversations.has(activeConversationKey) || history.at(-1)?.opening ||
+        handoffOpenersByConversation.get(activeConversationKey)?.has(step) ||
+        history.some(entry => entry.role === 'assistant' && entry.content === prompt.reply)) {
       pendingHandoffKey = null; return false;
     }
-    // Only actual switches can start a planning prompt; history deduplicates it across refreshes.
+    // Reserve the step before starting asynchronous speech, independently of reply wording.
+    const key = activeConversationKey, started = handoffOpenersByConversation.get(key) || new Set();
+    started.add(step); handoffOpenersByConversation.set(key, started);
+    const request = { step, received: false }; pendingOpeningRequests.set(key, request);
     pendingHandoffKey = null;
-    pipeline.greet?.(step);
+    const finish = () => {
+      if (pendingOpeningRequests.get(key) !== request) return;
+      pendingOpeningRequests.delete(key);
+      if (!request.received) started.delete(step); // Allow a later manual switch to retry a failed request.
+    };
+    Promise.resolve(pipeline.greet?.(step)).then(finish, finish);
     return true;
   }
   function greetFirstVisit() {
     // Restored chats already contain the agent's opening or last reply.
     // A refresh must not append another welcome or replace a pending question.
-    if (history.length) return;
+    if (history.length || unansweredOpeningConversations.has(activeConversationKey) || pendingOpeningRequests.has(activeConversationKey)) return;
     if (engine === 'pipeline' && document.body.dataset.stage === 'planning' && !welcomedConversations.has(activeConversationKey)) pipeline.greet?.();
   }
   window.addEventListener('trip-planning:open', greetFirstVisit);
@@ -395,6 +429,7 @@
   }));
   switchAgent.addEventListener('click', () => {
     if (switchAgent.disabled || enrolling) return;
+    pendingHandoffKey = null;
     if (responseActive || pipeline.playing) markInterrupted();
     pipeline.stop(); endSession('Ready when you are');
     switchSource = 'button';
