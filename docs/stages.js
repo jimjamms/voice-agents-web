@@ -54,6 +54,7 @@
     const completeCount = requirements.filter(([, done]) => done).length;
     const mobileSummary = document.querySelector('#mobile-goal-summary');
     if (mobileSummary) {
+      mobileSummary.dataset.ready = String(snapshot.ready);
       document.querySelector('#mobile-goal-count').textContent = `${completeCount}/5`;
       document.querySelector('#mobile-goal-progress').value = completeCount;
       mobileSummary.setAttribute('aria-label', `Open trip checklist, ${completeCount} of 5 complete`);
@@ -70,6 +71,7 @@
       covered < cities.length ? `Sage: choose an activity in ${cities.filter(city => !cityActivities[city]).join(', ')}.` :
       !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review your itinerary, request changes or approve it.';
     document.querySelector('#continue-review').hidden = !snapshot.ready;
+    document.querySelector('#plan-ready-notice').hidden = !snapshot.ready;
   }
   function openReview() {
     if (!snapshot.ready || document.body.dataset.stage !== 'planning') return;
@@ -134,10 +136,9 @@
     renderCompletedNotes('');
     step('setup'); name.focus();
   });
-  window.addEventListener('trip-goal:complete', () => {
-    if (!reviewedTrips.has(tripKey())) openReview();
-  });
+  // Finish opens only through an explicit Continue button click.
   document.querySelector('#continue-review').addEventListener('click', openReview);
+  document.querySelector('#finish-plan').addEventListener('click', openReview);
   document.querySelector('#back-to-planning').addEventListener('click', () => { step('planning'); title.focus(); });
   document.querySelector('#copy-completed-notes').addEventListener('click', async () => {
     const notes = document.querySelector('#completed-notes');
