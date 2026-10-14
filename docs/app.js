@@ -52,12 +52,12 @@
     "second-city": {
       "agent": "sage",
       "round": "second-choice",
-      "reply": "Let’s choose your second city. What kind of place would you like to visit next?"
+      "reply": "Let’s pick up your city and activity choices. What would you like to settle next?"
     },
     "second-activity": {
       "agent": "sage",
       "round": "second-choice",
-      "reply": "Let’s choose an activity for your next city. What would you most enjoy doing there?"
+      "reply": "Let’s pick up your activity choices. What still needs deciding?"
     },
     "final-plan": {
       "agent": "astra",
@@ -280,7 +280,7 @@
       'Speak, pause, and hear your companion’s reply. Hands-free supports interruptions.';
     setStatus('Ready when you are', next === 'pipeline' ?
       (handsFree ? 'Start hands-free, then just speak and pause.' : 'Tap Start talking to record a turn.') :
-      'Choose a mode, then connect to start.');
+      'Type a message or tap Start talking.');
     syncControls();
   }
   realtimeEngine.addEventListener('click', () => chooseEngine('realtime'));
@@ -300,7 +300,7 @@
     record.disabled = false; record.classList.remove('recording'); recordLabel.textContent = 'Connect';
     disconnectButton.hidden = true; tapMode.disabled = handsfreeMode.disabled = false;
     cards.forEach(card => { card.disabled = false; });
-    setStatus(message, 'Choose a mode, then connect to start.');
+    setStatus(message, 'Type a message or tap Start talking.');
     syncControls();
   }
   function restoreChats(name, chatTurns) {

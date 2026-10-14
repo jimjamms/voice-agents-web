@@ -7,12 +7,12 @@
   "second-city": {
     "agent": "sage",
     "round": "second-choice",
-    "reply": "Let’s choose your second city. What kind of place would you like to visit next?"
+    "reply": "Let’s pick up your city and activity choices. What would you like to settle next?"
   },
   "second-activity": {
     "agent": "sage",
     "round": "second-choice",
-    "reply": "Let’s choose an activity for your next city. What would you most enjoy doing there?"
+    "reply": "Let’s pick up your activity choices. What still needs deciding?"
   },
   "final-plan": {
     "agent": "astra",
