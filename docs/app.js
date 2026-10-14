@@ -39,6 +39,8 @@
   const conversations = new Map();
   const welcomedConversations = new Set();
   let pendingHandoffKey = null;
+  let pendingSuggestedHandoff = null;
+  const acceptedSuggestedHandoffs = new Set();
   let switchSource = 'card';
   const handoffOpenersByConversation = new Map();
   const pendingOpeningRequests = new Map();
@@ -366,7 +368,7 @@
   }
   function switchConversation() {
     // Stop callbacks must not evaluate a handoff against the old conversation key.
-    pendingHandoffKey = null;
+    pendingHandoffKey = null; pendingSuggestedHandoff = null;
     switchAgent.dataset.suggested = 'false';
     conversations.set(activeConversationKey, { history, sessionId, scrollTop: messages.scrollTop, draft: textInput.value });
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
@@ -411,9 +413,10 @@
     if (textInput.value.trim() || pipeline?.busy || pipeline?.playing || pipeline?.recording || pipeline?.isLocked()) return false;
     const choices = tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {};
     if (choices.finalized) { pendingHandoffKey = null; return false; }
+    const suggestedHandoff = pendingSuggestedHandoff?.key === activeConversationKey && !acceptedSuggestedHandoffs.has(pendingSuggestedHandoff.token) ? pendingSuggestedHandoff : null;
     const lastReply = history.at(-1);
     // A normal planning question can be pending too, not only a scripted opener.
-    if (lastReply?.role === 'assistant' && /[?？]/.test(lastReply.content || '')) {
+    if (!suggestedHandoff && lastReply?.role === 'assistant' && /[?？]/.test(lastReply.content || '')) {
       pendingHandoffKey = null; return false;
     }
     const round = planningRound();
@@ -423,21 +426,22 @@
     if (!prompt || prompt.agent !== agent) return false;
     const flexibleOpening = ['first-choice', 'early-budget', 'refine-first-stop', 'interim-logistics', 'review-discovery'].includes(step);
     // Existing chats already have a thread to resume; leave late progress updates eligible.
-    if (flexibleOpening && history.length) return false;
+    if (flexibleOpening && history.length && !suggestedHandoff) return false;
     if (unansweredOpeningConversations.has(activeConversationKey) || history.at(-1)?.opening ||
-        handoffOpenersByConversation.get(activeConversationKey)?.has(step) ||
-        history.some(entry => entry.role === 'assistant' && entry.content === prompt.reply)) {
+        (!suggestedHandoff && (handoffOpenersByConversation.get(activeConversationKey)?.has(step) ||
+        history.some(entry => entry.role === 'assistant' && entry.content === prompt.reply)))) {
       pendingHandoffKey = null; return false;
     }
     // Reserve the step before starting asynchronous speech, independently of reply wording.
     const key = activeConversationKey, started = handoffOpenersByConversation.get(key) || new Set();
     started.add(step); handoffOpenersByConversation.set(key, started);
+    if (suggestedHandoff) acceptedSuggestedHandoffs.add(suggestedHandoff.token);
     const request = { step, received: false }; pendingOpeningRequests.set(key, request);
     pendingHandoffKey = null;
     const finish = () => {
       if (pendingOpeningRequests.get(key) !== request) return;
       pendingOpeningRequests.delete(key);
-      if (!request.received) started.delete(step); // Allow a later manual switch to retry a failed request.
+      if (!request.received) { started.delete(step); if (suggestedHandoff) acceptedSuggestedHandoffs.delete(suggestedHandoff.token); } // Allow a later manual switch to retry a failed request.
     };
     Promise.resolve(pipeline.greet?.(step)).then(finish, finish);
     return true;
@@ -455,7 +459,9 @@
     const fromAgent = agent, suggested = switchAgent.dataset.suggested === 'true';
     const changedAgent = agent !== card.dataset.agent;
     if (changedAgent) {
+      const handoffToken = suggested ? JSON.stringify([activeConversationKey, history.length, history.at(-1)?.at || '', history.at(-1)?.content || '']) : null;
       agent = card.dataset.agent; switchConversation(); pendingHandoffKey = activeConversationKey;
+      pendingSuggestedHandoff = handoffToken ? { key: activeConversationKey, token: handoffToken } : null;
       if (document.body.dataset.stage === 'planning') remoteLogger?.record({ timestamp: new Date().toISOString(), session_id: sessionId,
         agent, engine, memory_sharing_mode: memoryMode.value, speaker: speakerName.value.trim() || 'Unknown',
         event_type: 'agent_switch', from_agent: fromAgent, initiated_by: 'user', switch_source: switchSource, suggested, user_text: '', agent_reply: '' });
