@@ -38,6 +38,29 @@
   let agent = 'sage', engine = 'pipeline', handsFree = false, history = [], pc, channel, mic, micTrack, connected = false;
   const conversations = new Map();
   const welcomedConversations = new Set();
+  let pendingHandoffKey = null;
+  const handoffPrompts = {
+    "first-review": {
+      "agent": "astra",
+      "round": "first-review",
+      "reply": "Let’s check your first stop against your time and budget. Is there anything you want me to prioritize?"
+    },
+    "second-city": {
+      "agent": "sage",
+      "round": "second-choice",
+      "reply": "Let’s choose your second city. What kind of place would you like to visit next?"
+    },
+    "second-activity": {
+      "agent": "sage",
+      "round": "second-choice",
+      "reply": "Let’s choose an activity for your next city. What would you most enjoy doing there?"
+    },
+    "final-plan": {
+      "agent": "astra",
+      "round": "final-plan",
+      "reply": "Let’s put your stops together and check the full itinerary and budget. Is there anything you want adjusted before we finalize?"
+    }
+  };
   const chatStartsByName = new Map();
   const sharedBootstrapNames = new Set();
   const conversationKey = () => JSON.stringify([speakerName.value.trim().toLowerCase() || 'unknown', memoryMode.value, engine, agent]);
@@ -51,6 +74,7 @@
     onPersist: key => window.onTripProfileChange?.(key),
     onChange: snapshot => {
       window.dispatchEvent(new CustomEvent('trip-notes:updated', { detail: snapshot }));
+      maybeSpeakHandoff();
       if (!snapshot.ready) tripCompletionPending = false;
       else if (snapshot.updated && document.body.dataset.stage === 'planning') {
         tripCompletionPending = true; maybeCompleteTrip();
@@ -89,6 +113,7 @@
   const addMessage = (role, content, speaker) => {
     const text = String(content || '').trim();
     if (!text) return;
+    if (role === 'user') pendingHandoffKey = null;
     if (role === 'assistant') highlightHandoff(text);
     const body = renderMessage(role, text, speaker);
     history.push({ role, content: text, at: new Date().toISOString(),
@@ -120,7 +145,7 @@
       const body = addMessage('assistant', reply); body.textContent = '…';
       return text => { body.textContent = text || '…'; messages.scrollTop = messages.scrollHeight; };
     },
-    onMessage: addMessage, onState: () => syncControls(),
+    onMessage: addMessage, onState: () => { syncControls(); maybeSpeakHandoff(); },
   });
   const tripCloud = window.createTripCloud?.({
     base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
@@ -302,6 +327,7 @@
     renderConversation(saved?.scrollTop);
   }
   function reset() {
+    pendingHandoffKey = null;
     switchAgent.dataset.suggested = 'false';
     pipeline?.stop(); endSession('Ready when you are'); transcripts.clear();
     history = []; textInput.value = ''; sessionId = crypto.randomUUID();
@@ -326,6 +352,23 @@
   }
   tapMode.addEventListener('click', () => chooseMode(false));
   handsfreeMode.addEventListener('click', () => chooseMode(true));
+  function maybeSpeakHandoff() {
+    if (pendingHandoffKey !== activeConversationKey || engine !== 'pipeline' || document.body.dataset.stage !== 'planning') return false;
+    if (textInput.value.trim() || pipeline?.busy || pipeline?.playing || pipeline?.recording || pipeline?.isLocked()) return false;
+    const choices = tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {};
+    if (choices.finalized) { pendingHandoffKey = null; return false; }
+    const round = planningRound();
+    let step = round === 'second-choice' ? (choices.cities.length < 2 ? 'second-city' : 'second-activity') : round;
+    const prompt = handoffPrompts[step];
+    if (!prompt || prompt.agent !== agent) return false;
+    if (history.some(entry => entry.role === 'assistant' && entry.content === prompt.reply)) {
+      pendingHandoffKey = null; return false;
+    }
+    // Only actual switches can start a planning prompt; history deduplicates it across refreshes.
+    pendingHandoffKey = null;
+    pipeline.greet?.(step);
+    return true;
+  }
   function greetFirstVisit() {
     // Restored chats already contain the agent's opening or last reply.
     // A refresh must not append another welcome or replace a pending question.
@@ -336,10 +379,11 @@
   window.addEventListener('trip-audio:unlock', () => pipeline.unlockAudio?.());
   cards.forEach(card => card.addEventListener('click', () => {
     if (connected || connecting || pipeline.isLocked() || enrolling) return;
-    if (agent !== card.dataset.agent) { agent = card.dataset.agent; switchConversation(); }
+    const changedAgent = agent !== card.dataset.agent;
+    if (changedAgent) { agent = card.dataset.agent; switchConversation(); pendingHandoffKey = activeConversationKey; }
     cards.forEach(c => { const selected = c === card; c.classList.toggle('active', selected); c.setAttribute('aria-pressed', String(selected)); c.querySelector('.select-indicator').textContent = selected ? '●' : '○'; });
     title.textContent = `Talking with ${agent === 'sage' ? 'Sage' : 'Astra'}`;
-    greetFirstVisit();
+    if (!maybeSpeakHandoff()) greetFirstVisit();
   }));
   switchAgent.addEventListener('click', () => {
     if (switchAgent.disabled || enrolling) return;
@@ -473,6 +517,7 @@
     event.preventDefault();
     if (textSend.disabled || engine !== 'pipeline') return;
     const text = textInput.value.trim(), key = activeConversationKey;
+    pendingHandoffKey = null;
     if (!text) { textInput.focus(); return; }
     if (pipeline.playing) markInterrupted();
     const sent = await pipeline.sendText(text, readTextReply.checked);
@@ -483,7 +528,9 @@
       event.preventDefault(); if (!textSend.disabled) textForm.requestSubmit();
     }
   });
+  textInput.addEventListener('input', () => { pendingHandoffKey = null; });
   record.addEventListener('click', async () => {
+    pendingHandoffKey = null;
     if (engine === 'pipeline') { await pipeline.press(); return; }
     if (connecting) return;
     if (!connected) { await connect(); return; }

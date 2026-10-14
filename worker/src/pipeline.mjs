@@ -1,3 +1,4 @@
+import handoffPrompts from './handoff-prompts.json' with { type: 'json' };
 import { chatOptions } from './chat-options.mjs';
 import { memoryContext, extractFact, sharedTurnContext, checklistContext } from './memory.mjs';
 import pipelineAgents from './pipeline_agents.json' with { type: 'json' };
@@ -72,7 +73,8 @@ export async function pipelineTurn(request, env, cors) {
     }
     const recentContext = memoryMode === 'shared' ? sharedTurnContext(speaker, sharedTurns, agent.name) : '';
     const rounds = { 'first-choice': 'Sage chooses the country, first city and its activity one question at a time.', 'first-review': 'Astra checks the first stop against budget and timing, then invites a return to Sage.', 'second-choice': 'Sage chooses the second city and its activity using the initial practical check, then invites Astra.', 'final-plan': 'Astra finalizes the full route and budget and asks for explicit approval.' };
-    const round = Object.hasOwn(rounds, form.get('planning_round')) ? rounds[form.get('planning_round')] : '';
+    const roundKey = Object.hasOwn(rounds, form.get('planning_round')) ? form.get('planning_round') : '';
+    const round = rounds[roundKey] || '';
     const roundContext = round ? '\n\nCurrent planning round: ' + round + ' This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
@@ -85,8 +87,15 @@ export async function pipelineTurn(request, env, cors) {
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     let transcript = '', reply;
     if (greeting) {
-      const returning = safeHistory(form.get('history')).length > 0;
-      reply = returning ? (name === 'sage' ? "Welcome back! It’s Sage. What would you like to explore for your trip today?" : "Welcome back. It’s Astra. What part of your itinerary would you like to work on?") : name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. Which country would you like to visit?" : "Hi, I’m Astra. I’ll help check how your trip ideas fit your time and budget. What would you like to check first?";
+      const step = form.get('handoff_step');
+      if (step) {
+        const prompt = Object.hasOwn(handoffPrompts, step) ? handoffPrompts[step] : null;
+        if (!prompt || prompt.agent !== name || prompt.round !== roundKey) return json({ error: 'This agent is not ready for that planning step.' }, 400, cors);
+        reply = prompt.reply;
+      } else {
+        const returning = safeHistory(form.get('history')).length > 0;
+        reply = returning ? (name === 'sage' ? "Welcome back! It’s Sage. What would you like to explore for your trip today?" : "Welcome back. It’s Astra. What part of your itinerary would you like to work on?") : name === 'sage' ? "Hi, I’m Sage! I’ll help you choose destinations and fun activities. Which country would you like to visit?" : "Hi, I’m Astra. I’ll help check how your trip ideas fit your time and budget. What would you like to check first?";
+      }
     } else {
       if (hasText) transcript = text.trim();
       else {
