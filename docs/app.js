@@ -63,6 +63,31 @@
       "agent": "astra",
       "round": "final-plan",
       "reply": "Let’s put your stops together and check the full itinerary and budget. Is there anything you want adjusted before we finalize?"
+    },
+    "first-choice": {
+      "agent": "sage",
+      "round": "first-choice",
+      "reply": "Let’s pick up your first stop. What would you like to decide next?"
+    },
+    "early-budget": {
+      "agent": "astra",
+      "round": "first-choice",
+      "reply": "We can work out the practical side while you explore destinations. What would be useful to figure out first?"
+    },
+    "refine-first-stop": {
+      "agent": "sage",
+      "round": "first-review",
+      "reply": "Let’s pick up the details of your first stop. What would you like to settle or change?"
+    },
+    "interim-logistics": {
+      "agent": "astra",
+      "round": "second-choice",
+      "reply": "We can check how your stops fit together so far. What would you like help with?"
+    },
+    "review-discovery": {
+      "agent": "sage",
+      "round": "final-plan",
+      "reply": "Let’s take another look at your places and activities. What would you like to refine?"
     }
   };
   const chatStartsByName = new Map();
@@ -387,9 +412,13 @@
     const choices = tripNotes?.snapshot?.(speakerName.value.trim())?.choices || {};
     if (choices.finalized) { pendingHandoffKey = null; return false; }
     const round = planningRound();
-    let step = round === 'second-choice' ? (choices.cities.length < 2 ? 'second-city' : 'second-activity') : round;
+    const step = agent === 'astra' ? ({ 'first-choice': 'early-budget', 'first-review': 'first-review', 'second-choice': 'interim-logistics', 'final-plan': 'final-plan' }[round]) :
+      ({ 'first-choice': 'first-choice', 'first-review': 'refine-first-stop', 'second-choice': (choices.cities?.length || 0) < 2 ? 'second-city' : 'second-activity', 'final-plan': 'review-discovery' }[round]);
     const prompt = handoffPrompts[step];
     if (!prompt || prompt.agent !== agent) return false;
+    const flexibleOpening = ['first-choice', 'early-budget', 'refine-first-stop', 'interim-logistics', 'review-discovery'].includes(step);
+    // Existing chats already have a thread to resume; leave late progress updates eligible.
+    if (flexibleOpening && history.length) return false;
     if (unansweredOpeningConversations.has(activeConversationKey) || history.at(-1)?.opening ||
         handoffOpenersByConversation.get(activeConversationKey)?.has(step) ||
         history.some(entry => entry.role === 'assistant' && entry.content === prompt.reply)) {

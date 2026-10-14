@@ -138,7 +138,6 @@
   });
   // Finish opens only through an explicit Continue button click.
   document.querySelector('#continue-review').addEventListener('click', openReview);
-  document.querySelector('#finish-plan').addEventListener('click', openReview);
   document.querySelector('#back-to-planning').addEventListener('click', () => { step('planning'); title.focus(); });
   document.querySelector('#copy-completed-notes').addEventListener('click', async () => {
     const notes = document.querySelector('#completed-notes');

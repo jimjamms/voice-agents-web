@@ -79,12 +79,17 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 .reply-speed-help summary:focus-visible{outline:2px solid currentColor;outline-offset:3px;border-radius:4px}
 .reply-speed-help p{margin:0 0 10px;max-width:58ch;color:var(--muted)}
 
-.plan-ready-notice{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:0 0 18px;padding:18px 20px;border:1px solid #c59e75;border-radius:12px;background:#fff2dd;color:#654c35}
-.plan-ready-copy{display:flex;align-items:flex-start;gap:12px;min-width:0}
-.plan-ready-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:32px;height:32px;border-radius:50%;background:#94603c;color:#fffdf7;font-size:18px}
-.plan-ready-copy strong{display:block;font-size:17px;line-height:1.4}
-.plan-ready-copy p{margin:5px 0 0;font-size:12px;line-height:1.6}
-#finish-plan{flex-shrink:0;min-height:44px;padding:12px 16px;border:0;border-radius:8px;background:#94603c;color:#fffdf7;font-weight:700;font-size:13px}
-#planning-stage:has(.conversation[data-agent="astra"]) .plan-ready-notice{background:#edf4e9;border-color:#9fb596;color:#36553f}
-#planning-stage:has(.conversation[data-agent="astra"]) .plan-ready-check,#planning-stage:has(.conversation[data-agent="astra"]) #finish-plan{background:#476e53}
-@media(max-width:850px){.plan-ready-notice{flex-direction:column;align-items:stretch;padding:14px;gap:12px}.plan-ready-copy strong{font-size:16px}#finish-plan{width:100%}.mobile-goal-summary[data-ready="true"]{display:none!important}}
+/* Compact completion notice with one shared Finish action. */
+.plan-ready-notice{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 14px;padding:12px 14px;border:1px solid #dec6a7;border-radius:12px;background:#fff7ec;color:#654c35}
+.plan-ready-copy{display:flex;align-items:center;gap:10px;min-width:0}
+.plan-ready-check{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:26px;height:26px;border-radius:50%;background:#f0d5b6;color:#654c35;font-size:15px}
+.plan-ready-copy strong{display:block;font-size:14px;line-height:1.4}
+.plan-ready-copy p{margin:3px 0 0;font-size:11px;line-height:1.5}
+.plan-ready-notice #continue-review{flex-shrink:0;min-height:44px;padding:10px 14px;border:0;border-radius:8px;background:#94603c;color:#fffdf7;font:700 12px 'DM Sans',sans-serif;cursor:pointer}
+.plan-ready-notice #continue-review:hover{filter:brightness(.94)}
+.plan-ready-notice #continue-review:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+#planning-stage:has(.conversation[data-agent="astra"]) .plan-ready-notice{background:#f3f8ef;border-color:#b9ceb5;color:#36553f}
+#planning-stage:has(.conversation[data-agent="astra"]) .plan-ready-check{background:#d6e6d2;color:#36553f}
+#planning-stage:has(.conversation[data-agent="astra"]) .plan-ready-notice #continue-review{background:#476e53}
+@media(max-width:850px){.mobile-goal-summary[data-ready="true"]{display:none!important}}
+@media(max-width:600px){.plan-ready-notice{flex-wrap:wrap;gap:10px}.plan-ready-copy{flex:1 1 100%}.plan-ready-notice #continue-review{width:100%}}
