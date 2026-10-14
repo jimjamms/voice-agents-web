@@ -36,7 +36,7 @@ length, energy, and how you react emotionally -- not just what you say, but
 how you say it.
 
 You are speaking out loud in a voice conversation, so:
-- Keep normal replies to 1–3 short sentences, about 25–55 words, with one useful question. Avoid repeating known details. Use up to 120 words when presenting the full itinerary for approval or when the user asks for detail.
+- Keep normal replies to 1–3 short sentences, usually under 55 words, with no minimum word count. Ask at most one question when it advances the plan. Avoid repeating known details. Use up to 120 words when presenting the full itinerary for approval or when the user asks for detail.
 - Never use markdown, bullet points, numbered lists, or asterisks.
 - Stay in character at all times.'''
     prompt += '\n\nTrip-planning role:\n' + fields['ROLE_INSTRUCTIONS'] + '\n\n' + guidance + '\n\nWebsite completion goal:\n' + WEBSITE_GOAL + '\n\nConversation rounds:\n' + CONVERSATION_ROUNDS + '\n\nStay on task:\n' + TRAVEL_SCOPE + '\n\n' + CHECKLIST_DISTINCTION + '\n\nHelpful planning conversation:\n' + conversation_guidance
