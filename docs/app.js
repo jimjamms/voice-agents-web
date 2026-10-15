@@ -187,6 +187,16 @@
   const tripCloud = window.createTripCloud?.({
     base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
     status: document.querySelector('#cloud-status'),
+    assignMemory: (name, mode) => {
+      memoryMode.value = mode;
+      sharedMemory.classList.toggle('selected', mode === 'shared');
+      isolatedMemory.classList.toggle('selected', mode === 'isolated');
+      sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
+      isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
+      document.querySelector('#memory-assignment').textContent = mode === 'shared' ? 'Shared' : 'Separate';
+      memoryDescription.textContent = mode === 'shared' ? 'Trip notes, memories, and recent exchanges are shared.' : 'Private memories and chats; basic trip notes visible to both.';
+      switchConversation();
+    },
     snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name), chatStarts: chatStartsByName.get(name) || {}, reviewed: window.tripWasReviewed?.(name) === true }),
     apply: (name, profile) => { if (profile.memories.recentShared === undefined && profile.memories.shared?.length) sharedBootstrapNames.add(name); else sharedBootstrapNames.delete(name); chatStartsByName.set(name, profile.chatStarts || {}); window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); window.dispatchEvent(new CustomEvent('trip-profile:loaded', { detail: { name, reviewed: profile.reviewed === true, generation: profile.generation || 0 } })); },
     chats: restoreChats,
@@ -236,7 +246,7 @@
     textSend.disabled = enrolling || pipeline.busy || pipeline.connecting || pipeline.recording || pipeline.active;
     textSend.textContent = pipeline.busy ? 'Sending…' : 'Send';
     textInput.placeholder = `Message ${agent === 'sage' ? 'Sage' : 'Astra'}…`;
-    sharedMemory.disabled = isolatedMemory.disabled = locked;
+    sharedMemory.disabled = isolatedMemory.disabled = true;
     speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
     maybeCompleteTrip();
   }

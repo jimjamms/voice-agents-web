@@ -1,3 +1,4 @@
+import { checkMemoryAssignment } from './memory-assignment.mjs';
 import { planningContext } from './planning-context.mjs';
 import handoffPrompts from './handoff-prompts.json' with { type: 'json' };
 import { chatOptions } from './chat-options.mjs';
@@ -67,6 +68,8 @@ export async function pipelineTurn(request, env, cors) {
       try { memories = JSON.parse(rawMemories); } catch {}
     }
     const memoryMode = form.get('memory_mode') === 'isolated' ? 'isolated' : 'shared';
+    if (env.LOG_DB && speaker.toLowerCase() !== 'unknown' && !await checkMemoryAssignment(env.LOG_DB, speaker, memoryMode))
+      return json({ error: 'This name ID uses a different memory setting. Return to setup and reload your trip.' }, 409, cors);
     let sharedTurns = [];
     const rawSharedTurns = form.get('shared_turns');
     if (memoryMode === 'shared' && typeof rawSharedTurns === 'string' && rawSharedTurns.length <= 35000) {

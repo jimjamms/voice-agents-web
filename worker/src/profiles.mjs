@@ -1,3 +1,4 @@
+import { assignedMemory } from './memory-assignment.mjs';
 import { normalizeChoices } from './trip-goals.mjs';
 export function cleanProfile(data) {
   if (!data || typeof data.notes !== 'string' || data.notes.length > 6000) throw new Error('Invalid trip notes');
@@ -51,7 +52,8 @@ export async function profileRequest(request, env, cors) {
         if (start && turn.timestamp <= start) return [];
         return [{ ...turn, interrupted: Boolean(item.interrupted) }];
       });
-      return json({ profile, chatTurns, version: row?.version || 0, generation });
+      const memoryMode = await assignedMemory(env.LOG_DB, id);
+      return json({ profile, chatTurns, version: row?.version || 0, generation, memoryMode });
     }
     if (data.action !== 'save' || !Number.isSafeInteger(data.version) || data.version < 0) return json({ error: 'Invalid profile request.' }, 400);
     let profile;

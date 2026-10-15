@@ -77,6 +77,8 @@
         const id = name.trim().toLowerCase(), credentials = { base: options.base(), code: options.code() };
         if (!credentials.base || !credentials.code) throw new Error('Enter your demo code and check the Worker address.');
         const result = await request({ action: 'load', name: id }, credentials);
+        if (!['shared', 'isolated'].includes(result.memoryMode)) throw new Error('Apply the memory assignment update to the Worker, then try again.');
+        options.assignMemory?.(id, result.memoryMode);
         // Do not replace newer cloud data with a browser's stale local copy.
         active = { name: id, version: result.version, generation: result.generation || 0, ...credentials }; conflict = false; pending = null; deletedNames.delete(id);
         if (result.profile) { options.apply(id, { ...result.profile, generation: result.generation || 0 }); options.chats?.(id, result.chatTurns || []); status('Saved trip and chats loaded.'); }
