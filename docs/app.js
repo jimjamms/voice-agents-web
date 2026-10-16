@@ -30,7 +30,6 @@
   const memoryMode = document.querySelector('#memory-mode');
   const sharedMemory = document.querySelector('#shared-memory');
   const isolatedMemory = document.querySelector('#isolated-memory');
-  const memoryDescription = document.querySelector('#memory-description');
   const memoryStatus = document.querySelector('#memory-status');
   const turns = [];
   const deletedNames = new Set();
@@ -201,8 +200,6 @@
       isolatedMemory.classList.toggle('selected', mode === 'isolated');
       sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
       isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
-      document.querySelector('#memory-assignment').textContent = mode === 'shared' ? 'Shared' : 'Separate';
-      memoryDescription.textContent = mode === 'shared' ? 'Trip notes, memories, and recent exchanges are shared.' : 'Private memories and chats; basic trip notes visible to both.';
       switchConversation();
     },
     snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name), chatStarts: chatStartsByName.get(name) || {}, reviewed: window.tripWasReviewed?.(name) === true }),
@@ -299,7 +296,6 @@
     isolatedMemory.classList.toggle('selected', mode === 'isolated');
     sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
     isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
-    memoryDescription.textContent = mode === 'shared' ? 'Trip notes, memories, and recent exchanges are shared.' : 'Private memories and chats; basic trip notes visible to both.';
     switchConversation();
   }
   sharedMemory.addEventListener('click', () => chooseMemory('shared'));
