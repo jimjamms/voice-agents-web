@@ -46,7 +46,7 @@
       const label = !value ? 'Not analyzed' : !value.opportunities ? 'No relevant opportunities' : !value.assessed ? 'Unclear evidence' : `${value.successful} handled · ${failed} missed`;
       card(interaction, title, label, description + (value ? ` ${value.opportunities} opportunities; ${value.unclear} unclear.` + (value.assessed ? ` Miss rate: ${ratio(failed, value.assessed)} assessed opportunities.` : '') : ''), 'AI estimate · review session evidence');
     };
-    opportunityCard('Cross-agent preference application', 'preferenceApplication', 'Concrete use of a relevant personal preference told to the other agent, beyond public trip notes.');
+    opportunityCard('Cross-agent preference application', 'preferenceApplication', 'Concrete use of a relevant personal preference told to the other agent, beyond public trip notes. A missed application does not by itself prove the information was available.');
     opportunityCard('Correction carryover', 'correctionCarryover', 'Later recommendations that respect a revised preference told to the other agent.');
     opportunityCard('Missing-context handling', 'contextHandling', 'Relevant clarification or an honest provisional suggestion when personal context is missing.');
     card(objective, 'Re-ask rate', scores ? ratio(scores.reasks, scores.questions) : waiting, 'Question turns that re-ask facts given to the other agent, divided by all analyzed question turns.', 'AI estimate');
@@ -89,6 +89,11 @@
         if (item.initiation) entry.append(node('p', `Repetition origin: ${item.initiation.replaceAll('_', ' ')}`));
         if (item.trigger_quote) entry.append(node('blockquote', `Prompt from ${item.trigger_agent}: ${item.trigger_quote}`));
         if (item.reason || item.fact) entry.append(node('p', item.reason || item.fact));
+        if (item.source_agent && Array.isArray(item.captured_memory_evidence)) {
+          entry.append(node('small', item.mode === 'isolated' ? 'Separate: the source was a private exchange with the other agent. Do not assume it was available to this agent.' : 'Shared: cross-agent context is allowed; mode alone does not prove this fact was supplied.'));
+          if (item.captured_memory_evidence?.length) entry.append(node('blockquote', `Exact captured memory evidence: ${item.captured_memory_evidence.join('; ')}`));
+          else entry.append(node('small', item.memory_capture_recorded ? 'No exact matching fact in the captured memory list. Equivalent wording or own conversation context may still exist.' : 'Memory capture unavailable for this finding; access cannot be established from this record.'));
+        }
         if (item.source_user_text) entry.append(node('blockquote', `Earlier user: ${item.source_user_text}`));
         if (item.user_text) entry.append(node('blockquote', `User: ${item.user_text}`));
         if (item.agent_reply) entry.append(node('blockquote', `Agent: ${item.agent_reply}`));
@@ -122,6 +127,11 @@
         if (item.prior_user_text) entry.append(node('blockquote', `Before correction: ${item.prior_user_text}`));
         if (item.fact || item.quote) entry.append(node('p', item.fact || item.quote));
         if (item.reason) entry.append(node('p', item.reason));
+        if (item.source_agent && Array.isArray(item.captured_memory_evidence)) {
+          entry.append(node('small', item.mode === 'isolated' ? 'Separate: the source was a private exchange with the other agent. Do not assume it was available to this agent.' : 'Shared: cross-agent context is allowed; mode alone does not prove this fact was supplied.'));
+          if (item.captured_memory_evidence?.length) entry.append(node('blockquote', `Exact captured memory evidence: ${item.captured_memory_evidence.join('; ')}`));
+          else entry.append(node('small', item.memory_capture_recorded ? 'No exact matching fact in the captured memory list. Equivalent wording or own conversation context may still exist.' : 'Memory capture unavailable for this finding; access cannot be established from this record.'));
+        }
         if (item.source_user_text) entry.append(node('blockquote', `Earlier user: ${item.source_user_text}`));
         if (item.user_text) entry.append(node('blockquote', `User: ${item.user_text}`));
         if (item.agent_reply) entry.append(node('blockquote', `Agent: ${item.agent_reply}`));

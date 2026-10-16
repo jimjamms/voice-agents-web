@@ -56,7 +56,7 @@
         if(!response.ok||!Array.isArray(result.saved)){retry=response.status!==401;throw new Error();}
         const saved=new Set(result.saved);
         this.queue=this.queue.filter(item=>!saved.has(item.turn_id)||snapshots.get(item.turn_id)!==JSON.stringify(item));
-        this.persist();this.status(result.discarded?.length ? 'Older chat uploads were discarded after host deletion.' : this.queue.length?'Chat upload pending…':'Chat saved for the host.');
+        this.persist();this.status(result.discarded?.length ? 'Older chat uploads were discarded after host deletion.' : this.queue.length?'Chat upload pending…':'');
       } catch {this.status('Chat upload pending. It will retry when connected.');retry=true;}
       finally {
         clearTimeout(timeout);this.running=false;

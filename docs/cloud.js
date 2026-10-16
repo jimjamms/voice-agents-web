@@ -81,7 +81,7 @@
         options.assignMemory?.(id, result.memoryMode);
         // Do not replace newer cloud data with a browser's stale local copy.
         active = { name: id, version: result.version, generation: result.generation || 0, ...credentials }; conflict = false; pending = null; deletedNames.delete(id);
-        if (result.profile) { options.apply(id, { ...result.profile, generation: result.generation || 0 }); options.chats?.(id, result.chatTurns || []); status('Saved trip and chats loaded.'); }
+        if (result.profile) { options.apply(id, { ...result.profile, generation: result.generation || 0 }); options.chats?.(id, result.chatTurns || []); status(''); }
         else { options.chats?.(id, result.chatTurns || []); changed(id); await flush(); if (pending) throw new Error('Could not create your cloud trip. Try again.'); }
       },
     };

@@ -52,10 +52,14 @@ export async function memoryTurn(request, env, cors) {
 export function checklistContext(choices = {}, notes = '') {
   if (!choices || typeof choices !== 'object' || Array.isArray(choices)) choices = {};
   const names = key => (Array.isArray(choices[key]) ? choices[key] : []).filter(value => typeof value === 'string' && value.trim() && value.length <= 100).slice(0, 30);
+  const publicArrangement = value => {
+    const arrangement = value.split(/\s+(?:because|since (?:I|we|you|they|the (?:user|traveler))|due to (?:my|our|your|their)|to accommodate (?:my|our|your|their)|to avoid)\b/i)[0].trim();
+    return /\b(?:I|we|you|they|the (?:user|traveler))\s+(?:(?:really|do not|don't|does not|doesn't)\s+)?(?:prefer|prefers|like|likes|dislike|dislikes|hate|hates|fear|fears|enjoy|enjoys|am afraid|is afraid|are afraid)\b/i.test(arrangement) ? '' : arrangement;
+  };
   const countries = names('countries'), cities = names('cities');
   const cityActivities = Object.fromEntries(cities.flatMap(city => {
     const activity = choices.cityActivities?.[city];
-    return typeof activity === 'string' && activity.trim() && activity.length <= 200 ? [[city, activity]] : [];
+    return typeof activity === 'string' && activity.trim() && activity.length <= 200 && publicArrangement(activity) ? [[city, publicArrangement(activity)]] : [];
   }));
   const rawBudget = choices.budget;
   const budget = rawBudget && typeof rawBudget.amount === 'number' && Number.isFinite(rawBudget.amount) && rawBudget.amount > 0 &&
@@ -64,17 +68,22 @@ export function checklistContext(choices = {}, notes = '') {
   const itinerary = {};
   for (const field of ['timing', 'route', 'transport', 'lodging', 'costs']) {
     const value = choices.itinerary?.[field];
-    if (typeof value === 'string' && value.trim() && value.length <= 1000) itinerary[field] = value;
+    if (typeof value === 'string' && value.trim() && value.length <= 1000 && publicArrangement(value)) itinerary[field] = publicArrangement(value);
   }
-  // Only labeled logistical facts from the visible notepad; exclude biographies,
-  // preferences, tasks, undecided sections and other agents' conversation data.
+  // Free-text notes may contain private reasons even under a logistical heading.
+  // Only pass a narrow calendar/duration fallback; arrangements use structured choices.
   const basicNotes = [];
+  const calendarWords = new Set('january february march april may june july august september october november december jan feb mar apr jun jul aug sep sept oct nov dec monday tuesday wednesday thursday friday saturday sunday mon tue wed thu fri sat sun day days night nights week weeks month months year years morning afternoon evening am pm from to through until between and of in on at early mid late about around approximately one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty thirty a an half the st nd rd th'.split(' '));
   let details = true;
   for (const raw of (typeof notes === 'string' ? notes.slice(0, 6000) : '').split('\n')) {
     const line = raw.trim().replace(/^[-•]\s*/, '');
     if (/^Need to know\s*:?$/i.test(line)) { details = true; continue; }
     if (/^(To do|Still undecided)\s*:?$/i.test(line)) { details = false; continue; }
-    if (details && /^(dates?|duration|timing|departure(?: city| location)?|travel party|party size|transport|lodging|hotel area|budget|estimated costs?)\s*:/i.test(line) && line.length <= 300) basicNotes.push(line);
+    const match = /^(dates?|duration|timing)\s*:\s*(.+)$/i.exec(line);
+    if (details && match && line.length <= 300) {
+      const value = match[2].toLowerCase(), words = value.match(/[a-z]+/g) || [];
+      if (/^[a-z0-9\s.,:/–—−+()\-]+$/.test(value) && (words.length || /\d/.test(value)) && words.every(word => calendarWords.has(word))) basicNotes.push(line);
+    }
     if (basicNotes.length >= 12) break;
   }
   if (!countries.length && !cities.length && !budget && !Object.keys(itinerary).length && !basicNotes.length) return '';

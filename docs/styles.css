@@ -130,3 +130,5 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 #study-welcome .setup-next{min-height:46px;width:auto;padding:12px 22px;border:1px solid #8e542f;border-radius:11px;background:#9c6039;color:#fffaf2;font:700 13px 'DM Sans',sans-serif;cursor:pointer}
 #study-welcome .setup-next:hover{background:#87502e}
 @media(max-width:560px){#study-welcome .setup-next{width:100%;justify-content:center}}
+
+.speaker-controls>small:empty{display:none}

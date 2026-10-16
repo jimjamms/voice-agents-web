@@ -84,7 +84,7 @@ export async function pipelineTurn(request, env, cors) {
     const context = memoryContext(speaker, memories, agent.name);
     const memoryFacts = !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
     const rawDuration = Number(form.get('speech_duration_ms'));
-    const metricsContext = { agent_version: 'travel-memory-pilot-v3', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
+    const metricsContext = { agent_version: 'travel-memory-pilot-v4', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
