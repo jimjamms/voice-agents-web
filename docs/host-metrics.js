@@ -175,7 +175,7 @@
     if (cache.has(name)) { render(cache.get(name)); status.textContent = analysisStatus(cache.get(name)); return; }
     await load();
   };
-  window.invalidateUserMetrics = name => { cache.delete(name); if (selected === name) { report = null; download.disabled = true; } };
+  window.invalidateUserMetrics = name => { cache.delete(name); comparisonSelection?.delete(name); if (comparison.open) renderComparison(); if (selected === name) { report = null; download.disabled = true; } };
   document.querySelector('#close-metrics').addEventListener('click', () => dialog.close());
   analyze.addEventListener('click', () => { void load(true); });
   download.addEventListener('click', () => {
@@ -187,8 +187,36 @@
   const comparison = document.querySelector('#comparison-dialog');
   const comparisonStatus = document.querySelector('#comparison-status');
   let comparisonData = null, cancelComparison = false;
-  function renderComparison() {
-    comparisonData = window.MemoryComparison.build([...cache.values()]);
+  // null means all loaded users; an explicit set preserves a custom selection.
+  let comparisonSelection = null;
+  const comparisonReports = () => [...cache.entries()].filter(([name]) => comparisonSelection === null || comparisonSelection.has(name)).map(([, data]) => data);
+  function renderUserSelector() {
+    const list = document.querySelector('#comparison-users'); list.replaceChildren();
+    const search = document.querySelector('#comparison-user-search').value.trim().toLowerCase();
+    const names = [...cache.keys()].filter(name => name.toLowerCase().includes(search)).sort((a, b) => a.localeCompare(b));
+    if (!names.length) list.append(node('p', cache.size ? 'No matching users.' : 'Load saved users to choose who to compare.'));
+    for (const name of names) {
+      const label = node('label', '', 'comparison-user-option');
+      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = comparisonSelection === null || comparisonSelection.has(name); checkbox.disabled = busy;
+      const text = node('span', name);
+      checkbox.addEventListener('change', () => {
+        if (busy) return;
+        if (comparisonSelection === null) comparisonSelection = new Set(cache.keys());
+        if (checkbox.checked) comparisonSelection.add(name); else comparisonSelection.delete(name);
+        renderComparison(false);
+      });
+      label.append(checkbox, text); list.append(label);
+    }
+  }
+  function renderComparison(refreshSelection = true) {
+    const reports = comparisonReports();
+    if (refreshSelection) renderUserSelector();
+    document.querySelector('#comparison-selection-count').textContent = `${reports.length} of ${cache.size} loaded users selected`;
+    document.querySelector('#comparison-user-picker').disabled = busy;
+    document.querySelector('#comparison-select-all').disabled = busy || !cache.size;
+    document.querySelector('#comparison-select-none').disabled = busy || !cache.size;
+    document.querySelector('#comparison-table-region').hidden = !reports.length;
+    comparisonData = window.MemoryComparison.build(reports);
     const groups = comparisonData.groups, table = document.querySelector('#comparison-table'); table.replaceChildren();
     const modes = ['shared', 'isolated', ...(groups.unknown.sessions ? ['unknown'] : [])];
     const head = node('thead', ''), header = node('tr', ''); header.append(node('th', 'Measure'));
@@ -197,7 +225,7 @@
     head.append(header); table.append(head); const body = node('tbody', '');
     for (let i = 0; i < groups.shared.metrics.length; i++) {
       const row = node('tr', ''), metric = groups.shared.metrics[i], label = node('th', metric.label); label.append(node('small', metric.basis)); row.append(label);
-      for (const mode of modes) { const value = groups[mode].metrics[i]; const cell = node('td', value.mean == null ? 'Not assessed' : `${value.mean.toFixed(1)}${value.format === 'percent' ? '%' : ''}`); cell.append(node('small', `n = ${value.n} sessions${value.opportunities != null ? ' · ' + value.assessedOpportunities + '/' + value.opportunities + ' assessable opportunities' : ''}`)); row.append(cell); }
+      for (const mode of modes) { const value = groups[mode].metrics[i]; const cell = node('td', value.mean == null ? 'Not assessed' : `${value.mean.toFixed(1)}${value.format === 'percent' ? '%' : ''}`); if (value.failureMean != null) cell.append(node('small', `${value.failureMean.toFixed(1)}% missed · same assessed cases`)); cell.append(node('small', `n = ${value.n} sessions${value.opportunities != null ? ' · ' + value.assessedOpportunities + '/' + value.opportunities + ' assessable opportunities' : ''}`)); row.append(cell); }
       const shared = groups.shared.metrics[i], separate = groups.isolated.metrics[i];
       const delta = shared.mean == null || separate.mean == null ? null : shared.mean - separate.mean;
       row.append(node('td', delta == null ? 'Not assessed' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}${metric.format === 'percent' ? ' pp' : ''}`));
@@ -205,7 +233,7 @@
     }
     table.append(body);
     const sessions = document.querySelector('#comparison-sessions'); sessions.replaceChildren();
-    sessions.append(node('p', 'Each Name ID is one session, across agents, devices and time gaps. Completed analyses are saved in Cloudflare and restored when loaded. New records require updated analysis; downloads remain available. Percentage differences are percentage points (pp).'));
+    sessions.append(node('p', 'Each Name ID is one session, across agents, devices and time gaps. Saved analyses remain unchanged until you explicitly reanalyze. Only selected users are included here and in the comparison download. Percentage differences are percentage points (pp).'));
     for (const session of comparisonData.sessions) {
       const entry = node('div', '', 'comparison-session');
       entry.append(node('strong', `${session.nameId} · ${session.condition === 'isolated' ? 'Separate' : session.condition === 'shared' ? 'Shared' : 'Unknown'}`));
@@ -213,12 +241,14 @@
       const view = node('button', 'View session'); view.type = 'button'; view.addEventListener('click', () => { if (busy) return; comparison.close(); void window.openUserMetrics(session.nameId, session.id); }); entry.append(view); sessions.append(entry);
     }
     const analyzed = comparisonData.sessions.filter(s => s.analysis).length;
-    document.querySelector('#comparison-coverage').textContent = `${cache.size} users loaded · ${comparisonData.sessions.length} sessions retained · ${analyzed} sessions analyzed. Counts use each report’s available window; estimates use its analyzed sample.`;
-    document.querySelector('#download-comparison').disabled = !cache.size;
+    document.querySelector('#comparison-coverage').textContent = `${cache.size} users loaded · ${reports.length} selected · ${comparisonData.sessions.length} ${comparisonData.sessions.length === 1 ? 'session' : 'sessions'} included · ${analyzed} ${analyzed === 1 ? 'session' : 'sessions'} analyzed. Counts use each report’s available window; estimates use its analyzed sample.`;
+    document.querySelector('#download-comparison').disabled = busy || !reports.length;
     document.querySelector('#analyze-comparison').disabled = busy || !comparisonData.sessions.some(s => s.userTurns && window.MemoryComparison.needsAnalysis(s));
   }
   function comparisonBusy(value) {
     busy = value; document.querySelector('#load-comparison').disabled = value;
+    document.querySelector('#comparison-user-picker').disabled = value;
+    document.querySelector('#comparison-select-all').disabled = document.querySelector('#comparison-select-none').disabled = value || !cache.size;
     document.querySelector('#analyze-comparison').disabled = value; document.querySelector('#download-comparison').disabled = value;
   }
   async function fetchReport(name, session = null) {
@@ -257,7 +287,7 @@
   }
   async function analyzeGroups() {
     if (busy) return; cancelComparison = false;
-    const queue = window.MemoryComparison.build([...cache.values()]).sessions.filter(s => s.userTurns && window.MemoryComparison.needsAnalysis(s));
+    const queue = window.MemoryComparison.build(comparisonReports()).sessions.filter(s => s.userTurns && window.MemoryComparison.needsAnalysis(s));
     comparisonBusy(true);
     try {
       for (const [index, session] of queue.entries()) {
@@ -265,19 +295,23 @@
         comparisonStatus.textContent = `Analyzing session ${index + 1}/${queue.length} · ${session.nameId}…`;
         await fetchReport(session.nameId, session.id); renderComparison();
       }
-      const unsaved = [...cache.values()].filter(data => data.analysisStorage?.status === 'not_saved');
+      const unsaved = comparisonReports().filter(data => data.analysisStorage?.status === 'not_saved');
       comparisonStatus.textContent = unsaved.length ? unsaved.map(data => `${data.nameId}: ${data.analysisStorage.message}`).join(' ') : cancelComparison ? 'Analysis stopped. Saved results are retained.' : 'Comparison ready. Completed analyses are saved; review the supporting evidence.';
     } catch (error) { comparisonStatus.textContent = `${error.message} Completed results are retained; press Analyze sessions to continue the remaining queue.`; }
     finally { comparisonBusy(false); renderComparison(); }
   }
-  document.querySelector('#compare-memory').addEventListener('click', () => { if (busy) return; renderComparison(); comparisonStatus.textContent = 'Load saved users, then analyze sessions. Previously viewed reports are already included.'; comparison.showModal?.(); });
+  document.querySelector('#compare-memory').addEventListener('click', () => { if (busy) return; renderComparison(); comparisonStatus.textContent = 'Load users, select who to include, then analyze selected sessions if needed.'; comparison.showModal?.(); });
   document.querySelector('#close-comparison').addEventListener('click', () => { cancelComparison = true; comparison.close(); });
   comparison.addEventListener('cancel', () => { cancelComparison = true; });
+  document.querySelector('#comparison-user-search').addEventListener('input', renderUserSelector);
+  document.querySelector('#comparison-select-all').addEventListener('click', () => { if (busy) return; comparisonSelection = null; renderComparison(); });
+  document.querySelector('#comparison-select-none').addEventListener('click', () => { if (busy) return; comparisonSelection = new Set(); renderComparison(); });
   document.querySelector('#load-comparison').addEventListener('click', () => { void loadGroups(); });
   document.querySelector('#analyze-comparison').addEventListener('click', () => { void analyzeGroups(); });
   document.querySelector('#download-comparison').addEventListener('click', () => {
-    if (!comparisonData) return;
-    const payload = { ...comparisonData, generatedAt: new Date().toISOString(), reports: [...cache.values()] };
+    const reports = comparisonReports();
+    if (!comparisonData || !reports.length || busy) return;
+    const payload = { ...comparisonData, generatedAt: new Date().toISOString(), selection: { includedNameIds: reports.map(data => data.nameId), excludedNameIds: [...cache.keys()].filter(name => comparisonSelection !== null && !comparisonSelection.has(name)), loadedUsers: cache.size }, reports };
     const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = 'shared-vs-separate-metrics.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });

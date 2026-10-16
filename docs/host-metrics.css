@@ -72,3 +72,18 @@ main{padding-top:36px;padding-bottom:40px}
 
 .metrics-problems{padding:14px 16px;border:1px solid #d8c9b6;border-radius:10px;background:#fcf5eb;font-size:12px;line-height:1.7}
 .metrics-problems>p{margin:0 0 8px}.metrics-problems>small{display:block;color:#6b655d;margin-top:10px;line-height:1.6}.metrics-problems summary{cursor:pointer;font-weight:600;min-height:40px;display:list-item;align-content:center}.metrics-problems .metric-finding{background:#fffaf3}.metrics-problems blockquote{border-left-color:#bda37b}
+
+#close-comparison{display:grid;place-items:center;width:44px;min-width:44px;height:44px;min-height:44px;flex:0 0 44px;padding:0;border:1px solid #c7d4bb;border-radius:10px;background:#edf2e5;color:#36553f;font:400 26px/1 'DM Sans',sans-serif;letter-spacing:0}
+#close-comparison:hover{background:#e0ebd9}
+.comparison-user-picker{min-width:0;margin:18px 0 12px;padding:14px 16px;border:1px solid #d4ddc9;border-radius:10px;background:#fffdf7}
+.comparison-user-picker legend{padding:0 6px;font-size:13px;font-weight:700}
+.comparison-selection-tools{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.comparison-selection-tools input{flex:1;min-width:140px;min-height:40px;padding:8px 10px;border:1px solid #c7d4bb;border-radius:8px;background:#fffaf1;color:#294b3b;font:inherit;font-size:12px}
+.comparison-selection-tools button{width:auto;min-height:40px;padding:8px 12px;border:1px solid #c7d4bb;border-radius:8px;background:#edf2e5;color:#36553f;font-size:12px}
+#comparison-selection-count{font-size:12px;color:#60745d;margin:12px 0 8px}
+.comparison-users{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;max-height:210px;overflow:auto;overscroll-behavior:contain}
+.comparison-user-option{display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 8px;border-radius:7px;font-size:12px;cursor:pointer;overflow-wrap:anywhere}
+.comparison-user-option:hover{background:#edf2e5}.comparison-user-option input{width:18px;height:18px;flex:0 0 18px;margin:0;accent-color:#476e53}.comparison-user-option span{min-width:0}.comparison-users>p{grid-column:1/-1;margin:8px 0;font-size:12px;color:#60745d}
+@media(max-width:560px){.comparison-users{grid-template-columns:minmax(0,1fr)}.comparison-selection-tools input{flex-basis:100%}.comparison-user-picker{padding:12px}}
+
+#close-comparison svg{display:block;pointer-events:none}
