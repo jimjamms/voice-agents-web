@@ -347,7 +347,7 @@ class TravelState:
         from travel_prompts import CHECKLIST_PROMPT
         before = self.ensure(name)["payload"]
         response = client.chat.completions.create(model=model, messages=[
-            {"role": "system", "content": CHECKLIST_PROMPT},
+            {"role": "system", "content": CHECKLIST_PROMPT + " " + 'Public trip notes and choices are visible to both agents in both memory modes. Store the accepted trip arrangement, not personal preference facts or their history: no interests, motivations, dislikes, fears, comfort biographies, why a choice was made, or superseded private preferences. Keep a concrete user-approved visit time, transport choice, lodging area or activity even if a preference influenced it; omit the private reason. Apply this to cityActivities and every itinerary field as well as the notes. Do not encode personal preferences under a logistical label. Do not add an unconfirmed logistical arrangement merely to carry a preference to the other agent. '},
             {"role": "user", "content": json.dumps({"existingNotes": before["notes"], "existingChoices": before["choices"],
                 "priorConversation": prior, "agent": agent.lower(), "user": user[:3500], "reply": reply[:3500]})}])
         text = response.choices[0].message.content.strip()
