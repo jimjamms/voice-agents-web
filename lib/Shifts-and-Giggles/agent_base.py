@@ -907,9 +907,25 @@ class PersonalityVoiceAgent:
     def greet_first_visit(self):
         if any(item.get("role") == "assistant" for item in self.history):
             return
-        reply = ("Hi, I’m Sage! I’ll help you choose destinations and fun activities. What kind of trip sounds exciting to you?"
-                 if self.name.lower() == "sage" else
-                 "Hi, I’m Astra. I’ll help turn your choices into a practical itinerary and budget. What would you like to finalize first?")
+        mode = self.memory_sharing_mode if self.memory_enabled else "disabled"
+        context = self.state.context(self.speaker_name, self.name, self.memory_sharing_mode, self.memory_enabled)
+        messages = [self.history[0], {"role": "system", "content": HANDOFF_INSTRUCTIONS[mode]}]
+        if context:
+            messages.append({"role": "system", "content": context})
+        messages.append({"role": "system", "content": (
+            "Write only a brief natural opening for this agent conversation, in 1–2 sentences, normally under 45 words, "
+            "with at most one useful question. Introduce yourself briefly if appropriate. Use one or two relevant "
+            "details actually available in the supplied memories or public trip notes to pick up the user's trip "
+            "and your next useful decision. Do not restart discovery when a country or city is known. "
+            "If no relevant detail is known, ask a useful starting question without inventing personal facts. "
+            "Separate mode allows only your own private context and basic public trip facts, never the other "
+            "agent's private preferences or conversations. Keep your personality natural, avoid reciting a profile "
+            "or a preset welcome, and do not immediately suggest switching away. This is an agent opening, "
+            "not a user utterance; do not invent a user message.")})
+        completion = self.openai_client.chat.completions.create(model=self.model, messages=messages)
+        reply = (completion.choices[0].message.content or "").strip()[:3500]
+        if not reply:
+            raise ValueError("The agent returned an empty opening.")
         print(f"{self.name}: {reply}")
         turn = self.state.append_turn(self.speaker_name, self.name, self.memory_sharing_mode, "", reply,
                                       self.session_id, remember_recent=False, logging=ENABLE_LOGGING)
