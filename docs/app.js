@@ -25,11 +25,8 @@
   const realtimeEngine = document.querySelector('#realtime-engine');
   const pipelineEngine = document.querySelector('#pipeline-engine');
   const engineDescription = document.querySelector('#engine-description');
-  const speakerControls = document.querySelector('#speaker-controls');
   const speakerName = document.querySelector('#speaker-name');
   const memoryMode = document.querySelector('#memory-mode');
-  const sharedMemory = document.querySelector('#shared-memory');
-  const isolatedMemory = document.querySelector('#isolated-memory');
   const memoryStatus = document.querySelector('#memory-status');
   const turns = [];
   const deletedNames = new Set();
@@ -196,10 +193,6 @@
     status: document.querySelector('#cloud-status'),
     assignMemory: (name, mode) => {
       memoryMode.value = mode;
-      sharedMemory.classList.toggle('selected', mode === 'shared');
-      isolatedMemory.classList.toggle('selected', mode === 'isolated');
-      sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
-      isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
       switchConversation();
     },
     snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name), chatStarts: chatStartsByName.get(name) || {}, reviewed: window.tripWasReviewed?.(name) === true }),
@@ -251,8 +244,7 @@
     textSend.disabled = enrolling || pipeline.busy || pipeline.connecting || pipeline.recording || pipeline.active;
     textSend.textContent = pipeline.busy ? 'Sending…' : 'Send';
     textInput.placeholder = `Message ${agent === 'sage' ? 'Sage' : 'Astra'}…`;
-    sharedMemory.disabled = isolatedMemory.disabled = true;
-    speakerName.disabled = memoryMode.disabled = document.querySelector('#forget-memory').disabled = locked;
+    speakerName.disabled = memoryMode.disabled = locked;
     maybeCompleteTrip();
   }
   function markInterrupted() {
@@ -289,30 +281,10 @@
     }
   }
   speakerName.addEventListener('change', () => { switchConversation(); tripNotes?.refresh(); });
-  function chooseMemory(mode) {
-    if (sharedMemory.disabled || memoryMode.value === mode) return;
-    memoryMode.value = mode;
-    sharedMemory.classList.toggle('selected', mode === 'shared');
-    isolatedMemory.classList.toggle('selected', mode === 'isolated');
-    sharedMemory.setAttribute('aria-pressed', String(mode === 'shared'));
-    isolatedMemory.setAttribute('aria-pressed', String(mode === 'isolated'));
-    switchConversation();
-  }
-  sharedMemory.addEventListener('click', () => chooseMemory('shared'));
-  isolatedMemory.addEventListener('click', () => chooseMemory('isolated'));
-  document.querySelector('#forget-memory').addEventListener('click', () => {
-    if (!speakerName.value.trim()) { setStatus('Type your name to forget its memories.'); return; }
-    const saved = window.AgentMemory.forget(speakerName.value.trim());
-    const speaker = speakerName.value.trim().toLowerCase();
-    for (const key of conversations.keys()) { if (JSON.parse(key)[0] === speaker) conversations.delete(key); }
-    reset();
-    memoryStatus.textContent = saved === false ? 'Memories cleared for this visit; browser storage could not update.' : 'Memories forgotten.';
-  });
   function chooseEngine(next) {
     if (next === 'realtime' && !optionalModes.realtime) return;
     if (connected || connecting || pipeline.isLocked() || enrolling || engine === next) return;
     engine = next; switchConversation();
-    speakerControls.hidden = false;
     if (next === 'realtime') recordLabel.textContent = 'Connect';
     realtimeEngine.classList.toggle('selected', next === 'realtime');
     pipelineEngine.classList.toggle('selected', next === 'pipeline');
@@ -496,7 +468,6 @@
     switchSource = 'button';
     try { cards.find(card => card.dataset.agent !== agent).click(); } finally { switchSource = 'card'; }
   });
-  document.querySelector('#reset').addEventListener('click', reset);
   disconnectButton.addEventListener('click', () => endSession());
   const transcripts = new Map();
   function handleEvent(event) {
@@ -721,7 +692,6 @@
   const recordRow = document.querySelector('.record-row');
   conversationControls.insertBefore(recordRow, conversationControls.firstChild);
   conversationControls.insertBefore(document.querySelector('#text-chat'), recordRow.nextSibling);
-  document.querySelector('#mobile-memory-settings').append(document.querySelector('#speaker-controls'));
   syncMobileNotes();
   syncControls();
   document.addEventListener('keydown', event => {
