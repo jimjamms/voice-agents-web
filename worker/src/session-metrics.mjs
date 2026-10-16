@@ -26,7 +26,7 @@ export function sessionReports(rows, analysis = null, analyzedRows = []) {
       const findings = key => (analysis[key] || []).filter(v => ids.has(v.turn_id));
       const questions = analysis.question_turn_ids.filter(id => ids.has(id)).length;
       const continuity = findings('continuity').filter(v => v.picked_up !== null);
-      const memoryTurns = sample.filter(t => t.input_mode !== 'greeting' && Array.isArray(t.memory_facts));
+      const memoryTurns = sample.filter(t => (t.input_mode !== 'greeting' || t.opening_kind === 'generated') && Array.isArray(t.memory_facts));
       const wasted = new Set(findings('wasted').map(v => v.turn_id));
       const recordedWasted = sample.filter(t => wasted.has(t.turn_id) && Number.isFinite(t.speech_duration_ms));
       const outcomes = findings('task_outcomes');

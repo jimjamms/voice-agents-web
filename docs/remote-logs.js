@@ -21,6 +21,8 @@
         agent:turn.agent, engine:turn.engine, memory_sharing_mode:turn.memory_sharing_mode, speaker:turn.speaker,
         ...(['text', 'voice', 'greeting'].includes(turn.inputMode || turn.input_mode) ? { input_mode: turn.inputMode || turn.input_mode } : {}),
         ...(turn.event_type === 'agent_switch' && { event_type: turn.event_type, from_agent: turn.from_agent, initiated_by: turn.initiated_by, switch_source: turn.switch_source, suggested: turn.suggested }),
+        ...(turn.opening_kind === 'generated' && { opening_kind: 'generated' }),
+        ...(typeof turn.agent_version === 'string' && { agent_version: turn.agent_version }),
         ...(Array.isArray(turn.memory_facts) && { memory_facts: turn.memory_facts }),
         ...(Number.isFinite(turn.speech_duration_ms) && { speech_duration_ms: turn.speech_duration_ms }),
         user_text:String(turn.user_text||'').slice(0,3500), agent_reply:String(turn.agent_reply||'').slice(0,3500), interrupted:turn.interrupted===true };

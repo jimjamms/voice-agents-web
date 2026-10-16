@@ -17,6 +17,8 @@ export function cleanTurn(turn) {
     agent_traits: agents[turn.agent].traits, engine: turn.engine, memory_sharing_mode: turn.memory_sharing_mode,
     ...(['text', 'voice', 'greeting'].includes(turn.inputMode || turn.input_mode) ? { input_mode: turn.inputMode || turn.input_mode } : {}),
     ...(isSwitch && { event_type: 'agent_switch', from_agent: turn.from_agent, initiated_by: 'user', switch_source: turn.switch_source, suggested: turn.suggested }),
+    ...(turn.opening_kind === 'generated' && (turn.inputMode || turn.input_mode) === 'greeting' && { opening_kind: 'generated' }),
+    ...(typeof turn.agent_version === 'string' && /^[a-zA-Z0-9._-]{1,80}$/.test(turn.agent_version) && { agent_version: turn.agent_version }),
     ...(Array.isArray(turn.memory_facts) && { memory_facts: [...new Set(turn.memory_facts)] }),
     ...(Number.isFinite(turn.speech_duration_ms) && turn.speech_duration_ms >= 0 && turn.speech_duration_ms <= 60000 && { speech_duration_ms: Math.round(turn.speech_duration_ms) }),
     speaker: turn.speaker.trim() || 'Unknown', user_text: turn.user_text, agent_reply: turn.agent_reply, interrupted: turn.interrupted === true };

@@ -82,9 +82,9 @@ export async function pipelineTurn(request, env, cors) {
     const roundContext = round ? '\n\nCurrent planning round: ' + round + ' Preference questions must invite an answer in the user’s own words; do not append two options or suggested answers. Before any switch recommendation, resolve outstanding decisions in your specialty for the current stop. If a first-stop venue is still undecided, finish that choice before second-city discovery; a dependency handoff should return to the same open decision. Respect the user choosing to leave a detail flexible. This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
     const context = memoryContext(speaker, memories, agent.name);
-    const memoryFacts = greeting || !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
+    const memoryFacts = !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
     const rawDuration = Number(form.get('speech_duration_ms'));
-    const metricsContext = { ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
+    const metricsContext = { agent_version: 'travel-memory-pilot-v1', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
