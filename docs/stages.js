@@ -70,7 +70,7 @@
     document.querySelector('#trip-goal-hint').textContent = snapshot.ready ? 'Your trip is ready. Make changes or continue to the form.' :
       countries.length < 1 || cities.length < 1 ? 'Sage: choose your country, first city, and an activity.' :
       !cityActivities[cities[0]] ? `Sage: choose an activity in ${cities[0]}.` :
-      !firstCityReviewed ? 'Switch to Astra to check your first stop, timing, and budget.' :
+      !firstCityReviewed ? 'Astra: review your first stop, timing, and budget.' :
       cities.length < 2 ? 'Back to Sage: choose your second city and its activity.' :
       covered < cities.length ? `Sage: choose an activity in ${cities.filter(city => !cityActivities[city]).join(', ')}.` :
       !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review your itinerary, request changes or approve it.';

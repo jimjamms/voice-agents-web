@@ -131,7 +131,7 @@
     const text = String(reply || '').replace(/[’‘]/g, "'");
     const clauses = text.split(/[.!?;\n]+|\s+(?:but|however|although)\s+|,\s*(?=(?:Astra|Sage)\b)/i);
     const invitation = new RegExp(`\\b(?:switch(?:ing)?(?: back| over)? to|return(?:ing)? to|go(?:ing)? back to|talk(?:ing)? (?:to|with)|speak(?:ing)? (?:to|with)|chat(?:ting)? (?:to|with)|work(?:ing)? with|ask|try|let|hand(?:ing)?\\b|over to|recommend|suggest|ready for|time for|next (?:step|stop|up)(?: is|:)?)[^.!?;]{0,160}\\b${other}\\b`, 'i');
-    const offer = new RegExp(`\\b${other}\\b(?:'s| is)?[^.!?;]{0,60}\\b(?:(?:can|could|will|would|is able to|would be happy to) (?:help|finalize|plan|work|check|review|turn|shape|build|fit|map|arrange|handle|take|sort|put|bring|refine|suggest|explore|choose)|is (?:better|best|the right|your next)|would be (?:better|a good|the right)|your next (?:step|stop))\\b`, 'i');
+    const offer = new RegExp(`\\b${other}\\b(?:'s| is)?[^.!?;]{0,60}\\b(?:(?:can|could|will|would|is able to|would be happy to) (?:(?:now|also|then|next|best|readily|easily) ){0,3}(?:help|finalize|plan|work|check|review|turn|shape|build|fit|map|arrange|handle|take|sort|put|bring|refine|suggest|explore|choose)|is (?:better|best|the right|your next)|would be (?:better|a good|the right)|your next (?:step|stop))\\b`, 'i');
     let suggested = false;
     for (const clause of clauses) {
       const target = new RegExp(`\\b${other}\\b`, 'i').exec(clause);
