@@ -28,6 +28,12 @@
     objective.replaceChildren(); subjective.replaceChildren();
     const interaction = document.querySelector('#interaction-metrics'); interaction.replaceChildren();
     const waiting = '—';
+    const returns = current?.repeatedInteractions || (!current ? data.summary.repeatedInteractions : null);
+    const repeatGrid = document.querySelector('#repeat-interaction-metrics'); repeatGrid.replaceChildren();
+    card(repeatGrid, 'Continued returns to agents', returns ? returns.returns : 'Not counted', returns ? `Sage: ${returns.byAgent.sage} · Astra: ${returns.byAgent.astra}. Requires a user message after interacting with the other agent; greetings and switch clicks alone do not count. This is behavior, not a satisfaction score.` : 'Not available in this saved report. Explicitly reanalyze to update it.', 'Counted · observed interaction sequence');
+    const returnScore = scores?.returnContinuity;
+    card(repeatGrid, 'Coherence on returning', returnScore ? ratio(returnScore.correct, returnScore.assessed) : 'Not assessed', returnScore ? `${returnScore.failed} failed · ${returnScore.unclear} unclear across ${returnScore.opportunities} returns in the analyzed sample. Missing earlier context stays unclear.` : 'Whether the first reply on returning builds on available progress instead of restarting. Requires analysis of supported return opportunities.', 'AI estimate · not a measure of enjoyment');
+
     const opportunityCard = (title, key, description) => {
       const value = scores?.[key];
       const failed = value ? value.assessed - value.successful : 0;
@@ -45,7 +51,12 @@
     card(subjective, 'User words per turn', s.wordsPerTurn ?? 'No user turns', `${s.userWords} words across ${s.userTurns} user turns. Excludes greetings and switch events.`, 'Counted from transcripts');
     card(subjective, 'Volunteered facts', scores ? scores.volunteeredFacts : waiting, 'Distinct user facts volunteered without a preceding request. This is a proxy for self-disclosure.', 'AI estimate');
     card(subjective, 'Re-explaining', scores ? `${scores.wastedTurns} turns · ${scores.wastedWords} words` : waiting,
-      scores?.wastedSpeechSeconds != null ? `${scores.wastedSpeechSeconds}s of recording across ${scores.wastedTurnsWithDuration} flagged turns. Includes pauses; other durations unavailable.` : 'Re-explanations of earlier information. Duration is unavailable without recorded timing.', 'AI estimate · “wasted” turns');
+      scores?.wastedSpeechSeconds != null ? `${scores.wastedSpeechSeconds}s of recording across ${scores.wastedTurnsWithDuration} flagged turns. Includes pauses; other durations unavailable.` : 'Re-explanations of earlier information. Duration is unavailable without recorded timing.', 'AI estimate · total re-explanation turns; not automatically memory failures');
+    const repetition = scores?.repetition;
+    if (a) {
+      const tile = node('p', repetition ? `${repetition.handoffPrompted} prompted by a handoff · ${repetition.agentReasked} after an agent re-ask · ${repetition.userInitiated} user initiated · ${repetition.unclear} unclear. Categories describe repeated user turns, separately from agent question counts.` : 'Repetition origins were not assessed in this saved result. Reanalyze explicitly to classify them.');
+      subjective.children[subjective.children.length - 1].append(tile);
+    }
     if (current) card(subjective, 'Session task outcome', current.analysis?.taskComplete === true ? 'Approved plan' : current.analysis?.taskComplete === false ? 'Needs revision' : 'Not assessed', 'Completion requires explicit approval of the complete itinerary in this session. Current profile alone is insufficient.', 'AI estimate · session evidence');
     else card(subjective, 'Current saved trip', s.task ? `${s.task.completed}/${s.task.total}${s.task.ready ? ' · Complete' : ''}` : 'No saved trip', 'Country, two cities, activity per city, budget, and approved itinerary.', 'Saved trip checklist');
     card(subjective, 'Final-plan satisfaction', a ? (a.satisfaction.length ? 'Reported' : 'Not reported') : '—', a?.satisfaction.length ? a.satisfaction.map(v => `“${v.quote}”`).join(' ') : 'Only explicit feedback about the final plan qualifies. No rating is inferred.', 'User self-report');
@@ -59,6 +70,7 @@
       ['Superseded preferences used', (a.correction_opportunities || []).filter(v => v.respected === false)],
       ['Unsupported personal claims', (a.context_handling || []).filter(v => v.behavior === 'unsupported_claim')],
       ['User re-explanations', a.wasted || []],
+      ['Failed return continuity', (a.return_continuity || []).filter(v => v.picked_up === false)],
     ] : [];
     const problemTurns = new Set(problemGroups.flatMap(([, items]) => items.map(item => item.turn_id)));
     problems.append(node('p', a ? problemTurns.size ? `${problemTurns.size} ${problemTurns.size === 1 ? 'reply' : 'replies'} with supported problems. Categories can overlap; unclear findings are excluded.` : 'No supported problems found in this analyzed sample. This does not establish that every reply was good.' : 'Analyze this session to review supported problems.'));
@@ -68,6 +80,8 @@
       for (const item of items) {
         const entry = node('article', '', 'metric-finding');
         entry.append(node('strong', `${item.agent} · ${item.mode === 'isolated' ? 'separate' : 'shared'} · ${item.turn_id}`));
+        if (item.initiation) entry.append(node('p', `Repetition origin: ${item.initiation.replaceAll('_', ' ')}`));
+        if (item.trigger_quote) entry.append(node('blockquote', `Prompt from ${item.trigger_agent}: ${item.trigger_quote}`));
         if (item.reason || item.fact) entry.append(node('p', item.reason || item.fact));
         if (item.source_user_text) entry.append(node('blockquote', `Earlier user: ${item.source_user_text}`));
         if (item.user_text) entry.append(node('blockquote', `User: ${item.user_text}`));
@@ -81,13 +95,13 @@
     const evidence = document.querySelector('#metrics-evidence'); evidence.replaceChildren();
     if (current?.conditionNote) evidence.append(node('p', current.conditionNote));
     evidence.append(node('p', data.sessionDefinition || ''));
-    evidence.append(node('p', 'Counts come from saved data. AI estimates need review. Shared and separate modes are labeled on each finding. Older switch initiation and memory availability cannot be reconstructed reliably. Memory utilization counts saved entries; an entry may summarize several facts.'));
+    evidence.append(node('p', 'Counts come from saved data. AI estimates need review. Shared and separate modes are labeled on each finding. Older switch initiation and memory availability cannot be reconstructed reliably. Memory utilization counts saved entries; an entry may summarize several facts. Return counts require continued user interaction, are limited to observed same-browser/engine/mode streams, and do not establish enjoyment or voluntary engagement. Use questionnaire feedback for perceived engagement and coherence. Re-explanation totals retain relay-prompted, agent-reasked, user-initiated and unclear cases; they are not all evidence of forgetting.'));
     const timeline = node('details', '', 'finding-group'); timeline.append(node('summary', `Switch timeline (${s.switches.tracked})`));
     for (const event of s.switches.events || []) timeline.append(node('p', `${new Date(event.timestamp).toLocaleString()} · ${event.from} → ${event.to} · user ${event.source} click${event.suggested ? ' · suggestion highlighted' : ' · manual'}`));
     evidence.append(timeline);
     if (s.task) evidence.append(node('p', s.task.requirements.map(r => `${r.complete ? '✓' : '○'} ${r.label}`).join(' · ')));
     if (!current) for (const group of s.byAgentAndMode) evidence.append(node('p', `${group.agent} · ${group.mode === 'isolated' ? 'separate' : 'shared'}: ${group.wordsPerTurn} words/turn across ${group.turns} turns.`));
-    if (a) for (const [key, title] of [['reasks','Re-asks'], ['continuity','Continuity'], ['violations','Preference violations'], ['memory_use','Memory used'], ['volunteered','Volunteered facts'], ['wasted','Re-explanations'], ['satisfaction','Satisfaction'], ['cross_agent_conflicts','Cross-agent preference conflicts'], ['task_outcomes','Session task outcome'], ['preference_opportunities','Preference application opportunities'], ['correction_opportunities','Correction carryover opportunities'], ['context_handling','Missing-context opportunities']]) {
+    if (a) for (const [key, title] of [['reasks','Re-asks'], ['continuity','Continuity'], ['violations','Preference violations'], ['memory_use','Memory used'], ['volunteered','Volunteered facts'], ['wasted','Re-explanations'], ['satisfaction','Satisfaction'], ['cross_agent_conflicts','Cross-agent preference conflicts'], ['task_outcomes','Session task outcome'], ['preference_opportunities','Preference application opportunities'], ['correction_opportunities','Correction carryover opportunities'], ['context_handling','Missing-context opportunities'], ['return_continuity','Coherence on returning']]) {
       const section = node('details', '', 'finding-group'); section.append(node('summary', `${title} (${a[key]?.length || 0})`));
       if (!a[key]?.length) section.append(node('p', 'No supported findings in the analyzed window.'));
       for (const item of a[key] || []) {
@@ -96,6 +110,8 @@
         if ('applied' in item || 'respected' in item) { const value = 'applied' in item ? item.applied : item.respected; entry.append(node('p', value === null ? 'Unclear application' : value ? 'Applied in the recommendation' : 'Not applied')); }
         if ('picked_up' in item) entry.append(node('p', item.picked_up === null ? 'Unclear handoff' : item.picked_up ? 'Continued correctly' : 'Failed to continue correctly'));
         if (item.behavior) entry.append(node('p', `${item.behavior.replaceAll('_', ' ')} · ${item.needed_detail}`));
+        if (item.initiation) entry.append(node('p', `Repetition origin: ${item.initiation.replaceAll('_', ' ')}`));
+        if (item.trigger_quote) entry.append(node('blockquote', `Prompt from ${item.trigger_agent}: ${item.trigger_quote}`));
         if (item.prior_user_text) entry.append(node('blockquote', `Before correction: ${item.prior_user_text}`));
         if (item.fact || item.quote) entry.append(node('p', item.fact || item.quote));
         if (item.reason) entry.append(node('p', item.reason));
@@ -142,7 +158,7 @@
       } else if (session.analysis && data.analysis) {
         const ids = new Set(session.turnIds);
         const scoped = { ...data.analysis, scores: session.analysis };
-        for (const key of ['reasks','continuity','violations','memory_use','volunteered','wasted','satisfaction','cross_agent_conflicts','task_outcomes','preference_opportunities','correction_opportunities','context_handling']) scoped[key] = (data.analysis[key] || []).filter(v => ids.has(v.turn_id));
+        for (const key of ['reasks','continuity','violations','memory_use','volunteered','wasted','satisfaction','cross_agent_conflicts','task_outcomes','preference_opportunities','correction_opportunities','context_handling','return_continuity']) scoped[key] = (data.analysis[key] || []).filter(v => ids.has(v.turn_id));
         data.sessionAnalyses[session.id] = scoped;
       }
     }
@@ -152,6 +168,7 @@
     if (busy) { status.textContent = 'Finish the current metrics request before selecting another user.'; if (!dialog.open) dialog.showModal?.(); return; }
     selected = name; sessionId = requestedId; report = null; analyze.disabled = download.disabled = true;
     document.querySelector('#metrics-heading').textContent = name;
+    document.querySelector('#repeat-interaction-metrics').replaceChildren();
     document.querySelector('#interaction-metrics').replaceChildren(); document.querySelector('#objective-metrics').replaceChildren(); document.querySelector('#subjective-metrics').replaceChildren(); document.querySelector('#metrics-evidence').replaceChildren();
     document.querySelector('#metrics-coverage').textContent = '';
     if (!dialog.open) dialog.showModal?.();

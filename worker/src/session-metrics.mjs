@@ -1,3 +1,5 @@
+import { repeatedInteractions, returnScores } from './repeated-interactions.mjs';
+import { repetitionScores } from './repetition-metrics.mjs';
 import { opportunityScores } from './opportunity-metrics.mjs';
 const words = text => String(text || '').trim().match(/\S+/gu)?.length || 0;
 const mode = row => ['shared', 'isolated'].includes(row.memory_sharing_mode) ? row.memory_sharing_mode : 'unknown';
@@ -30,7 +32,7 @@ export function sessionReports(rows, analysis = null, analyzedRows = []) {
       const wasted = new Set(findings('wasted').map(v => v.turn_id));
       const recordedWasted = sample.filter(t => wasted.has(t.turn_id) && Number.isFinite(t.speech_duration_ms));
       const outcomes = findings('task_outcomes');
-      estimates = { ...opportunityScores(analysis, ids), sampledRecords: entries.filter(t => sampled.has(t.turn_id)).length, userTurns: sample.filter(t => t.user_text?.trim()).length,
+      estimates = { returnContinuity: returnScores(findings('return_continuity'), repeatedInteractions(entries.filter(t => sampled.has(t.turn_id))), analysis.returnContinuityAssessed), repetition: repetitionScores(findings('wasted'), analysis.repetitionAssessment), ...opportunityScores(analysis, ids), sampledRecords: entries.filter(t => sampled.has(t.turn_id)).length, userTurns: sample.filter(t => t.user_text?.trim()).length,
         assistantTurns: sample.filter(t => t.agent_reply?.trim()).length,
         reasks: findings('reasks').length, questions, continuityCorrect: continuity.filter(v => v.picked_up).length, continuityAssessed: continuity.length,
         violations: findings('violations').length, crossAgentConflicts: analysis.crossAgentConflictsAssessed ? findings('cross_agent_conflicts').length : null,
@@ -41,7 +43,7 @@ export function sessionReports(rows, analysis = null, analyzedRows = []) {
         taskComplete: outcomes.length ? outcomes.at(-1).complete : null };
     }
     return { id, condition, conditions, fingerprint: entries.map(t => `${t.log_id || t.turn_id}:${Boolean(t.interrupted)}:${mode(t)}`).join('|'), turnIds: entries.map(t => t.turn_id), conditionNote: conditions.length > 1 ? 'More than one mode recorded; grouped by the last recorded condition. All records retained.' : '', startedAt: entries[0].timestamp, endedAt: entries.at(-1).timestamp,
-      records: entries.length, userTurns: users.length, userWords, wordsPerTurn: users.length ? userWords / users.length : null,
+      repeatedInteractions: repeatedInteractions(entries), records: entries.length, userTurns: users.length, userWords, wordsPerTurn: users.length ? userWords / users.length : null,
       assistantTurns: turns.filter(t => t.agent_reply?.trim()).length, switches: switches.length, suggestedSwitches: switches.filter(t => t.suggested === true).length,
       analysis: estimates };
   });

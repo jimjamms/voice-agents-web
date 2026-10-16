@@ -1,4 +1,4 @@
-export const ANALYSIS_VERSION = 'memory-metrics-generated-openings-v2';
+export const ANALYSIS_VERSION = 'memory-metrics-return-coherence-v4';
 export async function analysisFingerprint(records, profilePayload, totalRecords, model) {
   const input = JSON.stringify({ version: ANALYSIS_VERSION, model, totalRecords, profilePayload,
     records: records.map(r => [r.id, r.payload, Boolean(r.interrupted)]) });

@@ -1,3 +1,5 @@
+import { repeatedInteractions, RETURN_GUIDANCE, validateReturnContinuity, returnScores } from './repeated-interactions.mjs';
+import { REPETITION_GUIDANCE, annotateRepetition, repetitionScores } from './repetition-metrics.mjs';
 import { analysisFingerprint, readAnalysis, saveAnalysis } from './analysis-cache.mjs';
 import { OPPORTUNITY_GUIDANCE, validateOpportunities } from './opportunity-metrics.mjs';
 import { tagSessions, sessionReports } from './session-metrics.mjs';
@@ -50,7 +52,7 @@ export function summarizeMetrics(rows, profile) {
   }
   const memoryTurns = turns.filter(t => (t.input_mode !== 'greeting' || t.opening_kind === 'generated') && Array.isArray(t.memory_facts));
   const facts = bucket => (profile?.memories?.[bucket] || []).map(v => typeof v === 'string' ? v : v?.fact).filter(v => typeof v === 'string');
-  return { turns: turns.length, userTurns: userTurns.length, userWords: userTurns.reduce((n, t) => n + words(t.user_text), 0),
+  return { repeatedInteractions: repeatedInteractions(rows), turns: turns.length, userTurns: userTurns.length, userWords: userTurns.reduce((n, t) => n + words(t.user_text), 0),
     wordsPerTurn: userTurns.length ? Math.round(userTurns.reduce((n, t) => n + words(t.user_text), 0) / userTurns.length * 10) / 10 : null,
     byAgentAndMode: Object.values(groups).map(g => ({ ...g, wordsPerTurn: Math.round(g.words / g.turns * 10) / 10 })),
     switches: { tracked: switches.length, suggested: switches.filter(t => t.suggested).length, manual: switches.filter(t => !t.suggested).length, inferred: inferred.length, events: switches.map(t => ({ id: t.turn_id, timestamp: t.timestamp, from: t.from_agent, to: t.agent, source: t.switch_source, suggested: t.suggested === true })) },
@@ -86,7 +88,9 @@ export function validateAnalysis(raw, turns, summary) {
     });
     result[key] = dedup(result[key], v => key === 'memory_use' ? `${v.turn_id}:${norm(v.fact)}` : key === 'volunteered' ? `${v.research_session}:${norm(v.fact)}` : v.turn_id);
   }
-  Object.assign(result, validateOpportunities(raw, turns));
+  result.wasted = annotateRepetition(result.wasted, raw.wasted, turns);
+  result.repetitionAssessment = (raw.wasted.length === 0 || raw.wasted.some(v => ['handoff_prompted', 'agent_reasked', 'user_initiated', 'unclear'].includes(v?.initiation)));
+  Object.assign(result, validateOpportunities(raw, turns), validateReturnContinuity(raw.return_continuity, turns, repeatedInteractions(turns)));
   result.task_outcomes.sort((a, b) => map.get(a.turn_id).index - map.get(b.turn_id).index);
   const questionIds = new Set(result.question_turn_ids);
   result.reasks = result.reasks.filter(v => questionIds.has(v.turn_id));
@@ -95,7 +99,7 @@ export function validateAnalysis(raw, turns, summary) {
   const wastedIds = new Set(result.wasted.map(v => v.turn_id));
   const recordedWasted = turns.filter(t => wastedIds.has(t.turn_id) && Number.isFinite(t.speech_duration_ms));
   result.crossAgentConflictsAssessed = Array.isArray(raw.cross_agent_conflicts);
-  result.scores = { reasks: result.reasks.length, questions: questionIds.size, continuityCorrect: assessable.filter(v => v.picked_up).length, continuityAssessed: assessable.length,
+  result.scores = { returnContinuity: returnScores(result.return_continuity, repeatedInteractions(turns), result.returnContinuityAssessed), repetition: repetitionScores(result.wasted, result.repetitionAssessment), reasks: result.reasks.length, questions: questionIds.size, continuityCorrect: assessable.filter(v => v.picked_up).length, continuityAssessed: assessable.length,
     violations: result.violations.length, memoriesUsed: result.memory_use.length, memoriesAvailable: available,
     volunteeredFacts: result.volunteered.length, wastedTurns: wastedIds.size, wastedWords: turns.filter(t => wastedIds.has(t.turn_id)).reduce((n, t) => n + words(t.user_text), 0),
     wastedSpeechSeconds: recordedWasted.length ? Math.round(recordedWasted.reduce((n, t) => n + t.speech_duration_ms, 0) / 1000) : null, wastedTurnsWithDuration: recordedWasted.length };
@@ -146,7 +150,7 @@ export async function userMetrics(request, env, cors) {
       const sampleSummary = summarizeMetrics(sample, profile);
       const response = await fetch('https://api.openai.com/v1/chat/completions', { method: 'POST', headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
         body: JSON.stringify({ ...chatOptions(env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'), response_format: { type: 'json_object' }, max_completion_tokens: 12000,
-          messages: [{ role: 'system', content: REVIEW_PROMPT + '\n\n' + OPPORTUNITY_GUIDANCE }, { role: 'user', content: JSON.stringify({ turns: sample, handoffs: sampleSummary.handoffs, current_memory_snapshot: summary.memory.current }) }] }),
+          messages: [{ role: 'system', content: REVIEW_PROMPT + '\n\n' + OPPORTUNITY_GUIDANCE + '\n\n' + REPETITION_GUIDANCE + '\n\n' + RETURN_GUIDANCE }, { role: 'user', content: JSON.stringify({ turns: sample, handoffs: sampleSummary.handoffs, repeated_interactions: sampleSummary.repeatedInteractions, current_memory_snapshot: summary.memory.current }) }] }),
         signal: AbortSignal.timeout(90000) });
       if (!response.ok) throw new Error('Conversation analysis failed. Please retry.');
       const output = await response.json();
