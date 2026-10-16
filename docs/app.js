@@ -262,10 +262,12 @@
       if (request) request.received = true;
     }
     const sharedTurns = turn.mode === 'shared' ? window.AgentMemory.recentShared?.(turn.speaker) || [] : [];
-    const priorConversation = sharedTurns.length ?
+    // Short approvals refer to this agent's immediately preceding proposal.
+    // Shared history can supply fallback context, but must not displace it.
+    const priorConversation = history.length ? history.slice(-8).map(item => ({ role: item.role, content: item.content, agent: turn.agent })) :
       sharedTurns.slice(-4).flatMap(item => [
         { role: 'user', content: item.transcript, agent: item.agent }, { role: 'assistant', content: item.reply, agent: item.agent },
-      ]) : history.slice(-8).map(item => ({ role: item.role, content: item.content, agent: turn.agent }));
+      ]);
     if (!turn.greeting) {
       window.AgentMemory.recordShared?.(turn.speaker, turn.mode, turn.agent, turn.transcript, turn.reply);
       tripNotes?.update({ ...turn, priorConversation });
