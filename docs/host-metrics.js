@@ -15,6 +15,12 @@
   }
   function render(data) {
     report = data;
+    const historyPicker = document.querySelector('#analysis-history');
+    if (data.analysisStorage?.status !== 'historical') {
+      historyPicker.replaceChildren(); const currentOption = node('option', 'Current saved result'); currentOption.value = ''; historyPicker.append(currentOption);
+      for (const version of data.analysisStorage?.history || []) { const option = node('option', `#${version.id} · ${new Date(version.created_at).toLocaleString()} · ${version.model} · ${version.analysis_version}`); option.value = String(version.id); historyPicker.append(option); }
+      historyPicker.value = ''; document.querySelector('#analysis-history-picker').hidden = !(data.analysisStorage?.history?.length);
+    }
     if (!data.sessions?.some(s => s.id === sessionId)) sessionId = data.sessions?.at(-1)?.id || '';
     const current = data.sessions?.find(s => s.id === sessionId), ids = new Set(current?.turnIds || []);
     const picker = document.querySelector('#metrics-session'); picker.replaceChildren();
@@ -54,7 +60,7 @@
       scores?.wastedSpeechSeconds != null ? `${scores.wastedSpeechSeconds}s of recording across ${scores.wastedTurnsWithDuration} flagged turns. Includes pauses; other durations unavailable.` : 'Re-explanations of earlier information. Duration is unavailable without recorded timing.', 'AI estimate · total re-explanation turns; not automatically memory failures');
     const repetition = scores?.repetition;
     if (a) {
-      const tile = node('p', repetition ? `${repetition.handoffPrompted} prompted by a handoff · ${repetition.agentReasked} after an agent re-ask · ${repetition.userInitiated} user initiated · ${repetition.unclear} unclear. Categories describe repeated user turns, separately from agent question counts.` : 'Repetition origins were not assessed in this saved result. Reanalyze explicitly to classify them.');
+      const tile = node('p', repetition ? `${repetition.handoffPrompted} prompted by a handoff · ${repetition.agentReasked} after an agent re-ask · ${repetition.userInitiated} user initiated · ${repetition.unclear} unclear. Categories describe repeated user turns, separately from agent question counts.` : 'Repetition origins were not assessed in this saved result. Choose Analyze updated data to classify them.');
       subjective.children[subjective.children.length - 1].append(tile);
     }
     if (current) card(subjective, 'Session task outcome', current.analysis?.taskComplete === true ? 'Approved plan' : current.analysis?.taskComplete === false ? 'Needs revision' : 'Not assessed', 'Completion requires explicit approval of the complete itinerary in this session. Current profile alone is insufficient.', 'AI estimate · session evidence');
@@ -92,10 +98,11 @@
     }
     if (a) problems.append(node('small', 'Missed cross-agent preferences can reflect unavailable private context in Separate mode. These describe the experience; they do not establish an avoidable memory failure.'));
     document.querySelector('#metrics-coverage').textContent = `${current ? current.records + ' records in this session · ' : ''}${data.countedRecords} of ${data.totalRecords} saved records counted${a ? ` · AI estimates cover the latest ${a.sampledRecords} records` : ''}.`;
+    if (data.countedSource) document.querySelector('#metrics-coverage').textContent += ` Counted data ID: ${data.countedSource.fingerprint.slice(0, 12)}. Same ID means the same saved record window, including interruptions.`;
     const evidence = document.querySelector('#metrics-evidence'); evidence.replaceChildren();
     if (current?.conditionNote) evidence.append(node('p', current.conditionNote));
     evidence.append(node('p', data.sessionDefinition || ''));
-    evidence.append(node('p', 'Counts come from saved data. AI estimates need review. Shared and separate modes are labeled on each finding. Older switch initiation and memory availability cannot be reconstructed reliably. Memory utilization counts saved entries; an entry may summarize several facts. Return counts require continued user interaction, are limited to observed same-browser/engine/mode streams, and do not establish enjoyment or voluntary engagement. Use questionnaire feedback for perceived engagement and coherence. Re-explanation totals retain relay-prompted, agent-reasked, user-initiated and unclear cases; they are not all evidence of forgetting.'));
+    evidence.append(node('p', 'Transcript counts come from saved data. Counts of AI-classified events, including re-asks, remembered facts and coherence failures, are estimates and need review. Shared and separate modes are labeled on each finding. Older switch initiation and memory availability cannot be reconstructed reliably. Memory utilization counts saved entries; an entry may summarize several facts. Return counts require continued user interaction, are limited to observed same-browser/engine/mode streams, and do not establish enjoyment or voluntary engagement. Use questionnaire feedback for perceived engagement and coherence. Re-explanation totals retain relay-prompted, agent-reasked, user-initiated and unclear cases; they are not all evidence of forgetting.'));
     const timeline = node('details', '', 'finding-group'); timeline.append(node('summary', `Switch timeline (${s.switches.tracked})`));
     for (const event of s.switches.events || []) timeline.append(node('p', `${new Date(event.timestamp).toLocaleString()} · ${event.from} → ${event.to} · user ${event.source} click${event.suggested ? ' · suggestion highlighted' : ' · manual'}`));
     evidence.append(timeline);
@@ -123,7 +130,7 @@
       evidence.append(section);
     }
     card(objective, 'Cross-agent preference conflicts', scores?.crossAgentConflicts ?? '—', 'Suggestions conflicting with a preference told to the other agent in this session, even if unavailable in separate mode.', 'AI estimate · user experience');
-    analyze.textContent = data.analysis ? 'Reanalyze · API' : 'Analyze this session · API';
+    analyze.textContent = data.analysis ? 'Analyze updated data' : 'Analyze this session · API';
     analyze.disabled = !s.userTurns || data.analysisStorage?.available === false; download.disabled = false;
   }
   async function load(analyzeConversation = false) {
@@ -146,7 +153,7 @@
   }
   function analysisStatus(data) {
     if (data.analysisStorage?.message) return data.analysisStorage.message;
-    if (data.analysisStorage?.status === 'saved') return `Saved analysis loaded · ${new Date(data.analysisStorage.savedAt).toLocaleString()}. Kept unchanged until you press Reanalyze · API.`;
+    if (data.analysisStorage?.status === 'saved') return `Saved analysis loaded · ${new Date(data.analysisStorage.savedAt).toLocaleString()}. Saved results stay fixed. Analyze updated data only when needed; unchanged sources reuse this result.`;
     return data.analysis ? 'Analysis ready. Review the evidence below.' : 'Counts ready. Analysis uses API credits and will be saved.';
   }
   function retainSessionAnalyses(data, previous) {
@@ -163,6 +170,22 @@
       }
     }
   }
+  document.querySelector('#analysis-history').addEventListener('change', async event => {
+    if (busy) return;
+    const id = event.target.value;
+    if (!id) { if (cache.has(selected)) { render(cache.get(selected)); status.textContent = analysisStatus(cache.get(selected)); } return; }
+    const name = selected, token = ++generation;
+    busy = true; event.target.disabled = true; analyze.disabled = download.disabled = true; status.textContent = 'Loading saved analysis…';
+    try {
+      const url = new URL(`${window.VOICE_DEMO_CONFIG.apiBaseUrl.replace(/\/$/, '')}/logs/metrics`); url.searchParams.set('speaker', name); url.searchParams.set('analysis', id);
+      const response = await fetch(url, { headers: { authorization: `Bearer ${document.querySelector('#host-key').value.trim()}` } });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Could not load saved analysis.');
+      if (token !== generation || name !== selected) return;
+      retainSessionAnalyses(data); render(data); status.textContent = analysisStatus(data);
+      // Historical views never replace the cache used for memory-group comparison.
+    } catch (error) { status.textContent = error.message; }
+    finally { busy = false; event.target.disabled = false; analyze.disabled = !report?.summary?.userTurns || report?.analysisStorage?.available === false; download.disabled = !report; }
+  });
   document.querySelector('#metrics-session').addEventListener('change', event => { sessionId = event.target.value; if (report) render(report); });
   window.openUserMetrics = async (name, requestedId = '') => {
     if (busy) { status.textContent = 'Finish the current metrics request before selecting another user.'; if (!dialog.open) dialog.showModal?.(); return; }

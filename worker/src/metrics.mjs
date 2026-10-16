@@ -1,6 +1,6 @@
 import { repeatedInteractions, RETURN_GUIDANCE, validateReturnContinuity, returnScores } from './repeated-interactions.mjs';
 import { REPETITION_GUIDANCE, annotateRepetition, repetitionScores } from './repetition-metrics.mjs';
-import { analysisFingerprint, readAnalysis, saveAnalysis } from './analysis-cache.mjs';
+import { ANALYSIS_VERSION, analysisFingerprint, countedFingerprint, readAnalysis, historicalAnalysis, saveAnalysis } from './analysis-cache.mjs';
 import { OPPORTUNITY_GUIDANCE, validateOpportunities } from './opportunity-metrics.mjs';
 import { tagSessions, sessionReports } from './session-metrics.mjs';
 import { validKey } from './logs.mjs';
@@ -111,6 +111,13 @@ export async function userMetrics(request, env, cors) {
   const url = new URL(request.url), name = (url.searchParams.get('speaker') || '').trim().toLowerCase(), analyze = request.method === 'POST';
   if (!name || name.length > 40) return json({ error: 'Choose one Name ID.' }, 400, cors);
   try {
+    const historyId = url.searchParams.get('analysis');
+    if (historyId !== null) {
+      if (request.method !== 'GET' || !/^\d+$/.test(historyId)) return json({ error: 'Choose a saved analysis version.' }, 400, cors);
+      const historical = await historicalAnalysis(env.LOG_DB, name, Number(historyId));
+      if (!historical?.savedReport) return json({ error: 'Saved analysis version not found.' }, 404, cors);
+      return json({ ...historical.savedReport, analysis: historical.analysis, analysisStorage: { available: true, status: 'historical', savedAt: historical.savedAt, message: 'Historical snapshot. Viewing it does not replace the current saved comparison.' } }, 200, cors);
+    }
     const [{ results: records }, { results: profiles }, { results: totals }, { results: markers }] = await Promise.all([
       env.LOG_DB.prepare('SELECT id, payload, interrupted FROM chat_turns WHERE speaker_lower = ? ORDER BY id DESC LIMIT 1001').bind(name).all(),
       env.LOG_DB.prepare('SELECT payload, version FROM trip_profiles WHERE name_id = ?').bind(name).all(),
@@ -130,15 +137,23 @@ export async function userMetrics(request, env, cors) {
     if (requestedSession && !report.sessions.some(s => s.id === requestedSession)) return json({ error: 'This session is no longer in the counted window. Reload metrics.' }, 400, cors);
     const model = env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra';
     const fingerprint = await analysisFingerprint(selected, profiles[0]?.payload || null, report.totalRecords, model);
-    const stored = await readAnalysis(env.LOG_DB, name, fingerprint, model);
+    report.countedSource = { fingerprint: await countedFingerprint(selected, report.totalRecords), countedRecords: rows.length, totalRecords: report.totalRecords, lastTurnAt: rows.at(-1)?.timestamp || null };
+    const refresh = analyze && url.searchParams.get('refresh') === 'true';
+    const stored = await readAnalysis(env.LOG_DB, name, fingerprint, model, refresh);
     const { analysis: savedAnalysis, savedReport, ...storageInfo } = stored;
     report.analysisStorage = storageInfo;
-    if (savedAnalysis && !(analyze && url.searchParams.get('refresh') === 'true')) {
+    if (savedAnalysis && (!refresh || stored.matchesCurrent)) {
+      if (stored.fromHistory) {
+        const promotion = await saveAnalysis(env.LOG_DB, name, fingerprint, model, { ...savedAnalysis, savedReport }, { total: report.totalRecords, latest: Number(records[0]?.id || 0), interrupted: Number(totals[0]?.interrupted || 0), profileVersion: Number(profiles[0]?.version || 0), generation: Number(markers[0]?.generation || 0) });
+        if (promotion.status !== 'saved') { storageInfo.status = promotion.status; storageInfo.message = promotion.message; }
+      }
+      if (refresh && stored.matchesCurrent && storageInfo.status === 'saved') storageInfo.message = 'Data and evaluation settings are unchanged. Reused the saved result; no OpenAI call was made.';
       if (savedReport) return json({ ...savedReport, analysis: savedAnalysis, analysisStorage: storageInfo }, 200, cors);
       report.analysis = savedAnalysis;
     }
     if (analyze && !report.analysis) {
       if (!stored.available) return json({ error: stored.message }, 503, cors);
+      if (!stored.historyAvailable) return json({ error: 'Apply migration 0007_analysis_history.sql before creating another analysis.' }, 503, cors);
       if (!env.OPENAI_API_KEY) return json({ error: 'Conversation analysis is not configured.' }, 503, cors);
       if (env.DEMO_RATE_LIMITER) {
         const limit = await env.DEMO_RATE_LIMITER.limit({ key: `${request.headers.get('cf-connecting-ip') || 'host'}:host-metrics` });
@@ -154,12 +169,19 @@ export async function userMetrics(request, env, cors) {
         signal: AbortSignal.timeout(90000) });
       if (!response.ok) throw new Error('Conversation analysis failed. Please retry.');
       const output = await response.json();
-      report.analysis = { ...validateAnalysis(JSON.parse(output.choices?.[0]?.message?.content || ''), sample, sampleSummary), generatedAt: new Date().toISOString(), sampledRecords: sample.length, analyzedTurnIds: sample.map(t => t.turn_id), model: env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra', method: 'AI estimate; evidence review required' };
+      report.analysis = { ...validateAnalysis(JSON.parse(output.choices?.[0]?.message?.content || ''), sample, sampleSummary), generatedAt: new Date().toISOString(), evaluationVersion: ANALYSIS_VERSION, dataFingerprint: fingerprint, sampledRecords: sample.length, analyzedTurnIds: sample.map(t => t.turn_id), model: env.METRICS_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra', method: 'AI estimate; evidence review required' };
       report.sessions = sessionReports(rows, report.analysis, rows.filter(t => report.analysis.analyzedTurnIds.includes(t.turn_id)));
       const { analysis: snapshotAnalysis, analysisStorage: snapshotStorage, ...savedReport } = report;
       report.analysisStorage = await saveAnalysis(env.LOG_DB, name, fingerprint, model, { ...report.analysis, savedReport }, { total: report.totalRecords, latest: Number(records[0]?.id || 0), interrupted: Number(totals[0]?.interrupted || 0), profileVersion: Number(profiles[0]?.version || 0), generation: Number(markers[0]?.generation || 0) });
     }
-    if (report.analysis) report.sessions = sessionReports(rows, report.analysis, rows.filter(t => report.analysis.analyzedTurnIds.includes(t.turn_id)));
+    if (report.analysis) {
+      const canonical = await readAnalysis(env.LOG_DB, name, fingerprint, model, true);
+      if (canonical.matchesCurrent && canonical.savedReport) {
+        const { analysis, savedReport: frozen, ...savedStorage } = canonical;
+        return json({ ...frozen, analysis, analysisStorage: savedStorage }, 200, cors);
+      }
+      report.sessions = sessionReports(rows, report.analysis, rows.filter(t => report.analysis.analyzedTurnIds.includes(t.turn_id)));
+    }
     return json(report, 200, cors);
   } catch (error) { return json({ error: error.name === 'TimeoutError' ? 'Analysis timed out. Please retry.' : 'Could not calculate metrics. Please retry.' }, 503, cors); }
 }

@@ -7,7 +7,7 @@
   <title>Chat logs · Sage & Astra</title>
   <script src="config.js" defer></script>
   <script src="memory-comparison.js?v=compact-metrics-7" defer></script>
-  <script src="host-metrics.js?v=selected-users-11" defer></script>
+  <script src="host-metrics.js?v=stable-analysis-12" defer></script>
   <script src="host-logs.js?v=delete-id-metrics-6" defer></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
@@ -161,6 +161,7 @@ footer{border-top:1px solid #bccdbb;padding:23px 0 28px;display:flex;justify-con
         <div class="metrics-header"><div><p class="eyebrow">USER METRICS</p><h2 id="metrics-heading">Trip metrics</h2></div><button id="close-metrics" type="button" aria-label="Close metrics">×</button></div>
         <div class="metrics-actions"><button id="analyze-metrics" type="button">Analyze this session</button><button id="download-metrics" type="button">Download metrics</button></div>
         <div class="session-picker"><label for="metrics-session">Session</label><select id="metrics-session"></select><span id="metrics-condition"></span></div>
+        <div class="session-picker" id="analysis-history-picker" hidden><label for="analysis-history">Saved analysis</label><select id="analysis-history"><option value="">Current saved result</option></select></div>
         <p id="metrics-status" role="status" aria-live="polite"></p><p id="metrics-coverage"></p>
         <h3>Problems to review</h3><div id="metrics-problems" class="metrics-problems" aria-live="polite"></div>
         <h3>Repeated interactions</h3><div id="repeat-interaction-metrics" class="metrics-grid"></div>

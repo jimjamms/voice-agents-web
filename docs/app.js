@@ -132,12 +132,20 @@
   };
   function highlightHandoff(reply) {
     const other = agent === 'sage' ? 'Astra' : 'Sage';
-    const sentences = String(reply || '').split(/[.!?\n]+/);
-    const invitation = new RegExp(`\\b(?:switch(?:ing)?(?: back| over)? to|return(?:ing)? to|go(?:ing)? back to|talk(?:ing)? (?:to|with)|speak(?:ing)? (?:to|with)|chat(?:ting)? (?:to|with)|ask|try|let|hand(?:ing)? (?:this |you )?(?:over )?to|recommend|suggest)\\b[^.!?]{0,65}\\b${other}\\b`, 'i');
-    const offer = new RegExp(`\\b${other}\\b[^.!?]{0,45}\\b(?:can help|could help|can finalize|can plan|can work|can check|is better|would be better|is best|would help)\\b`, 'i');
-    const suggested = sentences.some(sentence =>
-      !/\b(?:don't|do not|no need to|shouldn't|should not|needn't)\b/i.test(sentence) &&
-      (invitation.test(sentence) || offer.test(sentence)));
+    const text = String(reply || '').replace(/[’‘]/g, "'");
+    const clauses = text.split(/[.!?;\n]+|\s+(?:but|however|although)\s+|,\s*(?=(?:Astra|Sage)\b)/i);
+    const invitation = new RegExp(`\\b(?:switch(?:ing)?(?: back| over)? to|return(?:ing)? to|go(?:ing)? back to|talk(?:ing)? (?:to|with)|speak(?:ing)? (?:to|with)|chat(?:ting)? (?:to|with)|work(?:ing)? with|ask|try|let|hand(?:ing)?\\b|over to|recommend|suggest|ready for|time for|next (?:step|stop|up)(?: is|:)?)[^.!?;]{0,160}\\b${other}\\b`, 'i');
+    const offer = new RegExp(`\\b${other}\\b(?:'s| is)?[^.!?;]{0,60}\\b(?:(?:can|could|will|would|is able to|would be happy to) (?:help|finalize|plan|work|check|review|turn|shape|build|fit|map|arrange|handle|take|sort|put|bring|refine|suggest|explore|choose)|is (?:better|best|the right|your next)|would be (?:better|a good|the right)|your next (?:step|stop))\\b`, 'i');
+    let suggested = false;
+    for (const clause of clauses) {
+      const target = new RegExp(`\\b${other}\\b`, 'i').exec(clause);
+      const before = target ? clause.slice(0, target.index) : clause;
+      const after = target ? clause.slice(target.index + other.length) : '';
+      const negativeAction = /\b(?:don't|do not|shouldn't|should not|needn't|can't|cannot|no need(?: to)?|not)\b[^.!?;]{0,80}\b(?:switch|talk|speak|chat|ask|return|go|hand|recommend(?:ing)?|suggest(?:ing)?|try)\b/i.test(before);
+      const negativeTarget = target && (/\bno need(?: for| to)?\s*$/i.test(before) || /^\s*(?:can't|cannot|won't|will not|wouldn't|isn't|is not|is unable|shouldn't|should not)\b/i.test(after));
+      if (negativeAction || negativeTarget || /\b(?:stay with me|don't switch yet|do not switch yet)\b/i.test(clause)) { suggested = false; continue; }
+      if (target && (invitation.test(clause) || offer.test(clause))) suggested = true;
+    }
     switchAgent.dataset.suggested = String(suggested);
     switchAgent.setAttribute('aria-label', `${suggested ? 'Suggested next: ' : ''}Switch to ${other}`);
   }
@@ -365,6 +373,8 @@
       const saved = conversations.get(activeConversationKey);
       history = saved?.history || []; sessionId = saved?.sessionId || crypto.randomUUID();
       switchAgent.dataset.suggested = 'false'; renderConversation();
+      const latest = chatTurns.filter(turn => turn.event_type !== 'agent_switch').at(-1);
+      if (latest?.agent === agent && latest.engine === engine && latest.memory_sharing_mode === memoryMode.value && history.at(-1)?.role === 'assistant') highlightHandoff(history.at(-1).content);
     }
   }
   function renderConversation(scrollTop) {
