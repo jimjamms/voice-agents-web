@@ -30,16 +30,17 @@
     const waiting = '—';
     const opportunityCard = (title, key, description) => {
       const value = scores?.[key];
-      const label = !value ? 'Not analyzed' : !value.opportunities ? 'No relevant opportunities' : !value.assessed ? 'Unclear evidence' : ratio(value.successful, value.assessed);
-      card(interaction, title, label, description + (value ? ` ${value.opportunities} opportunities; ${value.unclear} unclear.` : ''), 'AI estimate · review session evidence');
+      const failed = value ? value.assessed - value.successful : 0;
+      const label = !value ? 'Not analyzed' : !value.opportunities ? 'No relevant opportunities' : !value.assessed ? 'Unclear evidence' : `${value.successful} handled · ${failed} missed`;
+      card(interaction, title, label, description + (value ? ` ${value.opportunities} opportunities; ${value.unclear} unclear.` + (value.assessed ? ` Miss rate: ${ratio(failed, value.assessed)} assessed opportunities.` : '') : ''), 'AI estimate · review session evidence');
     };
     opportunityCard('Cross-agent preference application', 'preferenceApplication', 'Concrete use of a relevant personal preference told to the other agent, beyond public trip notes.');
     opportunityCard('Correction carryover', 'correctionCarryover', 'Later recommendations that respect a revised preference told to the other agent.');
     opportunityCard('Missing-context handling', 'contextHandling', 'Relevant clarification or an honest provisional suggestion when personal context is missing.');
     card(objective, 'Re-ask rate', scores ? ratio(scores.reasks, scores.questions) : waiting, 'Question turns that re-ask facts given to the other agent, divided by all analyzed question turns.', 'AI estimate');
-    card(objective, 'Handoff continuity', scores ? ratio(scores.continuityCorrect, scores.continuityAssessed) : waiting, 'First replies after a switch that continue the previous conversation correctly.', 'AI estimate · unassessable replies excluded');
+    card(objective, 'Handoff continuity', scores ? ratio(scores.continuityCorrect, scores.continuityAssessed) : waiting, 'First replies after a switch that continue the previous conversation correctly.' + (scores ? ` ${scores.continuityAssessed - scores.continuityCorrect} failed; ${(a?.continuity || []).filter(v => v.picked_up === null).length} unclear.` : ''), 'AI estimate · unassessable replies excluded');
     card(objective, 'Preference violations', scores ? scores.violations : waiting, 'Agent turns suggesting something that conflicts with a fact available at that point.', 'AI estimate');
-    card(objective, 'Saved-entry use', scores ? ratio(scores.memoriesUsed, scores.memoriesAvailable) : waiting, 'Use of captured saved entries only; recent shared chats and other conversation context are not counted. Older turns without snapshots are unassessable.', 'AI estimate · per-turn memory context');
+    card(objective, 'Saved-entry use', scores ? ratio(scores.memoriesUsed, scores.memoriesAvailable) : waiting, 'Captured saved entries only; chats and trip notes excluded.' + (scores ? ` ${scores.memoriesAvailable - scores.memoriesUsed} entries not used. Non-use alone is not a failure: an entry may be irrelevant.` : ''), 'AI estimate · per-turn memory context');
     card(objective, 'Agent switches', s.switches.tracked, `${s.switches.suggested} with a suggestion highlighted · ${s.switches.manual} without. ${s.switches.inferred} additional untracked transitions (inferred).`, 'Tracked count · every recorded switch is user initiated');
     card(subjective, 'User words per turn', s.wordsPerTurn ?? 'No user turns', `${s.userWords} words across ${s.userTurns} user turns. Excludes greetings and switch events.`, 'Counted from transcripts');
     card(subjective, 'Volunteered facts', scores ? scores.volunteeredFacts : waiting, 'Distinct user facts volunteered without a preceding request. This is a proxy for self-disclosure.', 'AI estimate');
@@ -48,6 +49,34 @@
     if (current) card(subjective, 'Session task outcome', current.analysis?.taskComplete === true ? 'Approved plan' : current.analysis?.taskComplete === false ? 'Needs revision' : 'Not assessed', 'Completion requires explicit approval of the complete itinerary in this session. Current profile alone is insufficient.', 'AI estimate · session evidence');
     else card(subjective, 'Current saved trip', s.task ? `${s.task.completed}/${s.task.total}${s.task.ready ? ' · Complete' : ''}` : 'No saved trip', 'Country, two cities, activity per city, budget, and approved itinerary.', 'Saved trip checklist');
     card(subjective, 'Final-plan satisfaction', a ? (a.satisfaction.length ? 'Reported' : 'Not reported') : '—', a?.satisfaction.length ? a.satisfaction.map(v => `“${v.quote}”`).join(' ') : 'Only explicit feedback about the final plan qualifies. No rating is inferred.', 'User self-report');
+    const problems = document.querySelector('#metrics-problems'); problems.replaceChildren();
+    const problemGroups = a ? [
+      ['Repeated questions', a.reasks || []],
+      ['Failed handoffs', (a.continuity || []).filter(v => v.picked_up === false)],
+      ['Available preference conflicts', a.violations || []],
+      ['Cross-agent preference conflicts', a.cross_agent_conflicts || []],
+      ['Missed preference applications', (a.preference_opportunities || []).filter(v => v.applied === false)],
+      ['Superseded preferences used', (a.correction_opportunities || []).filter(v => v.respected === false)],
+      ['Unsupported personal claims', (a.context_handling || []).filter(v => v.behavior === 'unsupported_claim')],
+      ['User re-explanations', a.wasted || []],
+    ] : [];
+    const problemTurns = new Set(problemGroups.flatMap(([, items]) => items.map(item => item.turn_id)));
+    problems.append(node('p', a ? problemTurns.size ? `${problemTurns.size} ${problemTurns.size === 1 ? 'reply' : 'replies'} with supported problems. Categories can overlap; unclear findings are excluded.` : 'No supported problems found in this analyzed sample. This does not establish that every reply was good.' : 'Analyze this session to review supported problems.'));
+    for (const [label, items] of problemGroups) {
+      if (!items.length) continue;
+      const group = node('details', '', 'finding-group problem-group'); group.append(node('summary', `${label} (${items.length})`));
+      for (const item of items) {
+        const entry = node('article', '', 'metric-finding');
+        entry.append(node('strong', `${item.agent} · ${item.mode === 'isolated' ? 'separate' : 'shared'} · ${item.turn_id}`));
+        if (item.reason || item.fact) entry.append(node('p', item.reason || item.fact));
+        if (item.source_user_text) entry.append(node('blockquote', `Earlier user: ${item.source_user_text}`));
+        if (item.user_text) entry.append(node('blockquote', `User: ${item.user_text}`));
+        if (item.agent_reply) entry.append(node('blockquote', `Agent: ${item.agent_reply}`));
+        group.append(entry);
+      }
+      problems.append(group);
+    }
+    if (a) problems.append(node('small', 'Missed cross-agent preferences can reflect unavailable private context in Separate mode. These describe the experience; they do not establish an avoidable memory failure.'));
     document.querySelector('#metrics-coverage').textContent = `${current ? current.records + ' records in this session · ' : ''}${data.countedRecords} of ${data.totalRecords} saved records counted${a ? ` · AI estimates cover the latest ${a.sampledRecords} records` : ''}.`;
     const evidence = document.querySelector('#metrics-evidence'); evidence.replaceChildren();
     if (current?.conditionNote) evidence.append(node('p', current.conditionNote));
@@ -65,6 +94,7 @@
         const entry = node('article', '', 'metric-finding');
         entry.append(node('strong', `${item.agent} · ${item.mode === 'isolated' ? 'separate' : 'shared'} · ${item.turn_id}`));
         if ('applied' in item || 'respected' in item) { const value = 'applied' in item ? item.applied : item.respected; entry.append(node('p', value === null ? 'Unclear application' : value ? 'Applied in the recommendation' : 'Not applied')); }
+        if ('picked_up' in item) entry.append(node('p', item.picked_up === null ? 'Unclear handoff' : item.picked_up ? 'Continued correctly' : 'Failed to continue correctly'));
         if (item.behavior) entry.append(node('p', `${item.behavior.replaceAll('_', ' ')} · ${item.needed_detail}`));
         if (item.prior_user_text) entry.append(node('blockquote', `Before correction: ${item.prior_user_text}`));
         if (item.fact || item.quote) entry.append(node('p', item.fact || item.quote));

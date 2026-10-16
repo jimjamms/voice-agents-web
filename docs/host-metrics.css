@@ -69,3 +69,6 @@ main{padding-top:36px;padding-bottom:40px}
 
 #interaction-metrics .metric-card>strong{font-size:20px;line-height:1.4;overflow-wrap:anywhere}
 @media(min-width:780px){#interaction-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+.metrics-problems{padding:14px 16px;border:1px solid #d8c9b6;border-radius:10px;background:#fcf5eb;font-size:12px;line-height:1.7}
+.metrics-problems>p{margin:0 0 8px}.metrics-problems>small{display:block;color:#6b655d;margin-top:10px;line-height:1.6}.metrics-problems summary{cursor:pointer;font-weight:600;min-height:40px;display:list-item;align-content:center}.metrics-problems .metric-finding{background:#fffaf3}.metrics-problems blockquote{border-left-color:#bda37b}
