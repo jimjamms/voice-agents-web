@@ -119,3 +119,14 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
  .record-button:hover,#send-text:hover,.setup-next:hover,.brand:hover .brand-mark svg{translate:0 0;transform:none}
  #planning-stage .agent-card:not([hidden]),#setup-stage:not([hidden]) .setup-card,#review-stage:not([hidden]) .review-grid,.plan-ready-notice:not([hidden]),.plan-ready-notice:not([hidden]) .plan-ready-check,.record-button.recording .mic svg{animation:none}
 }
+
+/* Neutral study introduction, shown before setup on each page opening. */
+#study-welcome{box-sizing:border-box;width:min(520px,calc(100vw - 32px));max-height:calc(100svh - 32px);overflow:auto;margin:auto;padding:clamp(24px,5vw,36px);border:1px solid #dac4a7;border-radius:20px;background:#fff8ed;color:#4d3a2d;box-shadow:0 24px 80px #172d3440}
+#study-welcome::backdrop{background:#21382d80}
+#study-welcome .eyebrow{font-size:10px;letter-spacing:.15em;color:#95603e;margin:0 0 12px}
+#study-welcome h2{font:800 clamp(23px,4vw,29px)/1.25 Manrope,sans-serif;margin:0 0 18px;color:#623f28}
+#study-welcome-message{font-size:16px;line-height:1.8;margin:0 0 26px;text-wrap:pretty}
+#study-welcome form{margin:0;display:flex;justify-content:flex-end}
+#study-welcome .setup-next{min-height:46px;width:auto;padding:12px 22px;border:1px solid #8e542f;border-radius:11px;background:#9c6039;color:#fffaf2;font:700 13px 'DM Sans',sans-serif;cursor:pointer}
+#study-welcome .setup-next:hover{background:#87502e}
+@media(max-width:560px){#study-welcome .setup-next{width:100%;justify-content:center}}
