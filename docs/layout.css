@@ -36,14 +36,23 @@ body[data-stage="setup"] .intro>p:last-child{margin-inline:auto}
   #planning-stage .conversation{min-block-size:0;align-self:stretch}
   #planning-stage .conversation>.conversation-head,#planning-stage .conversation>.controls{flex-shrink:0}
   #planning-stage .conversation>.messages{flex:1 1 0;block-size:0;min-block-size:280px;max-block-size:none;overflow-y:auto}
-  /* Notes can use spare height; checklist rows keep their natural spacing. */
+  /* Stretch both views, using distinct rows to organize the checklist space. */
   #planning-stage .chooser{display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:16px}
   #planning-stage .trip-planner{display:flex;flex-direction:column;flex:1 0 auto}
-  #planning-stage .trip-planner:has(#planner-checklist-panel:not([hidden])){flex:0 0 auto}
   #planning-stage .trip-planner .planner-views{flex-shrink:0}
-  #planning-stage .trip-planner #planner-checklist-panel{display:flex;flex-direction:column;flex:0 0 auto;gap:8px}
+  #planning-stage .trip-planner #planner-checklist-panel{display:flex;flex-direction:column;flex:1 0 auto;gap:8px}
   #planning-stage .trip-planner .checklist-heading,#planning-stage .trip-planner #trip-goal-hint{flex-shrink:0}
-  #planning-stage .trip-planner .goal-counts{display:grid;grid-template-columns:minmax(0,1fr);flex:0 0 auto;align-content:start;gap:6px;margin-block:8px}
+  #planning-stage .trip-planner .goal-counts{display:grid;grid-template-columns:minmax(0,1fr);flex:1 0 auto;grid-auto-rows:minmax(44px,1fr);align-content:stretch;gap:8px;margin-block:8px}
+  #planning-stage .trip-planner .goal-counts span{
+    display:flex;align-items:center;min-inline-size:0;padding:12px;
+    border:1px solid var(--planner-border);border-radius:9px;
+    background:var(--planner-header);color:var(--planner-ink);line-height:1.5;
+  }
+  #planning-stage .trip-planner .goal-counts span[data-complete="true"]{
+    background:color-mix(in srgb,var(--planner-accent) 12%,var(--planner-paper));
+    border-color:color-mix(in srgb,var(--planner-accent) 42%,var(--planner-border));
+    font-weight:600;
+  }
   #planning-stage .trip-planner #planner-notes-panel{flex:1 0 auto}
   #planning-stage .agent-options{flex:0 0 auto}
   #planning-stage .agent-options .agent-card{min-block-size:clamp(220px,25svh,300px)}
