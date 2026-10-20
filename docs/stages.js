@@ -86,13 +86,6 @@
     document.querySelector('#plan-progress-title').textContent = 'Your trip plan is complete.';
     document.querySelector('#plan-progress-description').textContent = 'Continue to Finish to review it. You can still make changes.';
     document.querySelector('#plan-progress-icon').textContent = '✓';
-    const progress = document.querySelector('#chat-trip-progress');
-    progress.hidden = !notesPending;
-    progress.dataset.state = workState;
-    document.querySelector('#chat-trip-progress-text').textContent = workState === 'paused' ?
-      'Trip update paused. Check your connection and demo code.' : workState === 'retrying' ?
-      'Still updating your trip—we’ll retry automatically. No need to resend.' :
-      'Updating your trip… After approval, stay here for Continue to Finish.';
     document.querySelector('#planner-notes-panel')?.setAttribute('aria-busy', String(notesPending));
     if (notesPending) {
       document.querySelector('#trip-goal-hint').textContent = 'Updating your checklist and notes from your latest message…';
