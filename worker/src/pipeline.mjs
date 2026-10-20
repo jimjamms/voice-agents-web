@@ -8,6 +8,8 @@ import pipelineAgents from './pipeline_agents.json' with { type: 'json' };
 const API = 'https://api.openai.com/v1';
 const MAX_AUDIO_BYTES = 4_000_000;
 const MAX_TEXT = 1600;
+// The itinerary reply can arrive before the asynchronous public notes check.
+const finishGuidance = '\n\nWebsite finish guidance: After the user explicitly approves the complete itinerary with Astra, clearly say that trip planning is finished and give the next website step in that same brief reply: stay on this page while the checklist updates, then select Continue to Finish when it appears. Do not end with a generic goodbye that suggests leaving the website. Do not ask another planning question after full approval, claim the checklist has already updated, promise an exact wait time, or say the form or study is complete. This instruction applies only to approval of a complete itinerary, not a single activity, budget or hotel choice. If the user later asks to revise the plan, help them revise it normally.';
 const formats = new Map([
   ['audio/webm', 'webm'], ['audio/mp4', 'm4a'], ['audio/mpeg', 'mp3'],
   ['audio/wav', 'wav'], ['audio/ogg', 'ogg'], ['audio/x-m4a', 'm4a'],
@@ -110,7 +112,7 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext },
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext + finishGuidance },
             ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')),
             ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
             { role: 'system', content: opening }],
@@ -135,7 +137,7 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext + finishGuidance }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
             { role: 'user', content: transcript }],
         }),
       })).json();

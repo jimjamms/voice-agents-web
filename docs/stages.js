@@ -21,6 +21,8 @@
   window.tripWasReviewed = id => reviewedTrips.has(id.trim().toLowerCase());
   const tripKey = () => name.value.trim().toLowerCase() || 'unknown';
   let snapshot = { notes: '', ready: false, choices: { countries: [], cities: [], activities: [] } };
+  let notesPending = false, workState = 'updating';
+  const canFinish = () => snapshot.ready && !notesPending;
   function renderCompletedNotes(text) {
     const textarea = document.querySelector('#completed-notes');
     if (window.renderTripNotes) window.renderTripNotes(textarea, text);
@@ -36,8 +38,10 @@
     }
   }
   function refreshGoal() {
-    document.body.dataset.planReady = String(snapshot.ready);
-    document.querySelector('#mobile-details-view').textContent = snapshot.ready ? 'Your completed plan ✓' : 'Checklist & notes';
+    const ready = canFinish();
+    document.body.dataset.planUpdating = String(notesPending);
+    document.body.dataset.planReady = String(ready);
+    document.querySelector('#mobile-details-view').textContent = ready ? 'Your completed plan ✓' : 'Checklist & notes';
     const { countries, cities, cityActivities = {}, firstCityReviewed, budget, itinerary, finalized } = snapshot.choices;
     const covered = cities.filter(city => cityActivities[city]).length;
     const requirements = [
@@ -60,24 +64,40 @@
     const completeCount = requirements.filter(([, done]) => done).length;
     const mobileSummary = document.querySelector('#mobile-goal-summary');
     if (mobileSummary) {
-      mobileSummary.dataset.ready = String(snapshot.ready);
+      mobileSummary.dataset.ready = String(ready);
       document.querySelector('#mobile-goal-count').textContent = `${completeCount}/5`;
       document.querySelector('#mobile-goal-progress').value = completeCount;
-      mobileSummary.setAttribute('aria-label', snapshot.ready ? 'View your completed trip checklist' : `Open trip checklist, ${completeCount} of 5 complete`);
+      mobileSummary.setAttribute('aria-label', ready ? 'View your completed trip checklist' : `Open trip checklist, ${completeCount} of 5 complete`);
       const next = requirements.find(([, done]) => !done);
-      document.querySelector('#mobile-goal-next').textContent = snapshot.ready ? 'Your trip is ready to finish.' : `Next: ${next ? next[2] : 'review your itinerary with Astra'}`;
-      document.querySelector('#mobile-goal-caption').textContent = snapshot.ready ? 'Tap to view your checklist and continue.' : 'Build a trip that works for you. Your choices can change. Tap to view progress.';
+      document.querySelector('#mobile-goal-next').textContent = ready ? 'Your trip is ready to finish.' : `Next: ${next ? next[2] : 'review your itinerary with Astra'}`;
+      document.querySelector('#mobile-goal-caption').textContent = ready ? 'Tap to view your checklist and continue.' : 'Build a trip that works for you. Your choices can change. Tap to view progress.';
     }
 
-    document.querySelector('#trip-goal-hint').textContent = snapshot.ready ? 'Your trip is ready. Make changes or continue to the form.' :
+    document.querySelector('#trip-goal-hint').textContent = ready ? 'Your trip is ready. Make changes or continue to the form.' :
       countries.length < 1 || cities.length < 1 ? 'Sage: choose your country, first city, and an activity.' :
       !cityActivities[cities[0]] ? `Sage: choose an activity in ${cities[0]}.` :
       !firstCityReviewed ? 'Astra: review your first stop, timing, and budget.' :
       cities.length < 2 ? 'Back to Sage: choose your second city and its activity.' :
       covered < cities.length ? `Sage: choose an activity in ${cities.filter(city => !cityActivities[city]).join(', ')}.` :
       !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review your itinerary, request changes or approve it.';
-    document.querySelector('#continue-review').hidden = !snapshot.ready;
-    document.querySelector('#plan-ready-notice').hidden = !snapshot.ready;
+    document.querySelector('#continue-review').hidden = !ready;
+    const notice = document.querySelector('#plan-ready-notice');
+    notice.hidden = !ready && !notesPending;
+    notice.dataset.state = notesPending ? workState : 'ready';
+    notice.setAttribute('aria-label', notesPending ? 'Trip update status' : 'Plan ready');
+    document.querySelector('#plan-progress-title').textContent = ready ? 'Your trip plan is complete.' :
+      workState === 'paused' ? 'Trip update paused.' : workState === 'retrying' ? 'Still updating your trip…' : 'Updating your trip…';
+    document.querySelector('#plan-progress-description').textContent = ready ? 'Continue to Finish to review it. You can still make changes.' :
+      workState === 'paused' ? 'Check your connection and demo code. Your latest message is kept in this browser.' :
+      workState === 'retrying' ? 'We’ll retry automatically. You don’t need to resend your message.' :
+      'Please stay on this page. If you’ve approved the full itinerary, Continue to Finish will appear after this check.';
+    document.querySelector('#plan-progress-icon').textContent = ready ? '✓' : workState === 'paused' ? '!' : '…';
+    document.querySelector('#planner-notes-panel')?.setAttribute('aria-busy', String(notesPending));
+    if (notesPending) {
+      document.querySelector('#trip-goal-hint').textContent = 'Updating your checklist and notes from your latest message…';
+      document.querySelector('#mobile-goal-next').textContent = workState === 'paused' ? 'Trip update paused.' : 'Updating your checklist and notes…';
+      document.querySelector('#mobile-goal-caption').textContent = workState === 'paused' ? 'Check your connection and demo code. Your latest message is kept here.' : 'Please stay on this page while your latest choices are checked.';
+    }
   }
   if (typeof ResizeObserver === 'function') {
     const completionObserver = new ResizeObserver(entries => {
@@ -87,7 +107,7 @@
     completionObserver.observe(document.querySelector('#plan-ready-notice'));
   }
   function openReview() {
-    if (!snapshot.ready || document.body.dataset.stage !== 'planning') return;
+    if (!canFinish() || document.body.dataset.stage !== 'planning') return;
     window.dispatchEvent(new Event('trip-review:open'));
     renderCompletedNotes(snapshot.notes);
     document.querySelector('#completed-notepad').dataset.companion = document.querySelector('[data-agent].active')?.dataset.agent || 'sage';
@@ -130,11 +150,15 @@
   });
   window.addEventListener('trip-notes:updated', event => {
     if (event.detail.key !== (name.value.trim().toLowerCase() || 'unknown')) return;
-    snapshot = event.detail; refreshGoal();
+    snapshot = event.detail; notesPending = snapshot.pending === true; if (!notesPending) workState = 'updating'; refreshGoal();
     if (document.body.dataset.stage === 'review') {
       renderCompletedNotes(snapshot.notes);
       if (!snapshot.ready) { step('planning'); title.focus(); }
     }
+  });
+  window.addEventListener('trip-notes:pending', event => {
+    if (event.detail.key !== tripKey()) return;
+    notesPending = event.detail.pending === true; workState = event.detail.state || 'updating'; refreshGoal();
   });
   window.addEventListener('trip-profile:loaded', event => {
     const { name: key, generation, reviewed } = event.detail;

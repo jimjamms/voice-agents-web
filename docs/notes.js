@@ -53,7 +53,7 @@
       options.clear.addEventListener('click', () => {
         const key = this.key(); this.bump(key); this.epochs.set(key, (this.epochs.get(key) || 0) + 1);
         this.pending = this.pending.filter(job => job.key !== key); this.persistWork();
-        this.saved[key] = { notes: '', choices: { countries: [], cities: [], activities: [] } }; renderTripNotes(options.textarea, ''); this.persist(key); this.publish(false);
+        this.saved[key] = { notes: '', choices: { countries: [], cities: [], activities: [] } }; renderTripNotes(options.textarea, ''); this.persist(key); this.publish(false); this.notifyWork(key);
       });
       options.copy.addEventListener('click', async () => {
         if (!options.textarea.value) { this.status('No trip notes yet.'); return; }
@@ -97,7 +97,7 @@
     }
     publish(updated) {
       const choices = this.choices();
-      this.options.onChange?.({ key: this.key(), notes: this.text(this.key()), choices, updated,
+      this.options.onChange?.({ key: this.key(), notes: this.text(this.key()), choices, updated, pending: this.pending.some(job => job.key === this.key()),
         ready: choices.countries.length >= 1 && choices.cities.length >= 2 && choices.cities.every(city => choices.cityActivities[city]) && Boolean(choices.budget) && Boolean(choices.itinerary) && choices.finalized });
     }
     snapshot(speaker) { const key = this.key(speaker); return { notes: this.text(key), choices: this.choices(key), notesWorkId: this.saved[key]?.workId || '' }; }
@@ -132,14 +132,19 @@
     }
     refresh() { renderTripNotes(this.options.textarea, this.text(this.key())); this.status('Your trip details and next steps, updated as you plan.'); this.publish(false); }
     persistWork() { try { localStorage.setItem(this.workStore, JSON.stringify(this.pending)); } catch { this.status('Browser storage is unavailable; keep this tab open until saving finishes.'); } }
-    discardJob(job) { this.pending = this.pending.filter(current => current.id !== job.id || current.epoch !== job.epoch); this.persistWork(); }
+    notifyWork(key = this.key(), state = 'updating') {
+      if (key !== this.key()) return;
+      const jobs = this.pending.filter(job => job.key === key);
+      window.dispatchEvent?.(new CustomEvent('trip-notes:pending', { detail: { key, pending: jobs.length > 0, state: jobs.some(job => job.parked) ? 'paused' : state } }));
+    }
+    discardJob(job) { this.pending = this.pending.filter(current => current.id !== job.id || current.epoch !== job.epoch); this.persistWork(); this.notifyWork(job.key); }
     update(turn) {
       const key = this.key(turn.speaker || 'Unknown');
       if (!this.options.base() || this.options.base().includes('REPLACE-ME') || !this.options.code()) return Promise.resolve();
       const copy = { agent: turn.agent, transcript: String(turn.transcript || '').slice(0, 3500), reply: String(turn.reply || '').slice(0, 3500),
         priorConversation: (turn.priorConversation || []).slice(-8).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 3500), agent: item.agent })) };
       this.pending.push({ id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`, key, scope: this.options.base().replace(/\/$/, ''), parent: [...this.pending].reverse().find(job => job.key === key && !job.parked)?.id || this.saved[key]?.workId || '', generation: this.generations.get(key) || 0, epoch: this.epochs.get(key) || 0, turn: copy, parked: false });
-      this.persistWork();
+      this.persistWork(); this.notifyWork(key);
       return this.flushPending();
     }
     flushPending() {
@@ -163,11 +168,11 @@
     async applyUpdate({ key, epoch, turn, id, parent }) {
       for (let attempt = 0; attempt < 2; attempt++) {
         if ((this.epochs.get(key) || 0) !== epoch) return 'done';
-        if ((parent || '') !== (this.saved[key]?.workId || '')) return 'blocked';
+        if ((parent || '') !== (this.saved[key]?.workId || '')) { this.notifyWork(key, 'paused'); return 'blocked'; }
         const revision = this.revisions.get(key) || 0;
         const base = this.options.base(), code = this.options.code();
-        if (!base || !code) return 'blocked';
-        this.status('Updating trip notes…', key);
+        if (!base || !code) { this.notifyWork(key, 'paused'); return 'blocked'; }
+        this.status('Updating trip notes…', key); this.notifyWork(key);
         const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 30000);
         try {
           const response = await fetch(`${base.replace(/\/$/, '')}/notes`, {
@@ -176,7 +181,7 @@
           });
           if (!response.ok) {
             if (response.status >= 400 && response.status < 500 && ![408,429].includes(response.status)) {
-              this.status('Trip saving is paused. Check the connection and demo code.', key); return 'blocked';
+              this.status('Trip saving is paused. Check the connection and demo code.', key); this.notifyWork(key, 'paused'); return 'blocked';
             }
             throw new Error('Temporary notes failure');
           }
@@ -190,7 +195,7 @@
           return 'done';
         } catch {
           if ((this.epochs.get(key) || 0) !== epoch) return 'done';
-          this.status('Saving your latest trip details automatically…', key);
+          this.status('Saving your latest trip details automatically…', key); this.notifyWork(key, 'retrying');
         } finally { clearTimeout(timer); }
       }
       return 'retry';
