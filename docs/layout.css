@@ -36,13 +36,14 @@ body[data-stage="setup"] .intro>p:last-child{margin-inline:auto}
   #planning-stage .conversation{min-block-size:0;align-self:stretch}
   #planning-stage .conversation>.conversation-head,#planning-stage .conversation>.controls{flex-shrink:0}
   #planning-stage .conversation>.messages{flex:1 1 0;block-size:0;min-block-size:280px;max-block-size:none;overflow-y:auto}
-  /* Both columns share the same height; the trip panel receives spare room. */
+  /* Notes can use spare height; checklist rows keep their natural spacing. */
   #planning-stage .chooser{display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:16px}
   #planning-stage .trip-planner{display:flex;flex-direction:column;flex:1 0 auto}
+  #planning-stage .trip-planner:has(#planner-checklist-panel:not([hidden])){flex:0 0 auto}
   #planning-stage .trip-planner .planner-views{flex-shrink:0}
-  #planning-stage .trip-planner #planner-checklist-panel{display:flex;flex-direction:column;flex:1 0 auto;gap:8px}
+  #planning-stage .trip-planner #planner-checklist-panel{display:flex;flex-direction:column;flex:0 0 auto;gap:8px}
   #planning-stage .trip-planner .checklist-heading,#planning-stage .trip-planner #trip-goal-hint{flex-shrink:0}
-  #planning-stage .trip-planner .goal-counts{display:grid;grid-template-columns:minmax(0,1fr);flex:1 0 auto;align-content:space-evenly;gap:6px;margin-block:8px}
+  #planning-stage .trip-planner .goal-counts{display:grid;grid-template-columns:minmax(0,1fr);flex:0 0 auto;align-content:start;gap:6px;margin-block:8px}
   #planning-stage .trip-planner #planner-notes-panel{flex:1 0 auto}
   #planning-stage .agent-options{flex:0 0 auto}
   #planning-stage .agent-options .agent-card{min-block-size:clamp(220px,25svh,300px)}
