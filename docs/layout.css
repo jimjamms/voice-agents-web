@@ -1,0 +1,28 @@
+/* A single centered canvas at every breakpoint; browser zoom stays native. */
+html{min-inline-size:0;scrollbar-gutter:stable}
+body{min-inline-size:0;min-block-size:100svh}
+.shell{
+  inline-size:100%;max-inline-size:1240px;min-inline-size:0;min-block-size:100svh;
+  margin-inline:auto;padding-inline:clamp(20px,4vw,48px);
+  display:flex;flex-direction:column;
+}
+.shell>main{flex:1 0 auto;inline-size:100%;max-inline-size:1120px;min-inline-size:0;margin-inline:auto}
+/* Center each stage as a group, while allowing taller content to grow the page. */
+body[data-stage] .shell>main{display:flex;flex-direction:column;justify-content:center;padding-block:clamp(18px,3svh,40px)}
+.shell>main>*{flex-shrink:0}
+.shell>.topbar,.shell>footer{inline-size:100%;max-inline-size:1120px;margin-inline:auto;flex-shrink:0}
+#setup-stage,#planning-stage,#review-stage,.stage-progress{inline-size:100%;max-inline-size:1120px;min-inline-size:0;margin-inline:auto}
+body[data-stage="setup"] .intro{flex-shrink:0;padding:0 0 24px;text-align:center}
+body[data-stage="setup"] .intro>p:last-child{margin-inline:auto}
+#setup-stage .setup-card{inline-size:100%;max-inline-size:600px;margin:0 auto}
+.stage-progress{flex-shrink:0;justify-content:center}
+#planning-stage .workspace,#review-stage .review-grid{inline-size:100%;margin-inline:auto}
+.workspace>*,.review-grid>*,.conversation,.trip-planner,.trip-notepad{min-inline-size:0}
+.planning-toolbar h2,.review-heading,.setup-card,.form-card{overflow-wrap:anywhere}
+/* Native dialog centering keeps short dialogs centered and tall ones scrollable. */
+#study-welcome{inset:0;margin:auto;max-inline-size:calc(100% - 32px);max-block-size:calc(100svh - 32px);overflow:auto;overscroll-behavior:contain}
+@media(max-width:850px){
+  .shell{padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+  body[data-stage] .shell>main{padding-block:20px}
+  body[data-stage="setup"] .intro{padding-bottom:22px}
+}
