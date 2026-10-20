@@ -647,11 +647,12 @@
   let plannerView = 'checklist';
   function syncPlannerHeight() {
     const checklist = document.querySelector('#planner-checklist-panel');
-    const wasHidden = checklist.hidden;
-    // Measure the reference view synchronously, without changing the selected tab.
-    checklist.hidden = false;
+    const notesPanel = document.querySelector('#planner-notes-panel');
+    const wasHidden = checklist.hidden, notesWereHidden = notesPanel.hidden;
+    // Measure only the checklist, so two flex panels cannot divide its height.
+    notesPanel.hidden = true; checklist.hidden = false;
     const height = checklist.getBoundingClientRect?.().height || 0;
-    checklist.hidden = wasHidden;
+    checklist.hidden = wasHidden; notesPanel.hidden = notesWereHidden;
     if (height > 0) document.querySelector('.trip-planner').style.setProperty('--planner-body-height', `${height}px`);
   }
   function selectPlannerView(view) {
