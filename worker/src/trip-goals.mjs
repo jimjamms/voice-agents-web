@@ -37,6 +37,7 @@ export function normalizeChoices(value = { countries: [], cities: [], activities
   }
   result.firstCityReviewed = typeof value.firstCityReviewed === 'string' ?
     result.cities.find(city => city.toLowerCase() === value.firstCityReviewed.trim().toLowerCase() && result.cityActivities[city]) || null : null;
+  if (value.approvalSource && /^[a-f0-9]{64}$/.test(value.approvalSource.proposalHash) && /^[a-f0-9]{64}$/.test(value.approvalSource.stateHash)) result.approvalSource = { proposalHash: value.approvalSource.proposalHash, stateHash: value.approvalSource.stateHash };
   result.finalized = value.finalized === true;
   return result;
 }

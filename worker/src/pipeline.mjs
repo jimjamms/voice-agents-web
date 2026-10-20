@@ -16,13 +16,15 @@ const json = (body, status, cors) => new Response(JSON.stringify(body), {
   status, headers: { ...cors, 'content-type': 'application/json; charset=utf-8' },
 });
 function safeHistory(value) {
-  if (typeof value !== 'string' || value.length > 22000) return [];
+  if (typeof value !== 'string' || value.length > 90000) return [];
   let parsed;
   try { parsed = JSON.parse(value); } catch { return []; }
   if (!Array.isArray(parsed)) return [];
-  return parsed.slice(-12).filter(m => m && ['user', 'assistant'].includes(m.role) &&
-    typeof m.content === 'string' && m.content.length <= MAX_TEXT
+  const messages = parsed.slice(-24).filter(m => m && ['user', 'assistant'].includes(m.role) &&
+    typeof m.content === 'string' && m.content.length <= (m.role === 'user' ? MAX_TEXT : 3500)
   ).map(({ role, content }) => ({ role, content }));
+  while (JSON.stringify(messages).length > 60000) messages.shift();
+  return messages;
 }
 function encode(buffer) {
   const bytes = new Uint8Array(buffer);
@@ -84,7 +86,7 @@ export async function pipelineTurn(request, env, cors) {
     const context = memoryContext(speaker, memories, agent.name);
     const memoryFacts = !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
     const rawDuration = Number(form.get('speech_duration_ms'));
-    const metricsContext = { agent_version: 'travel-memory-pilot-v4', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
+    const metricsContext = { agent_version: 'travel-memory-pilot-v5', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
@@ -140,7 +142,7 @@ export async function pipelineTurn(request, env, cors) {
       reply = String(chat.choices?.[0]?.message?.content || '').trim().slice(0, 3500);
       if (!reply) throw new Error('Empty model reply.');
     }
-    const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply);
+    const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply, safeHistory(form.get('history')));
     if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: null }, 200, cors);
     const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },

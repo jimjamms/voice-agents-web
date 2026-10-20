@@ -19,6 +19,13 @@ export async function notesTurn(request, env, cors) {
     (item.agent !== undefined && !['sage', 'astra'].includes(item.agent)))) return json({ error: 'Invalid preceding conversation.' }, 400);
   let existingChoices;
   try { existingChoices = normalizeChoices(data.choices); } catch { return json({ error: 'Invalid trip choices.' }, 400); }
+  // Approval of the exact saved proposal is a state transition, not another AI judgment.
+  if (approvesPresentedItinerary(data, priorConversation) && tripReady({ ...existingChoices, finalized: true }) && existingChoices.approvalSource &&
+      existingChoices.approvalSource.proposalHash === await fingerprint(priorConversation.at(-1).content) &&
+      existingChoices.approvalSource.stateHash === await fingerprint(approvalState(existingChoices))) {
+    const choices = { ...existingChoices, finalized: true, firstCityReviewed: existingChoices.cities[0] };
+    return json({ notes: formatChecklist(includeSelectedCities(data.notes, choices.cities), choices.cityActivities), choices, ready: true }, 200);
+  }
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST', headers: { authorization: `Bearer ${env.OPENAI_API_KEY}`, 'content-type': 'application/json' },
@@ -61,6 +68,13 @@ export async function notesTurn(request, env, cors) {
     const needsApproval = selectionsChanged || parsed.materialChange === true || (itineraryChanged && parsed.materialChange !== false);
     if (existingChoices.finalized && needsApproval && !freshApproval) choices.finalized = false;
     if (existingChoices.finalized && !needsApproval && parsed.materialChange === false) choices.finalized = true;
+    // Never accept a model-supplied proposal fingerprint.
+    delete choices.approvalSource;
+    if (data.agent === 'astra' && asksPlanApproval(data.reply) && looksLikeCompleteProposal(data.reply) && tripReady({ ...choices, finalized: true }) && storedProposalMatches(data.reply, choices, choices)) {
+      choices.approvalSource = { proposalHash: await fingerprint(data.reply), stateHash: await fingerprint(approvalState(choices)) };
+      // Presenting a proposal is not the user's approval of that new proposal.
+      choices.finalized = Boolean(existingChoices.finalized && !needsApproval);
+    } else if (existingChoices.approvalSource?.stateHash === await fingerprint(approvalState(choices))) choices.approvalSource = existingChoices.approvalSource;
     return json({ notes: formatChecklist(includeSelectedCities(parsed.notes, choices.cities), choices.cityActivities), choices, ready: tripReady(choices) }, 200);
   } catch {
     return json({ error: 'Notes could not update. Your existing notes are still saved.' }, 502);
@@ -99,14 +113,28 @@ function storedProposalMatches(proposal, before, candidate) {
   return Object.entries(candidate.cityActivities).every(([city, activity]) => before.cityActivities[city] === activity);
 }
 
+function approvalState(choices) {
+  return JSON.stringify(Object.fromEntries(['countries','cities','activities','cityActivities','budget','itinerary'].map(field => [field, choices[field]])));
+}
+async function fingerprint(value) {
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+function looksLikeCompleteProposal(text) {
+  return text.length >= 180 && /\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|fourteen)\s*(?:days?|nights?|weeks?)\b|\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\b/i.test(text) &&
+    /\b(?:train|shinkansen|coach|bus|taxi|flight|fly|ferry|drive|car|transport)\w*\b/i.test(text) &&
+    /\b(?:hotel|hostel|room|accommodation|lodging|guesthouse|apartment)\w*\b/i.test(text);
+}
+function asksPlanApproval(text) {
+  return /\bapprove\s+(?:this|the|our|your)\s+(?:(?:complete|full|final)\s+)?(?:itinerary|trip plan|plan)\b[^?]*\?/i.test(text);
+}
 export function approvesPresentedItinerary(data, priorConversation) {
   if (data.agent !== 'astra') return false;
-  const answer = data.userText.trim().toLowerCase().replace(/[’‘]/g, "'").replace(/[.!]+$/g, '').trim();
-  if (!/^(?:yes(?: please)?|okay|ok|i approve(?: (?:this|the|your) (?:complete |full |final )?(?:plan|itinerary))?|(?:i'm|i am) (?:good|happy|fine) with (?:this|that|the plan|the itinerary)|(?:that|this) works(?: for me)?|looks good(?: to me)?|approved)$/.test(answer)) return false;
+  const answer = data.userText.trim().toLowerCase().replace(/[’‘]/g, "'").replace(/[.!]+$/g, '').replace(/\s+/g, ' ').trim();
+  if (!/^(?:(?:yes|yeah|yep|sure|okay|ok)(?: please)?|(?:(?:yes|yeah|yep|okay|ok)[, ]+)?(?:i approve(?: of)?(?: (?:this|that|the|your) (?:complete |full |final )?(?:plan|itinerary))?|(?:i'm|i am) (?:good|happy|fine) with (?:this|that|the plan|the itinerary)|(?:that|this) works(?: for me)?|looks good(?: to me)?|i like (?:this|that|the plan|the itinerary)|that sounds good(?: to me)?|approved))$/.test(answer)) return false;
   const previous = priorConversation.at(-1);
   if (previous?.role !== 'assistant' || previous.agent && previous.agent !== 'astra') return false;
-  // Require an explicit whole-itinerary approval question, not an activity/date choice.
-  return /\bapprove\s+(?:this|the|our|your)\s+(?:(?:complete|full|final)\s+)?(?:itinerary|trip plan)\b[^?]*\?/i.test(previous.content);
+  return asksPlanApproval(previous.content);
 }
 
 // The visible checklist and the completion counter must agree about selected cities.

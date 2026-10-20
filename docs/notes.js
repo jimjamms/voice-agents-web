@@ -44,7 +44,7 @@
   const STORE = 'sage-astra-trip-notes-v1';
   class TripNotes {
     constructor(options) {
-      this.options = options; this.queue = Promise.resolve(); this.revisions = new Map(); this.epochs = new Map();
+      this.options = options; this.queue = Promise.resolve(); this.revisions = new Map(); this.epochs = new Map(); this.pending = []; this.retryTimer = null;
       try { this.saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { this.saved = {}; }
       if (!this.saved || typeof this.saved !== 'object' || Array.isArray(this.saved)) this.saved = {};
       options.textarea.readOnly = true;
@@ -57,6 +57,7 @@
         try { await navigator.clipboard.writeText(options.textarea.value); this.status('Copied.'); }
         catch { selectTripNotes(options.textarea); this.status('Select and copy the notes manually.'); }
       });
+      window.addEventListener?.('online', () => this.flushPending());
       this.refresh();
     }
     key(speaker = this.options.speaker()) { return speaker.trim().toLowerCase() || 'unknown'; }
@@ -87,6 +88,7 @@
         field => typeof value.itinerary[field] === 'string' && value.itinerary[field].trim()) ? value.itinerary : null;
       result.firstCityReviewed = typeof value.firstCityReviewed === 'string' ?
         result.cities.find(city => city.toLowerCase() === value.firstCityReviewed.trim().toLowerCase() && result.cityActivities[city]) || null : null;
+      if (value.approvalSource && /^[a-f0-9]{64}$/.test(value.approvalSource.proposalHash) && /^[a-f0-9]{64}$/.test(value.approvalSource.stateHash)) result.approvalSource = { proposalHash: value.approvalSource.proposalHash, stateHash: value.approvalSource.stateHash };
       result.finalized = value.finalized === true;
       return result;
     }
@@ -111,30 +113,64 @@
     }
     refresh() { renderTripNotes(this.options.textarea, this.text(this.key())); this.status('Your trip details and next steps, updated as you plan.'); this.publish(false); }
     update(turn) {
-      const key = this.key(turn.speaker || 'Unknown'); const epoch = this.epochs.get(key) || 0;
-      const base = this.options.base(); const code = this.options.code();
-      if (!base || base.includes('REPLACE-ME') || !code) return Promise.resolve();
+      const key = this.key(turn.speaker || 'Unknown');
+      if (!this.options.base() || this.options.base().includes('REPLACE-ME') || !this.options.code()) return Promise.resolve();
+      const copy = { agent: turn.agent, transcript: String(turn.transcript || '').slice(0, 3500), reply: String(turn.reply || '').slice(0, 3500),
+        priorConversation: (turn.priorConversation || []).slice(-8).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 3500), agent: item.agent })) };
+      this.pending.push({ key, epoch: this.epochs.get(key) || 0, turn: copy });
+      return this.flushPending();
+    }
+    flushPending() {
+      clearTimeout(this.retryTimer); this.retryTimer = null;
       this.queue = this.queue.catch(() => {}).then(async () => {
-        if ((this.epochs.get(key) || 0) !== epoch) return;
+        const blocked = new Set(); let retry = false;
+        for (const job of [...this.pending]) {
+          if (blocked.has(job.key)) continue;
+          if ((this.epochs.get(job.key) || 0) !== job.epoch) { this.pending.splice(this.pending.indexOf(job), 1); continue; }
+          const outcome = await this.applyUpdate(job);
+          if (outcome === 'done') this.pending.splice(this.pending.indexOf(job), 1);
+          else { blocked.add(job.key); if (outcome === 'retry') retry = true; }
+        }
+        if (retry && this.pending.length && !this.retryTimer) {
+          this.retryTimer = setTimeout(() => this.flushPending(), 15000);
+          this.retryTimer.unref?.();
+        }
+      });
+      return this.queue;
+    }
+    async applyUpdate({ key, epoch, turn }) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if ((this.epochs.get(key) || 0) !== epoch) return 'done';
         const revision = this.revisions.get(key) || 0;
+        const base = this.options.base(), code = this.options.code();
+        if (!base || !code) return 'blocked';
         this.status('Updating trip notes…', key);
-        const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 60000);
+        const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 30000);
         try {
           const response = await fetch(`${base.replace(/\/$/, '')}/notes`, {
             method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': code }, signal: controller.signal,
-            body: JSON.stringify({ agent: turn.agent, userText: String(turn.transcript || '').slice(0, 3500), reply: String(turn.reply || '').slice(0, 3500), priorConversation: (turn.priorConversation || []).slice(-8).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 3500), agent: item.agent })), notes: this.text(key), choices: this.choices(key) }),
+            body: JSON.stringify({ agent: turn.agent, userText: turn.transcript, reply: turn.reply, priorConversation: turn.priorConversation, notes: this.text(key), choices: this.choices(key) }),
           });
-          const result = await response.json();
-          if (!response.ok || typeof result.notes !== 'string' || result.notes.length > 6000) throw new Error('Notes failed');
-          if ((this.epochs.get(key) || 0) !== epoch || (this.revisions.get(key) || 0) !== revision) {
-            this.status('Your edits were kept. Auto-update skipped this turn.', key); return;
+          if (!response.ok) {
+            if (response.status >= 400 && response.status < 500 && ![408,429].includes(response.status)) {
+              this.status('Trip saving is paused. Check the connection and demo code.', key); return 'blocked';
+            }
+            throw new Error('Temporary notes failure');
           }
-          this.saved[key] = { notes: result.notes, choices: result.choices || { countries: [], cities: [], activities: [] } }; this.bump(key); this.persist(key);
+          const result = await response.json();
+          if (typeof result.notes !== 'string' || result.notes.length > 6000) throw new Error('Invalid notes');
+          if ((this.epochs.get(key) || 0) !== epoch || (this.revisions.get(key) || 0) !== revision) {
+            this.status('Your newer edits were kept.', key); return 'done';
+          }
+          this.saved[key] = { notes: result.notes, choices: result.choices || this.choices(key) }; this.bump(key); this.persist(key);
           if (key === this.key()) { renderTripNotes(this.options.textarea, this.text(key)); this.publish(true); }
-        } catch { this.status('Could not auto-update. Your saved notes are unchanged.', key); }
-        finally { clearTimeout(timer); }
-      });
-      return this.queue;
+          return 'done';
+        } catch {
+          if ((this.epochs.get(key) || 0) !== epoch) return 'done';
+          this.status('Saving your latest trip details automatically…', key);
+        } finally { clearTimeout(timer); }
+      }
+      return 'retry';
     }
   }
   window.createTripNotes = options => new TripNotes(options);

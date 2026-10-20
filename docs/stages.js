@@ -36,6 +36,8 @@
     }
   }
   function refreshGoal() {
+    document.body.dataset.planReady = String(snapshot.ready);
+    document.querySelector('#mobile-details-view').textContent = snapshot.ready ? 'Your completed plan ✓' : 'Checklist & notes';
     const { countries, cities, cityActivities = {}, firstCityReviewed, budget, itinerary, finalized } = snapshot.choices;
     const covered = cities.filter(city => cityActivities[city]).length;
     const requirements = [
@@ -61,7 +63,7 @@
       mobileSummary.dataset.ready = String(snapshot.ready);
       document.querySelector('#mobile-goal-count').textContent = `${completeCount}/5`;
       document.querySelector('#mobile-goal-progress').value = completeCount;
-      mobileSummary.setAttribute('aria-label', `Open trip checklist, ${completeCount} of 5 complete`);
+      mobileSummary.setAttribute('aria-label', snapshot.ready ? 'View your completed trip checklist' : `Open trip checklist, ${completeCount} of 5 complete`);
       const next = requirements.find(([, done]) => !done);
       document.querySelector('#mobile-goal-next').textContent = snapshot.ready ? 'Your trip is ready to finish.' : `Next: ${next ? next[2] : 'review your itinerary with Astra'}`;
       document.querySelector('#mobile-goal-caption').textContent = snapshot.ready ? 'Tap to view your checklist and continue.' : 'Build a trip that works for you. Your choices can change. Tap to view progress.';
@@ -76,6 +78,13 @@
       !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review your itinerary, request changes or approve it.';
     document.querySelector('#continue-review').hidden = !snapshot.ready;
     document.querySelector('#plan-ready-notice').hidden = !snapshot.ready;
+  }
+  if (typeof ResizeObserver === 'function') {
+    const completionObserver = new ResizeObserver(entries => {
+      const height = entries[0]?.target.getBoundingClientRect().height;
+      if (height > 0) document.body.style.setProperty('--completion-bar-height', `${Math.ceil(height)}px`);
+    });
+    completionObserver.observe(document.querySelector('#plan-ready-notice'));
   }
   function openReview() {
     if (!snapshot.ready || document.body.dataset.stage !== 'planning') return;

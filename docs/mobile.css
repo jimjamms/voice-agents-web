@@ -144,3 +144,20 @@
   #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary progress::-webkit-progress-value{background:#466d45}
   #planning-stage:has(.conversation[data-agent="astra"]) .mobile-goal-summary progress::-moz-progress-bar{background:#466d45}
 }
+
+/* One persistent completion action, visible from Chat and Checklist & notes. */
+@media(max-width:850px){
+  body[data-stage="planning"][data-plan-ready="true"]{padding-bottom:calc(max(160px,var(--completion-bar-height,160px)) + 24px + env(safe-area-inset-bottom))}
+  #planning-stage .plan-ready-notice{position:fixed;z-index:30;left:max(12px,env(safe-area-inset-left));right:max(12px,env(safe-area-inset-right));bottom:max(10px,env(safe-area-inset-bottom));margin:0;padding:14px;display:flex;flex-direction:column;align-items:stretch;gap:12px;border-width:2px;box-shadow:0 8px 32px #243f3b35}
+  #planning-stage .plan-ready-copy{flex:0 1 auto;align-items:center}
+  #planning-stage .plan-ready-copy strong{font-size:17px;line-height:1.35}
+  #planning-stage .plan-ready-copy p{font-size:12px;line-height:1.5;margin-top:4px}
+  #planning-stage .plan-ready-check{width:34px;height:34px;font-size:20px}
+  #planning-stage .plan-ready-notice #continue-review{width:100%;min-height:48px;font-size:15px;justify-content:center}
+  .mobile-goal-summary[data-ready="true"]{display:none}
+}
+
+@media(max-width:850px){
+  #planning-stage .mobile-planning-nav{position:sticky;top:max(0px,env(safe-area-inset-top));z-index:25;box-shadow:0 5px 14px #243f3b12}
+  #planning-conversation,#mobile-trip-details{scroll-margin-top:calc(72px + env(safe-area-inset-top))}
+}

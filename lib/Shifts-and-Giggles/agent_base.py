@@ -527,7 +527,7 @@ class PersonalityVoiceAgent:
         # Keep this method for existing callers; never cache memory in chat history.
         return
 
-    def extract_memory(self, speaker_name: str, user_text: str, reply: str):
+    def extract_memory(self, speaker_name: str, user_text: str, reply: str, prior_conversation=None):
         """Asks the model whether this turn revealed a short, durable fact
         about speaker_name worth remembering later, and stores it if so."""
         if not self.memory_enabled or speaker_name == "Unknown":
@@ -536,8 +536,8 @@ class PersonalityVoiceAgent:
         try:
             completion = self.openai_client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "system", "content": FACT_PROMPT + "\nAlso retain user-stated reasons behind travel choices, relevant tradeoffs and rejected options when useful for later planning. Preserve tentative wording and latest corrections. Include volunteered travel-relevant interests, past-experience likes or dislikes, comfort needs, spending priorities and the user’s reasons when stated. Do not infer preferences or adopt agent suggestions as user facts."},
-                          {"role": "user", "content": json.dumps({"speaker": speaker_name, "agent": self.name, "user": user_text, "reply": reply})}],
+                messages=[{"role": "system", "content": FACT_PROMPT + "\nAlso retain user-stated reasons behind travel choices, relevant tradeoffs and rejected options when useful for later planning. Preserve tentative wording and latest corrections. Include volunteered travel-relevant interests, past-experience likes or dislikes, comfort needs, spending priorities and the user’s reasons when stated. Do not infer preferences or adopt agent suggestions as user facts. Resolve short confirmations such as yes, sure, that works or I approve against the immediately preceding proposal in prior_conversation from THIS agent. When it proposed one clear choice and the user accepts it, remember the specific accepted value, including the year, budget amount/currency/person scope and whether flights are included or excluded. A reply of yes to Would January 2027 work accepts January 2027; yes to Would USD 3500 excluding international flights work accepts that amount with that exclusion. Do not treat an agent suggestion or its current acknowledgement as independently confirmed. If the preceding proposal contains competing options, a vague yes does not choose between them. An unanswered proposal remains unconfirmed. Return NONE for a bare acknowledgement without a resolvable proposal or useful new detail. Do not store absence-of-information claims such as no budget confirmed or year unconfirmed merely because this single turn did not state them; preserve uncertainty only when the user expresses it. Store the current update, not stale earlier unknowns or unrelated old facts."},
+                          {"role": "user", "content": json.dumps({"speaker": speaker_name, "agent": self.name, "prior_conversation": prior_conversation or [], "user": user_text, "reply": reply})}],
             )
             fact = completion.choices[0].message.content.strip()
         except Exception as e:
@@ -658,7 +658,7 @@ class PersonalityVoiceAgent:
         self._restore_history()
         mode = self.memory_sharing_mode if self.memory_enabled else "disabled"
         messages = [self.history[0], {"role": "system", "content": HANDOFF_INSTRUCTIONS[mode]},
-                    *self.history[1:][-12:]]
+                    *self.history[1:][-24:]]
         context = self.state.context(self.speaker_name, self.name, self.memory_sharing_mode, self.memory_enabled)
         if context:
             messages.append({"role": "system", "content": context})
@@ -873,12 +873,13 @@ class PersonalityVoiceAgent:
         turn_start = turn_start or time.time()
         name, agent, mode = self.speaker_name, self.name, self.memory_sharing_mode
         prior = self.state.prior(name, agent, mode, enabled=self.memory_enabled)
+        memory_prior = self.state.ensure(name)["histories"].get(self.state.bucket(agent, mode), [])[-6:]
         reply = self.get_response(user_text)
         print(f"{agent}: {reply}")
         turn = self.state.append_turn(name, agent, mode, user_text, reply, self.session_id,
                                       remember_recent=self.memory_enabled, logging=ENABLE_LOGGING)
         with ThreadPoolExecutor(max_workers=2) as pool:
-            memory_job = pool.submit(self.extract_memory, name, user_text, reply) if self.memory_enabled else None
+            memory_job = pool.submit(self.extract_memory, name, user_text, reply, memory_prior) if self.memory_enabled else None
             notes_job = pool.submit(self.state.checklist, name, self.openai_client, self.model, agent, user_text, reply, prior)
             finished = self.speak(reply) if speak else True
             try:

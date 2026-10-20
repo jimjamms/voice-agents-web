@@ -274,7 +274,7 @@
       speaker: turn.speaker, user_text: turn.transcript, agent_reply: turn.reply,
       agent_traits: turn.traits, interrupted: false, engine, ...turn });
     remoteLogger?.record(turns.at(-1));
-    if (turn.memoryDeferred && !turn.greeting) void extractTurnMemory(turn);
+    if (turn.memoryDeferred && !turn.greeting) void extractTurnMemory(turn, history.slice(-6).map(item => ({ ...item, agent: turn.agent })));
     if (turn.fact) {
       const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.fact);
       memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved.';
@@ -521,7 +521,13 @@
     saveTurn(turn);
     await extractTurnMemory(turn);
   }
-  async function extractTurnMemory(turn) {
+  async function extractTurnMemory(turn, priorConversation) {
+    if (!priorConversation) {
+      const thread = history.map(item => ({ ...item, agent: turn.agent }));
+      if (thread.at(-1)?.role === 'assistant' && thread.at(-1)?.content === turn.reply) thread.pop();
+      if (thread.at(-1)?.role === 'user' && thread.at(-1)?.content === turn.transcript) thread.pop();
+      priorConversation = thread.slice(-6);
+    }
     const memoryRevision = window.AgentMemory.revision?.(turn.speaker) || 0;
     const base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
     const demoCode = codeInput.value.trim();
@@ -530,7 +536,7 @@
     try {
       const response = await fetch(`${base.replace(/\/$/, '')}/memory`, {
         method: 'POST', headers: { 'content-type': 'application/json', 'x-demo-code': demoCode },
-        body: JSON.stringify({ agent: turn.agent, speaker: turn.speaker, userText: turn.transcript.slice(0, 3500), reply: turn.reply.slice(0, 3500) }),
+        body: JSON.stringify({ agent: turn.agent, speaker: turn.speaker, userText: turn.transcript.slice(0, 3500), reply: turn.reply.slice(0, 3500), priorConversation }),
       });
       if (response.ok) {
         const { fact } = await response.json();
@@ -672,19 +678,27 @@
     document.querySelector('#mobile-details-view').setAttribute('aria-pressed', String(mobileTripOpen));
     syncPlannerHeight();
   }
+  function revealMobileView() {
+    if (!mobileLayout?.matches) return;
+    const panel = document.querySelector(mobileTripOpen ? '#mobile-trip-details' : '.workspace');
+    panel?.scrollIntoView?.({ block: 'start', behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  }
   document.querySelector('#mobile-chat-view').addEventListener('click', () => {
     mobileTripOpen = false;
     syncMobileNotes();
+    revealMobileView();
   });
   document.querySelector('#mobile-details-view').addEventListener('click', () => {
     mobileTripOpen = true;
     syncMobileNotes();
+    revealMobileView();
   });
   document.querySelector('#mobile-goal-summary')?.addEventListener('click', () => {
     selectPlannerView('checklist');
     mobileTripOpen = true;
     syncMobileNotes();
-    document.querySelector('#planner-checklist-view').focus();
+    document.querySelector('#planner-checklist-view').focus({ preventScroll: true });
+    revealMobileView();
   });
   mobileLayout?.addEventListener?.('change', syncMobileNotes);
   // Keep primary conversation actions ahead of optional settings on both layouts.

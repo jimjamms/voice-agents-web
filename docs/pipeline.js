@@ -295,7 +295,7 @@
       form.set('memory_mode', mode);
       form.set('memories', JSON.stringify(this.options.memories()));
       form.set('shared_turns', JSON.stringify(mode === 'shared' ? this.options.sharedTurns?.() || [] : []));
-      form.set('history', JSON.stringify(this.options.history().slice(-12)));
+      form.set('history', JSON.stringify(this.options.history().slice(-24)));
       form.set('reply_audio', String(speakReply));
       if (text !== null) { form.set('text', text); }
       else if (!blob) { form.set('greeting', 'true'); if (handoffStep) form.set('handoff_step', handoffStep); }
