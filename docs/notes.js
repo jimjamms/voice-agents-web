@@ -42,14 +42,17 @@
   window.renderTripNotes = renderTripNotes;
   window.selectTripNotes = selectTripNotes;
   const STORE = 'sage-astra-trip-notes-v1';
+  const WORK_STORE = 'sage-astra-notes-work-v1';
   class TripNotes {
     constructor(options) {
-      this.options = options; this.queue = Promise.resolve(); this.revisions = new Map(); this.epochs = new Map(); this.pending = []; this.retryTimer = null;
+      this.options = options; this.queue = Promise.resolve(); this.revisions = new Map(); this.epochs = new Map(); this.pending = []; this.retryTimer = null; this.generations = new Map(); this.workStore = WORK_STORE + ':' + (options.base() || '').replace(/\/$/, '');
+      try { const jobs = JSON.parse(localStorage.getItem(this.workStore) || '[]'); if (Array.isArray(jobs)) this.pending = jobs.filter(job => job && typeof job.id === 'string' && typeof job.key === 'string' && Number.isSafeInteger(job.generation) && job.scope === options.base()?.replace(/\/$/, '') && job.turn && typeof job.turn.transcript === 'string' && typeof job.turn.reply === 'string').map(job => ({ ...job, parked: true })); } catch {}
       try { this.saved = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch { this.saved = {}; }
       if (!this.saved || typeof this.saved !== 'object' || Array.isArray(this.saved)) this.saved = {};
       options.textarea.readOnly = true;
       options.clear.addEventListener('click', () => {
         const key = this.key(); this.bump(key); this.epochs.set(key, (this.epochs.get(key) || 0) + 1);
+        this.pending = this.pending.filter(job => job.key !== key); this.persistWork();
         this.saved[key] = { notes: '', choices: { countries: [], cities: [], activities: [] } }; renderTripNotes(options.textarea, ''); this.persist(key); this.publish(false);
       });
       options.copy.addEventListener('click', async () => {
@@ -97,12 +100,28 @@
       this.options.onChange?.({ key: this.key(), notes: this.text(this.key()), choices, updated,
         ready: choices.countries.length >= 1 && choices.cities.length >= 2 && choices.cities.every(city => choices.cityActivities[city]) && Boolean(choices.budget) && Boolean(choices.itinerary) && choices.finalized });
     }
-    snapshot(speaker) { const key = this.key(speaker); return { notes: this.text(key), choices: this.choices(key) }; }
+    snapshot(speaker) { const key = this.key(speaker); return { notes: this.text(key), choices: this.choices(key), notesWorkId: this.saved[key]?.workId || '' }; }
     restore(speaker, profile) {
       const key = this.key(speaker); this.bump(key); this.epochs.set(key, (this.epochs.get(key) || 0) + 1);
-      this.saved[key] = { notes: profile.notes, choices: profile.choices };
+      const generation = Number.isSafeInteger(profile.generation) ? profile.generation : 0;
+      this.generations.set(key, generation);
+      const workId = typeof profile.notesWorkId === 'string' ? profile.notesWorkId : '';
+      const sameName = this.pending.filter(job => job.key === key && job.generation === generation);
+      const completed = sameName.findIndex(job => job.id === workId);
+      const alreadyDone = new Set(completed < 0 ? [] : sameName.slice(0,completed + 1).map(job => job.id));
+      let parent = workId;
+      this.pending = this.pending.flatMap(job => {
+        if (job.key !== key) return [job];
+        if (job.generation !== generation || alreadyDone.has(job.id)) return [];
+        const resume = (job.parent || '') === parent;
+        if (resume) parent = job.id;
+        return [{...job,epoch:this.epochs.get(key) || 0,parked:!resume}];
+      });
+      this.persistWork();
+      this.saved[key] = { notes: profile.notes, choices: profile.choices, workId };
       try { localStorage.setItem(STORE, JSON.stringify(this.saved)); } catch {}
       if (key === this.key()) this.refresh();
+      void this.flushPending();
     }
     bump(key) { this.revisions.set(key, (this.revisions.get(key) || 0) + 1); }
     status(text, key = this.key()) { if (key === this.key()) this.options.status.textContent = text; }
@@ -112,12 +131,15 @@
       catch { this.status('Saved for this visit; browser storage is unavailable.', key); }
     }
     refresh() { renderTripNotes(this.options.textarea, this.text(this.key())); this.status('Your trip details and next steps, updated as you plan.'); this.publish(false); }
+    persistWork() { try { localStorage.setItem(this.workStore, JSON.stringify(this.pending)); } catch { this.status('Browser storage is unavailable; keep this tab open until saving finishes.'); } }
+    discardJob(job) { this.pending = this.pending.filter(current => current.id !== job.id || current.epoch !== job.epoch); this.persistWork(); }
     update(turn) {
       const key = this.key(turn.speaker || 'Unknown');
       if (!this.options.base() || this.options.base().includes('REPLACE-ME') || !this.options.code()) return Promise.resolve();
       const copy = { agent: turn.agent, transcript: String(turn.transcript || '').slice(0, 3500), reply: String(turn.reply || '').slice(0, 3500),
         priorConversation: (turn.priorConversation || []).slice(-8).map(item => ({ role: item.role, content: String(item.content || '').slice(0, 3500), agent: item.agent })) };
-      this.pending.push({ key, epoch: this.epochs.get(key) || 0, turn: copy });
+      this.pending.push({ id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`, key, scope: this.options.base().replace(/\/$/, ''), parent: [...this.pending].reverse().find(job => job.key === key && !job.parked)?.id || this.saved[key]?.workId || '', generation: this.generations.get(key) || 0, epoch: this.epochs.get(key) || 0, turn: copy, parked: false });
+      this.persistWork();
       return this.flushPending();
     }
     flushPending() {
@@ -125,22 +147,23 @@
       this.queue = this.queue.catch(() => {}).then(async () => {
         const blocked = new Set(); let retry = false;
         for (const job of [...this.pending]) {
-          if (blocked.has(job.key)) continue;
-          if ((this.epochs.get(job.key) || 0) !== job.epoch) { this.pending.splice(this.pending.indexOf(job), 1); continue; }
+          if (blocked.has(job.key) || job.parked) continue;
+          if ((this.epochs.get(job.key) || 0) !== job.epoch) { this.discardJob(job); continue; }
           const outcome = await this.applyUpdate(job);
-          if (outcome === 'done') this.pending.splice(this.pending.indexOf(job), 1);
+          if (outcome === 'done') this.discardJob(job);
           else { blocked.add(job.key); if (outcome === 'retry') retry = true; }
         }
         if (retry && this.pending.length && !this.retryTimer) {
           this.retryTimer = setTimeout(() => this.flushPending(), 15000);
-          this.retryTimer.unref?.();
+          this.retryTimer?.unref?.();
         }
       });
       return this.queue;
     }
-    async applyUpdate({ key, epoch, turn }) {
+    async applyUpdate({ key, epoch, turn, id, parent }) {
       for (let attempt = 0; attempt < 2; attempt++) {
         if ((this.epochs.get(key) || 0) !== epoch) return 'done';
+        if ((parent || '') !== (this.saved[key]?.workId || '')) return 'blocked';
         const revision = this.revisions.get(key) || 0;
         const base = this.options.base(), code = this.options.code();
         if (!base || !code) return 'blocked';
@@ -162,7 +185,7 @@
           if ((this.epochs.get(key) || 0) !== epoch || (this.revisions.get(key) || 0) !== revision) {
             this.status('Your newer edits were kept.', key); return 'done';
           }
-          this.saved[key] = { notes: result.notes, choices: result.choices || this.choices(key) }; this.bump(key); this.persist(key);
+          this.saved[key] = { notes: result.notes, choices: result.choices || this.choices(key), workId: id }; this.bump(key); this.persist(key);
           if (key === this.key()) { renderTripNotes(this.options.textarea, this.text(key)); this.publish(true); }
           return 'done';
         } catch {

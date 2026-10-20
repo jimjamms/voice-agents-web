@@ -27,7 +27,9 @@ export function cleanProfile(data) {
       chatStarts[bucket] = new Date(timestamp).toISOString();
     }
   }
-  return { notes: data.notes, choices: normalizeChoices(data.choices), memories, chatStarts, reviewed: data.reviewed === true };
+  const notesWorkId = data.notesWorkId || '';
+  if (typeof notesWorkId !== 'string' || (notesWorkId && !/^[a-zA-Z0-9._-]{1,120}$/.test(notesWorkId))) throw new Error('Invalid notes revision.');
+  return { notes: data.notes, choices: normalizeChoices(data.choices), memories, chatStarts, reviewed: data.reviewed === true, ...(notesWorkId && { notesWorkId }) };
 }
 export async function profileRequest(request, env, cors) {
   const json = (body, status = 200) => Response.json(body, { status, headers: cors });
@@ -56,11 +58,13 @@ export async function profileRequest(request, env, cors) {
       return json({ profile, chatTurns, version: row?.version || 0, generation, memoryMode });
     }
     if (data.action !== 'save' || !Number.isSafeInteger(data.version) || data.version < 0) return json({ error: 'Invalid profile request.' }, 400);
+    if (data.generation !== undefined && (!Number.isSafeInteger(data.generation) || data.generation < 0)) return json({ error: 'Invalid trip generation.' }, 400);
+    if (data.generation !== undefined && data.generation !== generation) return json({ error: 'The host cleared this trip. Enter the same name ID to start again.', generation }, 410);
     let profile;
     try { profile = cleanProfile(data.profile); } catch (error) { return json({ error: error.message }, 400); }
     const payload = JSON.stringify(profile);
-    const statement = data.version === 0 ? env.LOG_DB.prepare('INSERT INTO trip_profiles(name_id, payload, version) VALUES(?, ?, 1) ON CONFLICT(name_id) DO NOTHING').bind(id, payload) :
-      env.LOG_DB.prepare('UPDATE trip_profiles SET payload = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE name_id = ? AND version = ?').bind(payload, id, data.version);
+    const statement = data.version === 0 ? env.LOG_DB.prepare('INSERT INTO trip_profiles(name_id, payload, version) SELECT ?, ?, 1 WHERE COALESCE((SELECT generation FROM deleted_name_ids WHERE name_id = ?),0) = ? ON CONFLICT(name_id) DO NOTHING').bind(id, payload, id, generation) :
+      env.LOG_DB.prepare('UPDATE trip_profiles SET payload = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE name_id = ? AND version = ? AND COALESCE((SELECT generation FROM deleted_name_ids WHERE name_id = ?),0) = ?').bind(payload, id, data.version, id, generation);
     const result = await statement.run();
     if (!result.meta.changes) return json({ error: 'This trip was changed on another device. Return to setup and enter the same name ID to reload before making more changes.' }, 409);
     return json({ version: data.version + 1 });

@@ -188,6 +188,8 @@
   readTextReply.addEventListener('change', () => {
     if (!readTextReply.checked) { pipeline.stopPlayback(); pipeline.notify(); }
   });
+  const profileGenerations = new Map();
+  let memoryWork;
   const tripCloud = window.createTripCloud?.({
     base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
     status: document.querySelector('#cloud-status'),
@@ -196,10 +198,10 @@
       switchConversation();
     },
     snapshot: name => ({ ...tripNotes.snapshot(name), memories: window.AgentMemory.snapshot(name), chatStarts: chatStartsByName.get(name) || {}, reviewed: window.tripWasReviewed?.(name) === true }),
-    apply: (name, profile) => { if (profile.memories.recentShared === undefined && profile.memories.shared?.length) sharedBootstrapNames.add(name); else sharedBootstrapNames.delete(name); chatStartsByName.set(name, profile.chatStarts || {}); window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); window.dispatchEvent(new CustomEvent('trip-profile:loaded', { detail: { name, reviewed: profile.reviewed === true, generation: profile.generation || 0 } })); },
+    apply: (name, profile) => { profileGenerations.set(name, profile.generation || 0); if (profile.memories.recentShared === undefined && profile.memories.shared?.length) sharedBootstrapNames.add(name); else sharedBootstrapNames.delete(name); chatStartsByName.set(name, profile.chatStarts || {}); window.AgentMemory.restore(name, profile.memories); tripNotes.restore(name, profile); memoryWork?.activate(name, profile.generation || 0); window.dispatchEvent(new CustomEvent('trip-profile:loaded', { detail: { name, reviewed: profile.reviewed === true, generation: profile.generation || 0 } })); },
     chats: restoreChats,
     onDeleted: (name, message) => {
-      deletedNames.add(name); remoteLogger?.forget(name);
+      deletedNames.add(name); memoryWork?.invalidate(name); remoteLogger?.forget(name);
       for (const state of [handoffOpenersByConversation, pendingOpeningRequests, unansweredOpeningConversations, welcomedConversations]) {
         for (const key of state.keys()) if (JSON.parse(key)[0] === name) state.delete(key);
       }
@@ -209,6 +211,10 @@
       document.querySelector('#completed-notes').value = '';
       window.dispatchEvent(new CustomEvent('trip-profile:deleted', { detail: { name, message } }));
     },
+  });
+  memoryWork = window.createMemoryWorkQueue?.({ base: () => window.VOICE_DEMO_CONFIG?.apiBaseUrl, code: () => codeInput.value.trim(),
+    isDeleted: name => deletedNames.has(name), remember: (...args) => window.AgentMemory.remember(...args),
+    status: text => { memoryStatus.textContent = text; }, onReset: () => tripCloud?.checkDeletion(),
   });
   window.restoreTripProfile = async name => { await tripNotes?.queue; await remoteLogger?.flush(); await tripCloud?.load(name); deletedNames.delete(name.trim().toLowerCase()); };
   function maybeCompleteTrip() {
@@ -528,6 +534,7 @@
       if (thread.at(-1)?.role === 'user' && thread.at(-1)?.content === turn.transcript) thread.pop();
       priorConversation = thread.slice(-6);
     }
+    if (memoryWork) return memoryWork.enqueue(turn, priorConversation, profileGenerations.get(turn.speaker.trim().toLowerCase()) || 0);
     const memoryRevision = window.AgentMemory.revision?.(turn.speaker) || 0;
     const base = window.VOICE_DEMO_CONFIG?.apiBaseUrl;
     const demoCode = codeInput.value.trim();

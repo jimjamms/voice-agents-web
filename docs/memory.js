@@ -77,7 +77,8 @@ function checklistContext(choices = {}, notes = '') {
       const bucket = id(speaker, mode, agent);
       const entries = this.entries(speaker, mode, agent);
       const value = mode === 'shared' ? { fact, learned_by: agent === 'sage' ? 'Sage' : 'Astra' } : fact;
-      store[bucket] = [...entries, value].slice(-20);
+      const duplicate = entries.some(entry => (typeof entry === 'string' ? entry : entry.fact) === fact);
+      store[bucket] = duplicate ? entries : [...entries, value].slice(-20);
       window.onTripProfileChange?.(speaker);
       try { localStorage.setItem(key, JSON.stringify(store)); } catch { return false; }
       return true;
