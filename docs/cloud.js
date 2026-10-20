@@ -65,7 +65,7 @@
         pending.version=remote.version;journal[key]={version:remote.version,generation:job.generation,profile:clone(pending.profile)};persist();
         timer=setTimeout(flush,0);timer?.unref?.();
       } else pending=null;
-      status('Trip saved across devices.');
+      status('');
     }
     function flush() {
       clearTimeout(timer);
@@ -95,7 +95,7 @@
             pending.version = result.version;
             journal[key] = {version:result.version,generation:job.generation,profile:clone(pending.profile)};
           } else delete journal[key];
-          persist(); status('Trip saved across devices.');
+          persist(); status('');
         } catch (error) {
           if (error.deleted || !active || active.name !== job.name || active.generation !== job.generation) return;
           if (!pending) pending = job;
