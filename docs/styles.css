@@ -132,3 +132,10 @@ body{background:#e4ede2;isolation:isolate}.scene-background{position:fixed;inset
 @media(max-width:560px){#study-welcome .setup-next{width:100%;justify-content:center}}
 
 .speaker-controls>small:empty{display:none}
+
+/* Quiet progress beside the conversation; completion keeps its existing notice. */
+.chat-trip-progress{display:flex;align-items:flex-start;gap:8px;padding:9px 16px;color:var(--chat-accent,#476e53);background:var(--chat-controls,#f3f6ef);font-size:12px;line-height:1.5}
+.trip-progress-dot{flex:0 0 6px;width:6px;height:6px;margin-top:6px;border-radius:50%;background:currentColor;animation:trip-progress-pulse 1.6s ease-in-out infinite}
+.chat-trip-progress[data-state="paused"] .trip-progress-dot{animation:none}
+@keyframes trip-progress-pulse{50%{transform:scale(.65);opacity:.5}}
+@media(prefers-reduced-motion:reduce){.trip-progress-dot{animation:none}}

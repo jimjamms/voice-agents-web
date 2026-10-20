@@ -82,16 +82,17 @@
       !budget ? 'Astra: confirm your budget, currency, and who it covers.' : 'Astra: review your itinerary, request changes or approve it.';
     document.querySelector('#continue-review').hidden = !ready;
     const notice = document.querySelector('#plan-ready-notice');
-    notice.hidden = !ready && !notesPending;
-    notice.dataset.state = notesPending ? workState : 'ready';
-    notice.setAttribute('aria-label', notesPending ? 'Trip update status' : 'Plan ready');
-    document.querySelector('#plan-progress-title').textContent = ready ? 'Your trip plan is complete.' :
-      workState === 'paused' ? 'Trip update paused.' : workState === 'retrying' ? 'Still updating your trip…' : 'Updating your trip…';
-    document.querySelector('#plan-progress-description').textContent = ready ? 'Continue to Finish to review it. You can still make changes.' :
-      workState === 'paused' ? 'Check your connection and demo code. Your latest message is kept in this browser.' :
-      workState === 'retrying' ? 'We’ll retry automatically. You don’t need to resend your message.' :
-      'Please stay on this page. If you’ve approved the full itinerary, Continue to Finish will appear after this check.';
-    document.querySelector('#plan-progress-icon').textContent = ready ? '✓' : workState === 'paused' ? '!' : '…';
+    notice.hidden = !ready;
+    document.querySelector('#plan-progress-title').textContent = 'Your trip plan is complete.';
+    document.querySelector('#plan-progress-description').textContent = 'Continue to Finish to review it. You can still make changes.';
+    document.querySelector('#plan-progress-icon').textContent = '✓';
+    const progress = document.querySelector('#chat-trip-progress');
+    progress.hidden = !notesPending;
+    progress.dataset.state = workState;
+    document.querySelector('#chat-trip-progress-text').textContent = workState === 'paused' ?
+      'Trip update paused. Check your connection and demo code.' : workState === 'retrying' ?
+      'Still updating your trip—we’ll retry automatically. No need to resend.' :
+      'Updating your trip… After approval, stay here for Continue to Finish.';
     document.querySelector('#planner-notes-panel')?.setAttribute('aria-busy', String(notesPending));
     if (notesPending) {
       document.querySelector('#trip-goal-hint').textContent = 'Updating your checklist and notes from your latest message…';
