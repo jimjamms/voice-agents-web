@@ -158,6 +158,6 @@
 }
 
 @media(max-width:850px){
-  #planning-stage .mobile-planning-nav{position:sticky;top:max(0px,env(safe-area-inset-top));z-index:25;box-shadow:0 5px 14px #243f3b12}
-  #planning-conversation,#mobile-trip-details{scroll-margin-top:calc(72px + env(safe-area-inset-top))}
+  #planning-stage .mobile-planning-nav{position:sticky;top:calc(12px + env(safe-area-inset-top));z-index:25;box-shadow:0 5px 14px #243f3b12}
+  #planning-conversation,#mobile-trip-details{scroll-margin-top:calc(84px + env(safe-area-inset-top))}
 }
