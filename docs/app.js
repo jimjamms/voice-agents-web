@@ -679,7 +679,6 @@
     }
     document.querySelector('.workspace').hidden = isMobile && mobileTripOpen;
     document.querySelector('#mobile-trip-details').hidden = !isMobile || !mobileTripOpen;
-    document.querySelector('.mobile-start-guide').hidden = isMobile && mobileTripOpen;
     const goalSummary = document.querySelector('#mobile-goal-summary');
     if (goalSummary) goalSummary.hidden = !isMobile || mobileTripOpen;
     document.querySelector('#mobile-chat-view').setAttribute('aria-pressed', String(!mobileTripOpen));
