@@ -26,3 +26,20 @@ body[data-stage="setup"] .intro>p:last-child{margin-inline:auto}
   body[data-stage] .shell>main{padding-block:20px}
   body[data-stage="setup"] .intro{padding-bottom:22px}
 }
+
+/* Give spare desktop height to the conversation, rather than empty margins. */
+@media(min-width:851px){
+  body[data-stage="planning"] .shell>main{justify-content:flex-start}
+  body[data-stage="planning"] #planning-stage{display:flex;flex-direction:column;flex:1 0 auto}
+  #planning-stage>.planning-toolbar,#planning-stage>.plan-ready-notice{flex-shrink:0}
+  #planning-stage .workspace{flex:1 0 auto;min-block-size:620px;align-items:stretch}
+  #planning-stage .conversation{min-block-size:0;align-self:stretch}
+  #planning-stage .conversation>.conversation-head,#planning-stage .conversation>.controls{flex-shrink:0}
+  #planning-stage .conversation>.messages{flex:1 1 0;block-size:0;min-block-size:280px;max-block-size:none;overflow-y:auto}
+  /* Keep the reference panel and mascot at readable sizes, with no giant gaps. */
+  #planning-stage .chooser{grid-template-rows:auto auto;align-content:start;align-items:start}
+}
+/* A tall phone also gains chat space, without hiding its controls or notes. */
+@media(max-width:850px){
+  #planning-stage .conversation>.messages{block-size:clamp(180px,calc(100svh - 580px),560px);min-block-size:180px;max-block-size:none;flex:0 0 auto}
+}
