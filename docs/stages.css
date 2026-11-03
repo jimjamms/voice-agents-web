@@ -226,3 +226,12 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
   .planning-checklist #trip-goal-hint{display:block;font-size:13px;font-weight:600;line-height:1.6;margin-top:14px;color:var(--note-accent,#476e53)}
   .planning-checklist #trip-goal-hint::before{content:'Next step · ';font-weight:800}
 }
+
+/* Keep the survey inside Finish; its external link is a fallback. */
+#review-stage .review-grid{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);align-items:start}
+#review-stage .google-form-embed{display:block;width:100%;height:clamp(640px,78svh,960px);border:0;border-radius:10px;background:#fff;margin:0 0 16px}
+#review-stage .google-form-embed[hidden]{display:none}
+#review-stage .survey-fallback{display:inline-block;font-size:13px;margin-bottom:8px}
+#review-stage #form-open-hint{font-size:12px;margin-bottom:14px}
+@media(max-width:800px){#review-stage .review-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:480px){#review-stage .form-card{padding:16px 8px}#review-stage .form-card h2,#review-stage .form-card>p,#review-stage .form-card>.text-button{margin-left:8px;margin-right:8px}}
