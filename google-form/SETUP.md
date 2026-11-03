@@ -24,7 +24,7 @@ Do the following once on the shared form, then repeat on the separate form:
 
 1. Open the form's editor, not its public participant link.
 2. Keep email collection and Limit to 1 response off for no Google sign-in. Avoid file-upload questions and organization-only restrictions.
-3. If it has a linked response Sheet, unlink it. Google Forms response deletion does not remove corresponding Sheet rows. Unlinking preserves existing Sheet data. Use the Forms Responses tab/CSV after processing for accepted responses.
+3. Keep your linked response spreadsheet. The script supports both linked and unlinked forms and requests spreadsheet permission when needed.
 4. In the form editor, choose the three-dot menu > Apps Script.
 5. Replace the script with the included Code.gs and save.
 6. In Apps Script Project Settings > Script Properties, set:
@@ -75,7 +75,7 @@ No website/GitHub Pages update is required for this particular change; the exist
 
 Test with a known shared ID and a known separate ID using the host's assignment information. Do not change their memory assignments just for testing. Each should open the appropriate form in Finish without an on-page memory-mode label.
 
-Submit test answers. The website checks status every 15 seconds while Finish is visible. Reopen the same ID on another device to verify completion stays locked. A wrong-form submission using a copied code is rejected by the Worker and removed by that form's script. Repeat callbacks for the accepted response are safe. Normal extra new responses using the same code are also removed. Editing remains disabled.
+Submit test answers. The website checks status every 15 seconds while Finish is visible. Reopen the same ID on another device to verify completion stays locked. A wrong-form or unknown-code submission is rejected by the Worker but retained in Forms and Sheets for host review. Only confirmed extra submissions using an already accepted code are removed. Their matching rows are removed from this form's linked response tab as well. Repeat callbacks for the accepted response are safe. Editing remains disabled.
 
 After verifying the replacement, stop accepting responses on the old form. Review any old form's pending Apps Script executions before retiring its triggers; the old script does not supply the form identity required for new callbacks. Existing accepted responses are not deleted or migrated between Google Forms.
 
@@ -88,3 +88,19 @@ The code is pseudonymous: the website does not put the name ID or memory mode in
 Only responses associated with the form assigned by the server can claim the code. Invalid/missing configuration does not silently choose a default form. A missing saved assignment asks the participant to load their ID in setup rather than assigning a new condition.
 
 Live Cloudflare deployment, Google authorization/triggers, and both actual forms need the manual checks above. Your supplied full URLs are configured in the Worker. Their live display and submission triggers still need testing on your deployed website.
+
+## Updating an existing installation for linked spreadsheets
+
+1. Replace worker/src/survey.mjs and run npx wrangler deploy from worker. No migration or new variables/secrets are needed for this particular update. Keep migrations 0008 and 0009 installed.
+2. Replace the bound Apps Script on BOTH forms with the included Code.gs. Keep the existing Script Properties.
+3. Keep the response Sheets linked. Run installSurveyProtection again on each form, and authorize spreadsheet access if Google requests it. No Apps Script deployment is needed.
+4. Reuse the same SURVEY_SHARED_ENTRY_ID and SURVEY_SEPARATE_ENTRY_ID if the Survey code questions were not deleted/recreated. The installer prints the identifiers again for verification.
+5. Submit a fresh test through the website's Finish stage, not the bare Google Form link. Check the form's Responses tab, its linked Sheet, and the website's completion message.
+
+Only a confirmed duplicate is deleted from Forms and its linked Sheet. Accepted answers stay. Code/form mismatches and unclassified rejections are retained for review, with a review:<response ID> Script Property and an execution-log message. The website cannot confirm an unaccepted submission. Correct the underlying code/form configuration, then manually run retryReviewReceipts in Apps Script to recheck retained responses (up to 25 per run).
+
+Duplicate row deletion matches Survey code plus timestamp only in the linked tab belonging to this form. It protects the accepted response's timestamp, rechecks the candidate row before deleting, and journals the action so retries cannot delete another row. If the row has not arrived yet, cleanup is queued for the five-minute retry. Ambiguous matches (including near-simultaneous timestamps) stay intact for host review; do not interpret such raw rows as additional accepted study responses. Check Executions for these cases. Avoid sorting or renaming the raw response tab's columns while submissions are being processed.
+
+An existing Google confirmation page might show a duplicate briefly before cleanup. This update does not restore responses previously deleted by older scripts and does not retroactively clean old Sheet rows. Review legacy rows separately.
+
+Targeted mocked checks cover linked/unlinked installation, accepted rows remaining intact, correct duplicate-row and Form-response removal, unknown/wrong-form response preservation, callback outages, delayed/ambiguous rows, cross-form tab isolation, and retries after Sheet cleanup. Live Google authorization, native Sheet append timing, and both form triggers still require the manual test above.

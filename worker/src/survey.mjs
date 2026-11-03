@@ -55,13 +55,15 @@ export async function surveyReceipt(request, env) {
   try {
     const input = await data(request);
     if (typeof input.responseId !== 'string' || !input.responseId || input.responseId.length > 300) return reply({accepted:false},400);
-    if (!tokenPattern.test(input.token || '')) return reply({accepted:false});
+    if (!tokenPattern.test(input.token || '')) return reply({accepted:false,reason:'invalid_code'});
     let submittedForm;
     try { submittedForm = formAddress(input.formUrl); }
     catch { return reply({error:'Update the Google Forms script and run its installer before submitting.'},400); }
     // A single atomic update claims the first response, only for its assigned form.
     await env.LOG_DB.prepare('UPDATE survey_receipts SET response_id = ?, edit_url = ?, submitted_at = CURRENT_TIMESTAMP WHERE token = ? AND form_url = ? AND response_id IS NULL').bind(input.responseId,null,input.token,submittedForm).run();
     const row = await env.LOG_DB.prepare('SELECT response_id, form_url FROM survey_receipts WHERE token = ?').bind(input.token).first();
-    return reply({accepted:row?.response_id === input.responseId && row?.form_url === submittedForm});
+    if (!row) return reply({accepted:false,reason:'unknown_code'});
+    if (row.form_url !== submittedForm) return reply({accepted:false,reason:'wrong_form'});
+    return reply({accepted:row.response_id === input.responseId,reason:row.response_id === input.responseId?'accepted':'duplicate',...(row.response_id !== input.responseId && {acceptedResponseId:row.response_id})});
   } catch { return reply({error:'Receipt could not be processed; retry later.'},503); }
 }
