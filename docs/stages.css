@@ -227,11 +227,18 @@ body[data-stage="setup"] footer{max-width:1120px;margin-inline:auto}
   .planning-checklist #trip-goal-hint::before{content:'Next step · ';font-weight:800}
 }
 
-/* Keep the survey inside Finish; its external link is a fallback. */
+/* Keep the survey inside Finish. */
 #review-stage .review-grid{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);align-items:start}
 #review-stage .google-form-embed{display:block;width:100%;height:clamp(640px,78svh,960px);border:0;border-radius:10px;background:#fff;margin:0 0 16px}
 #review-stage .google-form-embed[hidden]{display:none}
-#review-stage .survey-fallback{display:inline-block;font-size:13px;margin-bottom:8px}
-#review-stage #form-open-hint{font-size:12px;margin-bottom:14px}
 @media(max-width:800px){#review-stage .review-grid{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:480px){#review-stage .form-card{padding:16px 8px}#review-stage .form-card h2,#review-stage .form-card>p,#review-stage .form-card>.text-button{margin-left:8px;margin-right:8px}}
+
+/* Equal-height Finish panels, with independent scrolling inside the notes/form. */
+#review-stage .review-grid{align-items:stretch;--finish-panel-height:clamp(640px,80svh,960px)}
+#review-stage #completed-notepad,#review-stage .form-card{height:var(--finish-panel-height);min-height:0;display:flex;flex-direction:column;overflow:hidden}
+#review-stage #completed-notepad .notes-head,#review-stage #completed-status,#review-stage .form-card>h2,#review-stage .form-card>p,#review-stage .form-card>button{flex-shrink:0}
+#review-stage #completed-notepad .notes-content{height:auto;min-height:0;max-height:none;flex:1;resize:none;overflow:auto}
+#review-stage .google-form-embed{height:auto;min-height:0;flex:1;width:100%;margin:0 0 12px}
+#review-stage #survey-status:empty{display:none}
+#review-stage #survey-edit,#review-stage #survey-retry{align-self:flex-start;margin-bottom:12px}

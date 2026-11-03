@@ -29,9 +29,11 @@
     else textarea.value = text;
   }
   function step(next) {
+    const wasReview = document.body.dataset.stage === 'review';
     setup.hidden = next !== 'setup'; planning.hidden = next !== 'planning'; review.hidden = next !== 'review';
     document.body.dataset.stage = next;
-    if (next === 'review') loadSurvey();
+    if (next === 'review') window.dispatchEvent(new Event('survey:open'));
+    else if (wasReview) window.dispatchEvent(new Event('survey:close'));
     for (let i = 0; i < steps.length; i++) {
       const active = ['setup', 'planning', 'review'][i] === next;
       steps[i].classList.toggle('active', active);
@@ -176,20 +178,4 @@
     try { await navigator.clipboard.writeText(notes.value); document.querySelector('#completed-status').textContent = 'Copied.'; }
     catch { if (window.selectTripNotes) window.selectTripNotes(notes); else { notes.focus(); notes.select(); } document.querySelector('#completed-status').textContent = 'Select and copy the notes manually.'; }
   });
-  function loadSurvey() {
-    const frame = document.querySelector('#google-form-embed');
-    if (frame?.dataset.src && !frame.hasAttribute('src')) frame.src = frame.dataset.src;
-  }
-  const link = document.querySelector('#google-form-link');
-  try {
-    const url = new URL(window.VOICE_DEMO_CONFIG?.googleFormUrl || '');
-    if (url.protocol !== 'https:' || !['docs.google.com', 'forms.gle'].includes(url.hostname) || (url.hostname === 'docs.google.com' && !url.pathname.startsWith('/forms/'))) throw new Error('Not a Google Form');
-    link.href = url.href; link.hidden = false;
-    const embedUrl = new URL(url.href);
-    embedUrl.searchParams.set('embedded', 'true');
-    const frame = document.querySelector('#google-form-embed');
-    frame.dataset.src = embedUrl.href; frame.hidden = false;
-    if (!review.hidden) loadSurvey();
-    document.querySelector('#form-coming-soon').hidden = true; document.querySelector('#form-open-hint').hidden = false;
-  } catch { link.hidden = true; }
 })();

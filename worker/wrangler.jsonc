@@ -5,7 +5,8 @@
 	"vars": {
 		"PUBLIC_ORIGIN": "https://jimjamms.github.io",
 		"REALTIME_MODEL": "gpt-realtime-2.1",
-		"PIPELINE_CHAT_MODEL": "gpt-6-astra"
+		"PIPELINE_CHAT_MODEL": "gpt-6-astra",
+		"SURVEY_ENTRY_ID": "entry.984219076"
 	},
 	"ratelimits": [
 		{
