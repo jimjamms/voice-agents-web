@@ -24,6 +24,9 @@ function installSurveyProtection() {
   const item=matches.length?matches[0].asTextItem():form.addTextItem().setTitle(title);
   item.setHelpText('Filled in by the study website. Please leave this code unchanged.').setRequired(true);
   item.setValidation(FormApp.createTextValidation().requireTextMatchesPattern('^[a-f0-9]{64}$').build());
+  // Reuse the same item so moving it does not change its prefill entry ID.
+  if(item.getIndex() !== 0) form.moveItem(item.getIndex(),0);
+  form.setShuffleQuestions(false); // Keep the code first for every participant.
   form.setAllowResponseEdits(false);
   form.setShowLinkToRespondAgain(false);
   props.setProperty('FORM_ID',form.getId());
@@ -39,6 +42,8 @@ function installSurveyProtection() {
   ScriptApp.newTrigger('retryPendingReceipts').timeBased().everyMinutes(5).create();
   console.log('Survey form URL: '+form.getPublishedUrl());
   console.log('Survey code entry ID: '+entry[1]);
+  console.log('Survey code is now the first question; question shuffling is off.');
+  console.log('Prefill display test ONLY - do not submit: '+url);
 }
 function onSurveySubmitted(event) {
   if(!event || !event.response) throw new Error('This function runs from the Form submission trigger.');
