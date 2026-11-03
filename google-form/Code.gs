@@ -24,6 +24,7 @@ function installSurveyProtection() {
   form.setAllowResponseEdits(false);
   form.setShowLinkToRespondAgain(false);
   props.setProperty('FORM_ID',form.getId());
+  props.setProperty('FORM_URL',form.getPublishedUrl());
   props.setProperty('CODE_ITEM_ID',String(item.getId()));
   const url=form.createResponse().withItemResponse(item.createResponse('a'.repeat(64))).toPrefilledUrl();
   const entry=url.match(/[?&](entry\.\d+)=/);
@@ -33,7 +34,8 @@ function installSurveyProtection() {
   }
   ScriptApp.newTrigger('onSurveySubmitted').forForm(form).onFormSubmit().create();
   ScriptApp.newTrigger('retryPendingReceipts').timeBased().everyMinutes(5).create();
-  console.log('Set SURVEY_ENTRY_ID in worker/wrangler.jsonc vars to: '+entry[1]);
+  console.log('Survey form URL: '+form.getPublishedUrl());
+  console.log('Survey code entry ID: '+entry[1]);
 }
 function onSurveySubmitted(event) {
   if(!event || !event.response) throw new Error('This function runs from the Form submission trigger.');
@@ -50,7 +52,7 @@ function processReceipt_(response,props) {
   const token=String(answer?answer.getResponse():'').trim();
   const result=UrlFetchApp.fetch(props.getProperty('WORKER_URL').replace(/\/$/,'')+'/survey/receipt',{
     method:'post',contentType:'application/json',headers:{Authorization:'Bearer '+props.getProperty('SURVEY_RECEIPT_KEY')},
-    payload:JSON.stringify({token,responseId:id}),muteHttpExceptions:true
+    payload:JSON.stringify({token,responseId:id,formUrl:props.getProperty('FORM_URL')}),muteHttpExceptions:true
   });
   if(result.getResponseCode()!==200) throw new Error('Receipt pending; Worker returned '+result.getResponseCode()+'. Automatic retry will run.');
   const receipt=JSON.parse(result.getContentText());

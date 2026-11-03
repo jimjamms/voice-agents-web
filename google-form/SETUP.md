@@ -1,95 +1,90 @@
-# Embedded survey and duplicate-response setup
+# Shared and separate survey forms
 
-The Finish panels have equal outer heights on desktop and mobile. Notes and the Google Form scroll independently inside them. Notes remain resizable while planning.
+This update builds on the installed embedded survey and duplicate-response protection. It changes no website layout or participant memory assignments.
 
-## What this does
+Your forms:
 
-- No email registration or participant Google sign-in is added.
-- The Worker generates an opaque survey code from the normalized name ID using a private signing key. The same ID gets the same code on every device, including after profile deletion.
-- Only that opaque code is prefilled into the Google Form. No name ID, chat, notes, or memory condition is sent as a form answer by the website.
-- The first server-accepted response claims the code atomically. Further new responses using that code are removed from Google Forms by a submission trigger. Existing response edits keep their response ID and are accepted.
-- Completion is checked on opening Finish and every 15 seconds while it is visible. After confirmation, Finish shows a thank-you message and an Edit your response button, which opens the existing response inside the website.
-- Responses are pseudonymous, not strictly anonymous: a host with both the Worker and form data can associate the opaque code with the name ID. Reflect this in the research consent/data handling plan.
+- Shared: https://docs.google.com/forms/d/e/1FAIpQLSfE3zVMUF7Vhy-ZqAA47HYjv3880pw99WswhVsZphc5hhV3Kw/viewform
+- Separate: https://docs.google.com/forms/d/e/1FAIpQLSeyNKhB_Dvb-udkmOxTuuhoBLXynMQgF6pqFry6x6__RzHebg/viewform
 
-## Important limits
+The Worker reads the existing memory_assignments row for the normalized name ID. Stored shared IDs get the shared form; stored isolated IDs get the separate form. It does not trust a mode sent by the browser or create new assignments here. The participant-facing website shows no condition label. Use neutral titles/questions in the forms if participants should not learn their condition from the survey itself.
 
-This does not disable Google's Submit button before a duplicate is submitted. It keeps one accepted response per code by removing extra responses after submission. Trigger/network delays can leave duplicates visible temporarily. Failed receipt requests are queued and retried every five minutes; they are never treated as proof of success.
+## 1. Copy these changed files
 
-A new name ID yields a new code. With no identity verification, this cannot guarantee one participation per human. Users can also copy their form URL. Do not describe this as a strict one-person rule.
+- worker/src/survey.mjs
+- worker/migrations/0009_survey_form_routes.sql
+- google-form/Code.gs
+- google-form/SETUP.md (these instructions)
 
-Use Google Forms' own Responses tab/CSV after the trigger has completed for accepted survey data. Do not link the form directly to a response Sheet: deleting a Form response does not remove its spreadsheet row. The installer refuses to proceed if a destination Sheet is linked. Unlinking does not delete existing sheet data.
+Keep the other installed website/Worker files. No docs files changed in this update.
 
-## 1. Copy the updated files
+## 2. Install Apps Script on BOTH new forms
 
-Copy the included docs, worker/src, and worker/migrations files into your existing project, preserving the directories. Keep all your other project files. Retain your own Worker address in docs/config.js.
+Do the following once on the shared form, then repeat on the separate form:
 
-## 2. Apply the database migration
+1. Open the form's editor, not its public participant link.
+2. Keep email collection and Limit to 1 response off for no Google sign-in. Avoid file-upload questions and organization-only restrictions.
+3. If it has a linked response Sheet, unlink it. Google Forms response deletion does not remove corresponding Sheet rows. Unlinking preserves existing Sheet data. Use the Forms Responses tab/CSV after processing for accepted responses.
+4. In the form editor, choose the three-dot menu > Apps Script.
+5. Replace the script with the included Code.gs and save.
+6. In Apps Script Project Settings > Script Properties, set:
+   - WORKER_URL: the same Worker base URL you already use.
+   - SURVEY_RECEIPT_KEY: the same receipt secret already installed in that Worker. Do not use SURVEY_SIGNING_KEY here.
+7. Run installSurveyProtection and authorize it as the form owner. Do not deploy it as a web app or manually run onSurveySubmitted.
+8. Copy BOTH lines printed in the execution log:
+   - Survey form URL: https://docs.google.com/forms/d/e/.../viewform
+   - Survey code entry ID: entry.123456789
+9. Label your copied values shared or separate so you keep each URL paired with its own entry ID.
 
-In PowerShell, open the worker directory and run:
+The installer creates/reuses the required Survey code question, disables answer editing and Submit another response, and installs submission/retry triggers. Re-running it reuses that question. Do not remove or rename the Survey code question.
+
+The installer also prints the full URL so you can verify that each entry ID belongs to the intended form. The Worker already contains your two supplied full URLs.
+
+## 3. Configure two Worker variables
+
+In worker/wrangler.jsonc, replace the old SURVEY_ENTRY_ID variable with these two entries INSIDE the existing vars object. Preserve PUBLIC_ORIGIN, model settings, and any other existing variables. Replace each entry-ID placeholder with the output from the corresponding form's installer:
+
+```json
+"SURVEY_SHARED_ENTRY_ID": "entry.PASTE_SHARED_NUMBER",
+"SURVEY_SEPARATE_ENTRY_ID": "entry.PASTE_SEPARATE_NUMBER"
+```
+
+The two full form URLs above are already built into survey.mjs. No form URL variable is needed. If you previously set SURVEY_SHARED_FORM_URL or SURVEY_SEPARATE_FORM_URL, remove those overrides or ensure they match the full URLs above. Keep the two existing secrets unchanged: SURVEY_SIGNING_KEY and SURVEY_RECEIPT_KEY. There is no need to generate replacements.
+
+## 4. Apply the database migration
+
+From PowerShell in worker:
 
 ```powershell
 npx wrangler d1 migrations apply sage-astra-chat-logs --remote
 ```
 
-Use the database_name from your wrangler.jsonc if yours differs. This creates survey_receipts without changing existing trips, memory assignments, or answers. Local development also needs the migration with --local.
+Use your database_name if different. This applies 0009_survey_form_routes.sql to add a form_url column. Keep the prior 0008 migration installed. Local development also needs the migrations with --local.
 
-## 3. Create two different private secrets
+Existing tokens, completed submissions, memory assignments, chats, and memories are retained. The signing-key/name-ID formula is unchanged. An existing ID that already submitted the old survey remains marked submitted; replacing forms does not grant an automatic second submission. Use the individual reset process if you intentionally want someone to participate again.
 
-Run these separately from worker; enter a different long random secret when each prompt appears:
+## 5. Deploy and test
 
-```powershell
-npx wrangler secret put SURVEY_SIGNING_KEY
-npx wrangler secret put SURVEY_RECEIPT_KEY
-```
-
-Keep SURVEY_SIGNING_KEY stable: changing it gives existing IDs new survey codes. Save SURVEY_RECEIPT_KEY securely; the exact same receipt key must be entered in Apps Script. Never place either key in docs/config.js or the form questions.
-
-## 4. Set up the Google Form
-
-1. Open your form in edit mode. The public viewform link is not the editor.
-2. Keep email collection off and Limit to 1 response off for this no-sign-in workflow.
-3. If a response Sheet is linked, unlink it. Save/retain any existing data separately; do not delete existing responses.
-4. Open the form's Apps Script editor from its menu.
-5. Replace the default script with google-form/Code.gs from this package.
-6. In Apps Script Project Settings, add these Script Properties:
-   - WORKER_URL: your Worker base address, for example https://sage-astra-voice-api.voice-agents-web.workers.dev
-   - SURVEY_RECEIPT_KEY: the receipt secret from step 3 (not the signing key).
-7. Save and run installSurveyProtection. Authorize it using the form owner's account. Participants do not authorize anything.
-8. This creates a required short-answer Survey code question and installs the submit/retry triggers. It prints an entry identifier such as entry.123456789 in the execution log.
-9. Leave this Survey code question in place. It will be filled automatically by the website. The code field is visible and editable because Google Forms has no hidden answer fields; changed or unknown codes cannot claim an accepted response.
-
-Do not manually run onSurveySubmitted: it needs a real submission event.
-
-## 5. Configure and deploy the Worker
-
-Add the printed identifier inside the existing vars object of worker/wrangler.jsonc, preserving the other variables:
-
-```json
-"SURVEY_ENTRY_ID": "entry.123456789"
-```
-
-Replace the example with the value printed by your script. Then run:
+Avoid switching during active participation. Once both forms and the two entry-ID variables are ready, run:
 
 ```powershell
 npx wrangler deploy
 ```
 
-Survey access stays closed until the migration, secrets, and entry identifier are configured. The participant sees a retry/error message instead of an unchecked form.
+No website/GitHub Pages update is required for this particular change; the existing survey.js uses the URL returned by the Worker. Old docs/config.js.googleFormUrl is not used by the protected survey flow.
 
-## 6. Publish the website
+Test with a known shared ID and a known separate ID using the host's assignment information. Do not change their memory assignments just for testing. Each should open the appropriate form in Finish without an on-page memory-mode label.
 
-Push the included docs files to GitHub Pages. The existing config.js with your googleFormUrl can remain, although the protected survey URL now comes from the Worker.
+Submit test answers. The website checks status every 15 seconds while Finish is visible. Reopen the same ID on another device to verify completion stays locked. A wrong-form submission using a copied code is rejected by the Worker and removed by that form's script. Repeat callbacks for the accepted response are safe. Normal extra new responses using the same code are also removed. Editing remains disabled.
 
-## 7. Test before recruitment
+After verifying the replacement, stop accepting responses on the old form. Review any old form's pending Apps Script executions before retiring its triggers; the old script does not supply the form identity required for new callbacks. Existing accepted responses are not deleted or migrated between Google Forms.
 
-Use a test name ID, finish a trip, and submit the survey. Leave Finish open for up to 15 seconds for confirmation. Reopen the same ID on another device: it should show Survey submitted and allow editing the same response. Edits must stay in the embedded form.
+## Boundaries
 
-To test duplicate removal, before the first submission open that same test ID in a second browser and load Finish. Submit one response from each browser. Verify one accepted response remains in Google Forms after triggers finish. Look at Apps Script Executions for failures. A trigger's deletion of a duplicate is permanent; only perform the duplicate test using test responses.
+This keeps one accepted response per existing name ID using an opaque survey code. There is no Google sign-in or email registration. It cannot prevent the same human creating a different name ID. Google accepts a duplicate before Apps Script removes it, so duplicate rows can be visible temporarily; failed callbacks remain queued for five-minute retries.
 
-Existing form responses collected before this installation are not retrospectively deduplicated. Live Cloudflare and Google setup cannot be performed merely by copying this package; complete the steps above.
+The code is pseudonymous: the website does not put the name ID or memory mode in form answers, but a host with both systems can link the code to the ID. This is not a claim of unlinkable anonymity.
 
-## Validation performed
+Only responses associated with the form assigned by the server can claim the code. Invalid/missing configuration does not silently choose a default form. A missing saved assignment asks the participant to load their ID in setup rather than assigning a new condition.
 
-Local checks cover stable codes across name-ID capitalization/device requests, simultaneous response claims, idempotent receipt retries, callback authentication, unknown-code rejection, incomplete setup, response-edit access, and preserving unfinished answers during a failed status refresh. A real SQLite check allowed one winner among eight concurrent claims. Apps Script mocks verified accepted replies are kept, rejected duplicates are removed, and unavailable callbacks remain queued. Syntax checks passed.
-
-The legacy 114-test suite has the same 36 failing test names before and after this update; no new failures were introduced. Those existing tests include assumptions about older UI/profile behavior. This is not a claim that the full suite passes. Live Google authorization/triggers, Cloudflare deployment, and visual/mobile rendering still require the setup and manual checks above.
+Live Cloudflare deployment, Google authorization/triggers, and both actual forms need the manual checks above. Your supplied full URLs are configured in the Worker. Their live display and submission triggers still need testing on your deployed website.
