@@ -21,7 +21,7 @@ function installSurveyProtection() {
   const item=matches.length?matches[0].asTextItem():form.addTextItem().setTitle(title);
   item.setHelpText('Filled in by the study website. Please leave this code unchanged.').setRequired(true);
   item.setValidation(FormApp.createTextValidation().requireTextMatchesPattern('^[a-f0-9]{64}$').build());
-  form.setAllowResponseEdits(true);
+  form.setAllowResponseEdits(false);
   form.setShowLinkToRespondAgain(false);
   props.setProperty('FORM_ID',form.getId());
   props.setProperty('CODE_ITEM_ID',String(item.getId()));
@@ -50,7 +50,7 @@ function processReceipt_(response,props) {
   const token=String(answer?answer.getResponse():'').trim();
   const result=UrlFetchApp.fetch(props.getProperty('WORKER_URL').replace(/\/$/,'')+'/survey/receipt',{
     method:'post',contentType:'application/json',headers:{Authorization:'Bearer '+props.getProperty('SURVEY_RECEIPT_KEY')},
-    payload:JSON.stringify({token,responseId:id,editUrl:response.getEditResponseUrl()}),muteHttpExceptions:true
+    payload:JSON.stringify({token,responseId:id}),muteHttpExceptions:true
   });
   if(result.getResponseCode()!==200) throw new Error('Receipt pending; Worker returned '+result.getResponseCode()+'. Automatic retry will run.');
   const receipt=JSON.parse(result.getContentText());

@@ -19,9 +19,9 @@ export async function surveyAccess(request, env, cors) {
     const signature = await crypto.subtle.sign('HMAC',key,new TextEncoder().encode('travel-survey-v1:'+input.name.trim().toLowerCase()));
     const token = Array.from(new Uint8Array(signature),v=>v.toString(16).padStart(2,'0')).join('');
     await env.LOG_DB.prepare('INSERT INTO survey_receipts(token) VALUES (?) ON CONFLICT(token) DO NOTHING').bind(token).run();
-    const row = await env.LOG_DB.prepare('SELECT response_id, edit_url FROM survey_receipts WHERE token = ?').bind(token).first();
+    const row = await env.LOG_DB.prepare('SELECT response_id FROM survey_receipts WHERE token = ?').bind(token).first();
     const url = new URL(FORM); url.searchParams.set('embedded','true');url.searchParams.set(env.SURVEY_ENTRY_ID,token);
-    return reply({submitted:!!row.response_id,url:row.response_id ? null : url.href,editUrl:row.edit_url || null},200,cors);
+    return reply({submitted:!!row.response_id,url:row.response_id ? null : url.href},200,cors);
   } catch { return reply({error:'Could not check survey access. Please try again.'},503,cors); }
 }
 export async function surveyReceipt(request, env) {
@@ -33,14 +33,8 @@ export async function surveyReceipt(request, env) {
     const input = await data(request);
     if (typeof input.responseId !== 'string' || !input.responseId || input.responseId.length > 300) return reply({accepted:false},400);
     if (!tokenPattern.test(input.token || '')) return reply({accepted:false});
-    let editUrl = null;
-    if (input.editUrl) {
-      const url = new URL(input.editUrl);
-      if (url.origin !== 'https://docs.google.com' || !url.pathname.startsWith('/forms/')) return reply({accepted:false},400);
-      editUrl = url.href;
-    }
     // A single atomic update claims the first response, even if two arrive together.
-    await env.LOG_DB.prepare('UPDATE survey_receipts SET response_id = ?, edit_url = ?, submitted_at = CURRENT_TIMESTAMP WHERE token = ? AND response_id IS NULL').bind(input.responseId,editUrl,input.token).run();
+    await env.LOG_DB.prepare('UPDATE survey_receipts SET response_id = ?, edit_url = ?, submitted_at = CURRENT_TIMESTAMP WHERE token = ? AND response_id IS NULL').bind(input.responseId,null,input.token).run();
     const row = await env.LOG_DB.prepare('SELECT response_id FROM survey_receipts WHERE token = ?').bind(input.token).first();
     return reply({accepted:row?.response_id === input.responseId});
   } catch { return reply({error:'Receipt could not be processed; retry later.'},503); }

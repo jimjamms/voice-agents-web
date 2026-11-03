@@ -3,9 +3,8 @@
   const frame = document.querySelector('#google-form-embed');
   const status = document.querySelector('#survey-status');
   const retry = document.querySelector('#survey-retry');
-  const edit = document.querySelector('#survey-edit');
   const unavailable = document.querySelector('#form-coming-soon');
-  let timer, controller, activeName = '', serial = 0, editUrl = '', editing = false;
+  let timer, controller, activeName = '', serial = 0;
   const isOpen = () => document.body.dataset.stage === 'review';
   function stop() { clearTimeout(timer); controller?.abort(); serial++; }
   async function check() {
@@ -13,7 +12,7 @@
     clearTimeout(timer); controller?.abort(); controller = new AbortController();
     const current = ++serial;
     const name = document.querySelector('#speaker-name').value.trim().toLowerCase();
-    if (name !== activeName) { activeName=name; frame.removeAttribute('src'); frame.hidden=true; editing=false; }
+    if (name !== activeName) { activeName=name; frame.removeAttribute('src'); frame.hidden=true; }
     retry.hidden=true; unavailable.hidden=true;
     if (!frame.hasAttribute('src')) status.textContent='Checking your survey…';
     const timeout=setTimeout(()=>controller.abort(),15000);
@@ -26,12 +25,11 @@
       const data=await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not check survey access.');
       if (current !== serial || !isOpen()) return;
-      editUrl=data.editUrl || '';edit.hidden=!data.submitted || !editUrl;
       if (data.submitted) {
-        status.textContent=editing?'Edit your existing response below.':'Your survey is submitted. Thank you!';
-        if (!editing) { frame.hidden=true; frame.removeAttribute('src'); }
+        status.textContent='Your survey is submitted. Thank you!';
+        frame.hidden=true; frame.removeAttribute('src');
       } else {
-        edit.hidden=true;status.textContent='Complete the survey below. Your survey code is filled in automatically; please leave it unchanged.';
+        status.textContent='Complete the survey below. Your survey code is filled in automatically; please leave it unchanged.';
         if (!frame.hasAttribute('src')) frame.src=data.url;
         frame.hidden=false;
       }
@@ -47,9 +45,8 @@
     } finally { clearTimeout(timeout); }
   }
   retry.addEventListener('click',check);
-  edit.addEventListener('click',()=>{if(editUrl){editing=true;frame.src=editUrl;frame.hidden=false;status.textContent='Edit your existing response below.';}});
   window.addEventListener('survey:open',check);
-  window.addEventListener('survey:close',()=>{stop();editing=false;frame.hidden=true;frame.removeAttribute('src');});
+  window.addEventListener('survey:close',()=>{stop();frame.hidden=true;frame.removeAttribute('src');});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else if(isOpen())check();});
   if(isOpen())check();
 })();
