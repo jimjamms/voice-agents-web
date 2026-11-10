@@ -79,9 +79,10 @@ function checklistContext(choices = {}, notes = '') {
       const records = (Array.isArray(input) ? input : [input]).slice(0, 4).flatMap(entry => {
         const fact = typeof entry === 'string' ? entry : entry?.fact;
         if (typeof fact !== 'string' || !fact.trim() || fact.length > 1000) return [];
-        return [{ fact: fact.trim().slice(0, 600), learned_by: by,
+        return [{ fact: fact.trim().slice(0, 600),
           type: allowed.includes(entry?.type) ? entry.type : 'trip_detail',
-          reason: typeof entry?.reason === 'string' && entry.reason.trim() ? entry.reason.trim().slice(0, 200) : null }];
+          reason: typeof entry?.reason === 'string' && entry.reason.trim() ? entry.reason.trim().slice(0, 200) : null,
+          learned_by: by }];
       });
       if (!records.length) return;
       const bucket = id(speaker, mode, agent);
