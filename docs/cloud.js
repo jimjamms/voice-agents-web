@@ -15,7 +15,7 @@
     function comparable(profile) {
       const p = profile || {}, c = p.choices || {}, m = p.memories || {};
       return canonical({ notes: p.notes || '', choices: { countries:c.countries || [], cities:c.cities || [], activities:c.activities || [], cityActivities:c.cityActivities || {}, budget:c.budget || null, itinerary:c.itinerary || null, firstCityReviewed:c.firstCityReviewed || null, finalized:c.finalized === true, ...(c.approvalSource && {approvalSource:c.approvalSource}) },
-        memories: { shared:(m.shared || []).map(v => ({fact:typeof v === 'string' ? v : v.fact,learned_by:v.learned_by === 'Astra' ? 'Astra' : 'Sage'})), sage:(m.sage || []).map(v => typeof v === 'string' ? v : v.fact), astra:(m.astra || []).map(v => typeof v === 'string' ? v : v.fact), recentShared:m.recentShared || [] }, chatStarts:p.chatStarts || {}, reviewed:p.reviewed === true, notesWorkId:p.notesWorkId || '' });
+        memories: { shared:(m.shared || []).map(v => typeof v === 'string' ? {fact:v,learned_by:'Sage'} : {...v,learned_by:v.learned_by === 'Astra' ? 'Astra' : 'Sage'}), sage:m.sage || [], astra:m.astra || [], recentShared:m.recentShared || [] }, chatStarts:p.chatStarts || {}, reviewed:p.reviewed === true, notesWorkId:p.notesWorkId || '' });
     }
     const equal = (a,b) => JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
     function clearDeleted(name, message, generation) {

@@ -104,3 +104,7 @@ Duplicate row deletion matches Survey code plus timestamp only in the linked tab
 An existing Google confirmation page might show a duplicate briefly before cleanup. This update does not restore responses previously deleted by older scripts and does not retroactively clean old Sheet rows. Review legacy rows separately.
 
 Targeted mocked checks cover linked/unlinked installation, accepted rows remaining intact, correct duplicate-row and Form-response removal, unknown/wrong-form response preservation, callback outages, delayed/ambiguous rows, cross-form tab isolation, and retries after Sheet cleanup. Live Google authorization, native Sheet append timing, and both form triggers still require the manual test above.
+
+## Personal-memory sharing awareness update
+
+After replacing Code.gs, run `installSharingAwarenessQuestions` on BOTH assigned forms. This adds identical neutral awareness, evidence, direction and explicit-source items at the end, reusing their IDs on later runs. The existing Survey code entry IDs, callbacks and linked response Sheets stay in place. The complete wording, interpretation and pilot checks are in `README-personal-memory-update.md` at the archive root. Keep form titles neutral and do not reveal the assigned condition in the questions. Existing questions/responses are not deleted.

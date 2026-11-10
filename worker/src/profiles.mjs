@@ -1,3 +1,4 @@
+import { normalizeMemory } from './personal-memory.mjs';
 import { assignedMemory } from './memory-assignment.mjs';
 import { normalizeChoices } from './trip-goals.mjs';
 export function cleanProfile(data) {
@@ -9,7 +10,9 @@ export function cleanProfile(data) {
     memories[bucket] = list.map(entry => {
       const fact = typeof entry === 'string' ? entry : entry?.fact;
       if (typeof fact !== 'string' || !fact.trim() || fact.length > 1000) throw new Error('Invalid memory');
-      return bucket === 'shared' ? { fact, learned_by: entry.learned_by === 'Astra' ? 'Astra' : 'Sage' } : fact;
+      if (typeof entry === 'string' && bucket !== 'shared') return fact;
+      const by = bucket === 'shared' ? (entry?.learned_by === 'Astra' ? 'Astra' : 'Sage') : bucket === 'sage' ? 'Sage' : 'Astra';
+      return normalizeMemory(entry, by);
     });
   }
   const recent = data.memories?.recentShared || [];

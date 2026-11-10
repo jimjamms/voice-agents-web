@@ -22,10 +22,11 @@
             if(response.status===410){invalidate(job.name);void options.onReset?.(job.name);return 'done';}
             if(!response.ok){if(response.status>=400 && response.status<500 && ![408,429].includes(response.status))return 'blocked';throw new Error('Temporary extraction failure');}
             const result=await response.json();if(result.fact!==null && (typeof result.fact!=='string' || !result.fact.trim() || result.fact.length>600))throw new Error('Invalid extraction response');
-            if(!valid(job))return 'done';job.fact=result.fact;persist();
+            if (result.memories !== undefined && (!Array.isArray(result.memories) || result.memories.length > 4 || result.memories.some(entry => !entry || typeof entry.fact !== 'string' || !entry.fact.trim() || entry.fact.length > 600 || (entry.reason != null && (typeof entry.reason !== 'string' || entry.reason.length > 200))))) throw new Error('Invalid structured memory response');
+            if(!valid(job))return 'done';job.fact=result.fact;job.memories=result.memories;persist();
           }
           if(!valid(job))return 'done';
-          if(job.fact && options.remember(job.name,job.mode,job.agent,job.fact)===false)throw new Error('Memory save pending');
+          if((job.memories?.length || job.fact) && options.remember(job.name,job.mode,job.agent,job.memories?.length ? job.memories : job.fact)===false)throw new Error('Memory save pending');
           return 'done';
         }catch{options.status?.('Saving memories automatically…');}finally{clearTimeout(timeout);}
       }

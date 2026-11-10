@@ -2,14 +2,12 @@ import { checkMemoryAssignment } from './memory-assignment.mjs';
 import { planningContext } from './planning-context.mjs';
 import handoffPrompts from './handoff-prompts.json' with { type: 'json' };
 import { chatOptions } from './chat-options.mjs';
-import { memoryContext, extractFact, sharedTurnContext, checklistContext } from './memory.mjs';
+import { memoryContext, extractMemories, sharedTurnContext, checklistContext } from './memory.mjs';
 import pipelineAgents from './pipeline_agents.json' with { type: 'json' };
 
 const API = 'https://api.openai.com/v1';
 const MAX_AUDIO_BYTES = 4_000_000;
 const MAX_TEXT = 1600;
-// The itinerary reply can arrive before the asynchronous public notes check.
-const finishGuidance = '\n\nWebsite finish guidance: After the user explicitly approves the complete itinerary with Astra, clearly say that trip planning is finished and give the next website step in that same brief reply: stay on this page while the checklist updates, then select Continue to Finish when it appears. Do not end with a generic goodbye that suggests leaving the website. Do not ask another planning question after full approval, claim the checklist has already updated, promise an exact wait time, or say the form or study is complete. This instruction applies only to approval of a complete itinerary, not a single activity, budget or hotel choice. If the user later asks to revise the plan, help them revise it normally.';
 const formats = new Map([
   ['audio/webm', 'webm'], ['audio/mp4', 'm4a'], ['audio/mpeg', 'mp3'],
   ['audio/wav', 'wav'], ['audio/ogg', 'ogg'], ['audio/x-m4a', 'm4a'],
@@ -68,7 +66,7 @@ export async function pipelineTurn(request, env, cors) {
     const speaker = String(form.get('speaker') || 'Unknown').trim().slice(0, 40) || 'Unknown';
     let memories = [];
     const rawMemories = form.get('memories');
-    if (typeof rawMemories === 'string' && rawMemories.length <= 15000) {
+    if (typeof rawMemories === 'string' && rawMemories.length <= 30000) {
       try { memories = JSON.parse(rawMemories); } catch {}
     }
     const memoryMode = form.get('memory_mode') === 'isolated' ? 'isolated' : 'shared';
@@ -83,12 +81,12 @@ export async function pipelineTurn(request, env, cors) {
     const rounds = { 'first-choice': 'Sage uses all supplied country, city and activity choices immediately. Ask only the next essential missing detail. During initial discovery allow one useful open-ended interest or experience question for Sage, plus at most one specific useful follow-up, unless already answered or declined. Use the answer to settle an activity that Astra can help arrange.', 'first-review': 'Astra checks the first stop against budget, timing and comfort. Use available preferences to choose an appropriate visit time, walking load, daily pace, transport or lodging area. When a relevant preference is missing, use Astra’s one practical-priority question plus at most one useful specific follow-up, unless already fulfilled or declined. Apply available Sage preferences to a real timing, transport, lodging or spending decision. Finish the practical review and invite a return to Sage when useful.', 'second-choice': 'Sage chooses remaining cities and their activities using the initial practical check, including additional stops the user wants beyond the two-city minimum. Use available preferences and Astra’s practical priorities to tailor the next experience. On returning to Sage, one additional targeted open-ended question is allowed if relevant context is missing and would change the decision, even if her initial preference question was used; no extra follow-up interview. Do not re-ask known or declined information. Settle the activity and invite Astra when useful.', 'final-plan': 'Astra finalizes the full route and budget, applying available preferences to pacing, visiting times, transport, lodging and spending priorities. Briefly explain one relevant planning choice using a stated preference when available. Draft the compact complete plan as soon as essential details are available. Clarify only an essential unresolved practical detail, not an extra preference interview. If ready, invite approval or a specific change in one turn.' };
     const roundKey = Object.hasOwn(rounds, form.get('planning_round')) ? form.get('planning_round') : '';
     const round = rounds[roundKey] || '';
-    const roundContext = round ? '\n\nCurrent planning round: ' + round + ' Preference questions must invite an answer in the user’s own words; do not append two options or suggested answers. Before any switch recommendation, resolve outstanding decisions in your specialty for the current stop. If a first-stop venue is still undecided, finish that choice before second-city discovery; a dependency handoff should return to the same open decision. Respect the user choosing to leave a detail flexible. This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
+    const roundContext = round ? '\n\nCurrent planning round: ' + round + ' Preference questions must invite an answer in the user’s own words; do not append two options or suggested answers. Before any switch recommendation, resolve outstanding decisions in your specialty for the current stop. If a first-stop venue is still undecided, finish that choice before second-city discovery; a dependency handoff should return to the same open decision. Respect the user choosing to leave a detail flexible. Personal follow-up priority: Sage may ask one optional open-ended why question about a newly stated preference if its reason is not known. Astra may ask one brief open-ended why question when a suggestion is rejected or changed and its reason is not known, including during final review. Do not ask the optional why question together with a logistics, approval or handoff question. Skip it when already explained, declined or the user wants to proceed. This is a progress hint; the latest conversation may already have advanced beyond the saved checklist. Respect newer completed decisions and user requests. Follow the current memory mode; this hint does not imply access to the other agent’s private facts.' : '';
     const handoff = agent.handoff[speaker.toLowerCase() === 'unknown' ? 'disabled' : memoryMode];
-    const context = memoryContext(speaker, memories, agent.name);
+    const context = memoryContext(speaker, memories, agent.name, memoryMode);
     const memoryFacts = !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
     const rawDuration = Number(form.get('speech_duration_ms'));
-    const metricsContext = { agent_version: 'travel-memory-pilot-v6', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
+    const metricsContext = { agent_version: 'travel-personal-memory-v7', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
@@ -112,7 +110,7 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext + finishGuidance },
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext },
             ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')),
             ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
             { role: 'system', content: opening }],
@@ -137,21 +135,21 @@ export async function pipelineTurn(request, env, cors) {
         method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
         body: JSON.stringify({
           ...chatOptions(env.VOICE_CHAT_MODEL || env.PIPELINE_CHAT_MODEL || 'gpt-6-astra'),
-          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext + finishGuidance }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
+          messages: [{ role: 'system', content: agent.prompt + '\n\n' + handoff + roundContext + switchContext }, ...(context ? [{ role: 'system', content: context }] : []), ...safeHistory(form.get('history')), ...(recentContext ? [{ role: 'system', content: recentContext }] : []), ...(publicNotes ? [{ role: 'system', content: publicNotes }] : []),
             { role: 'user', content: transcript }],
         }),
       })).json();
       reply = String(chat.choices?.[0]?.message?.content || '').trim().slice(0, 3500);
       if (!reply) throw new Error('Empty model reply.');
     }
-    const factPromise = greeting || memoryDeferred ? Promise.resolve(null) : extractFact(env, agent.name, speaker, transcript, reply, safeHistory(form.get('history')));
-    if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: null }, 200, cors);
+    const factPromise = greeting || memoryDeferred ? Promise.resolve({ fact: null, memories: [] }) : extractMemories(env, agent.name, speaker, transcript, reply, safeHistory(form.get('history')));
+    if (!speakReply) return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, ...(await factPromise), traits: agent.traits, audio: null }, 200, cors);
     const speech = await upstream('/audio/speech', {
       method: 'POST', headers: { ...authorization, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'gpt-4o-mini-tts', voice: agent.voice,
         instructions: agent.instructions, input: reply, response_format: 'mp3' }),
     });
-    return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, fact: await factPromise, traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
+    return json({ transcript, reply, greeting, inputMode, memoryDeferred, ...metricsContext, ...(await factPromise), traits: agent.traits, audio: encode(await speech.arrayBuffer()), mimeType: 'audio/mpeg' }, 200, cors);
   } catch (error) {
     console.error('Pipeline turn failed:', error);
     return json({ error: 'Could not complete this turn. Check API billing and try again.' }, 502, cors);

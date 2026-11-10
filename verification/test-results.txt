@@ -1,0 +1,28 @@
+(node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Sage and Astra extraction returns typed facts, stated reasons, and server-owned source (12.683135ms)
+✔ Unknown reasons stay null; NONE, empty extraction and legacy summaries are supported (16.24289ms)
+✔ Malformed memory JSON stays retryable; unknown speakers cause no model request (6.473906ms)
+✔ Profile save preserves type/reason in all buckets and reads legacy strings (2.706691ms)
+✔ Shared memory flows in both directions, while separate buckets stay isolated (3.438058ms)
+✔ Source mentions require a real personal memory and the other agent as source (1.867629ms)
+✔ Isolated worker context filters cross-agent records; public notes do not expose reasons (6.296424ms)
+✔ Durable background queue retains structured fields, source, and legacy fallback (9.920117ms)
+Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
+Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
+Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
+Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
+✔ Deleting a trip discards pending personal memories rather than restoring them (9.345777ms)
+✔ Pipeline receives current follow-up rules and returns typed memories for either agent (25.947096ms)
+✔ Pipeline still checks the saved memory assignment (6.397004ms)
+✔ Awareness installer adds identical neutral questions to both forms and is idempotent (4.808701ms)
+✔ Pipeline and realtime personas both include the same one-question and privacy rules (5.335133ms)
+✔ Cloud recovery saves metadata-only changes instead of dropping reasons (4.313951ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 274.440664

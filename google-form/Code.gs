@@ -27,6 +27,7 @@ function installSurveyProtection() {
   // Reuse the same item so moving it does not change its prefill entry ID.
   if(item.getIndex() !== 0) form.moveItem(item.getIndex(),0);
   form.setShuffleQuestions(false); // Keep the code first for every participant.
+  installSharingAwarenessQuestions();
   form.setAllowResponseEdits(false);
   form.setShowLinkToRespondAgain(false);
   props.setProperty('FORM_ID',form.getId());
@@ -153,4 +154,51 @@ function retryReviewReceipts() {
       catch(error) { console.error('Review retry pending: '+error.message); }
     }
   } finally {lock.releaseLock();}
+}
+/* Add the SAME neutral manipulation check to both assigned forms.
+ * Run on each bound Form as owner. Reuses item IDs; never touches responses.
+ */
+function installSharingAwarenessQuestions() {
+  const form = FormApp.getActiveForm();
+  if (!form) throw new Error('Open this script from the study Google Form editor.');
+  const props = PropertiesService.getScriptProperties();
+  const find = (key, title, type) => {
+    let item = null;
+    const saved = props.getProperty(key);
+    if (saved) { try { item = form.getItemById(Number(saved)); } catch (_) {} }
+    if (!item) {
+      const matches = form.getItems(type).filter(value => value.getTitle() === title);
+      if (matches.length > 1) throw new Error('Keep exactly one question titled ' + title);
+      item = matches[0] || null;
+    }
+    if (item && item.getType() !== type) throw new Error('Question type changed for ' + title);
+    return item;
+  };
+  const multiple = (key, title, choices, help, required) => {
+    const existing = find(key, title, FormApp.ItemType.MULTIPLE_CHOICE);
+    const item = existing ? existing.asMultipleChoiceItem() : form.addMultipleChoiceItem();
+    item.setTitle(title).setChoiceValues(choices).setHelpText(help || '').setRequired(required);
+    props.setProperty(key, String(item.getId()));
+    return item;
+  };
+  const primary = multiple('SHARING_AWARENESS_ITEM_ID',
+    'Did either agent use personal information you had told only the other agent?',
+    ['Yes', 'No', 'Not sure'],
+    'Personal information means your preferences, reasons, past experiences, or practical needs, rather than just destinations and itinerary details in the trip notes.', true);
+  const evidenceTitle = 'What, if anything, made you think the agents shared personal information?';
+  const evidenceExisting = find('SHARING_EVIDENCE_ITEM_ID', evidenceTitle, FormApp.ItemType.PARAGRAPH_TEXT);
+  const evidence = evidenceExisting ? evidenceExisting.asParagraphTextItem() : form.addParagraphTextItem();
+  evidence.setTitle(evidenceTitle).setHelpText('Optional. A brief description is enough; please avoid repeating sensitive personal details.').setRequired(false);
+  props.setProperty('SHARING_EVIDENCE_ITEM_ID', String(evidence.getId()));
+  const direction = multiple('SHARING_DIRECTION_ITEM_ID',
+    'Where did you notice this, if anywhere?',
+    ['Astra used something I told Sage', 'Sage used something I told Astra', 'Both directions', 'I did not notice this', 'Not sure'], '', false);
+  const cue = multiple('SHARING_SOURCE_CUE_ITEM_ID',
+    'Did an agent say it learned something about you from the other agent?',
+    ['Yes', 'No', 'Not sure'], '', false);
+  // Put checks after the experience questions. Free-text evidence precedes the cue item.
+  for (const item of [primary, evidence, direction, cue]) form.moveItem(item.getIndex(), form.getItems().length - 1);
+  form.setShuffleQuestions(false);
+  props.setProperty('SHARING_CHECK_VERSION', 'personal-sharing-awareness-v1');
+  console.log('Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.');
 }

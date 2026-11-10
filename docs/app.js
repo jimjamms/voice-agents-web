@@ -282,7 +282,7 @@
     remoteLogger?.record(turns.at(-1));
     if (turn.memoryDeferred && !turn.greeting) void extractTurnMemory(turn, history.slice(-6).map(item => ({ ...item, agent: turn.agent })));
     if (turn.fact) {
-      const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.fact);
+      const saved = window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, turn.memories?.length ? turn.memories : turn.fact);
       memoryStatus.textContent = saved === false ? 'Memory is available for this visit, but browser storage could not save it.' : 'Memory saved.';
     }
   }
@@ -546,8 +546,8 @@
         body: JSON.stringify({ agent: turn.agent, speaker: turn.speaker, userText: turn.transcript.slice(0, 3500), reply: turn.reply.slice(0, 3500), priorConversation }),
       });
       if (response.ok) {
-        const { fact } = await response.json();
-        if (fact && !deletedNames.has(turn.speaker.trim().toLowerCase()) && (window.AgentMemory.revision?.(turn.speaker) || 0) === memoryRevision) window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, fact);
+        const { fact, memories } = await response.json();
+        if (fact && !deletedNames.has(turn.speaker.trim().toLowerCase()) && (window.AgentMemory.revision?.(turn.speaker) || 0) === memoryRevision) window.AgentMemory.remember(turn.speaker, turn.mode, turn.agent, memories?.length ? memories : fact);
       } else memoryStatus.textContent = 'Reply received, but this turn’s memory could not be saved.';
     } catch { memoryStatus.textContent = 'Reply received, but this turn’s memory could not be saved.'; }
   }
