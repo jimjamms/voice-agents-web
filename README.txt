@@ -1,85 +1,73 @@
-Sage and Astra follow-up and source-visibility update (v8)
+Sage and Astra natural follow-up update (v9)
 
-Apply this patch on top of sage-astra-personal-followups-update.zip.
-Copy the included docs/, worker/, lib/ and verification/ files into the matching
-paths of your project. These are changed files, not a full standalone repository.
-Deploy the Worker and the website using your existing deployment process.
-The new worker/src/response-policy.mjs must be included in the Worker bundle.
-Reload the website after deployment. Reconnect any existing realtime sessions
-so they receive the new instructions. This package has not been deployed.
+Apply on top of sage-astra-why-and-sharing-update-v8.zip. Copy the included
+files into the same paths in your repository. This ZIP contains only changes
+since v8, not a complete project.
 
 What changed
 
-1. Sage asks what appeals about a new travel preference or choice when its reason
-   is missing. This includes a short place/activity answer to her previous question.
-   Astra asks why a suggestion was rejected or changed when no reason was supplied.
-   The obsolete per-round interview quotas have been removed. The prompts were
-   shortened by removing a large repetitive planning-guidance section and replacing
-   it with a consolidated policy while retaining personality, role, completion goals,
-   spoken length, task boundaries, public-note rules and travel limitations.
+- Follow-ups refer to the actual choice instead of falling back to the same
+  generic "What drew you to that choice?" line.
+- Natural model wording such as "How come quieter cafes appeal to you?" is
+  preserved instead of rejected by the previous narrow wording check.
+- After a recognized motivation question, the pipeline leaves the next two
+  replies for applying the answer or planning, rather than asking another why.
+  Normal practical questions remain possible. Shared-mode pacing also considers
+  recent supplied exchanges with the other agent; Separate mode uses own history.
+- If the available history shows that a preference was already followed by a
+  why question, overlapping preference wording does not trigger another probe,
+  even if the user never supplied an explanation. This matching is heuristic,
+  not a complete semantic equivalence check.
+- Exact repeated questions in recent own-agent history are suppressed. A useful
+  observation, answer or suggestion can stand alone without a question.
+- Persona and round prompts discourage repeated acknowledgments, automatic
+  questioning of every minor selection, and synonymous rewordings of the same
+  why. They tell agents to use the reason in a concrete trip decision instead.
+- Direct user questions do not force the pipeline to ask why back at the user.
+- Shared-memory source validation, visible relevant source mentions, memory
+  storage, personality values, voices and survey behavior are preserved.
 
-2. Text and recorded-voice pipeline replies use a small internal JSON contract.
-   Statements and the single follow-up question are generated separately. The Worker
-   replaces a missing why with one question for the clear choice/rejection patterns
-   covered by its detector. It removes extra question sentences and rejects common
-   stacked-question wording. JSON is never displayed or spoken. Unusual phrasing
-   still depends on the model interpreting the instructions correctly.
+Examples of intended wording (model wording can vary)
 
-3. When applying another agent's relevant personal fact to a concrete planning
-   decision, the model selects its evidence ID and an exact sentence showing the
-   application. The Worker checks the supplied evidence and inserts its actual source.
-   It does not let the model invent the source ID or paraphrase the evidence into an
-   unsupported new fact. The model still judges relevance and whether a fact was
-   already learned directly or superseded. This is a provenance check, not proof that
-   every recommendation follows logically from the selected memory.
+User to Sage: I prefer quiet places.
+Sage: A tucked-away garden could fit. What do you enjoy about a quieter setting?
 
-   A rendered example for Astra is
-   Sage mentioned that you prefer quiet cafes. I'd choose a cafe on a quieter side street.
+User: Crowds wear me out.
+Sage: We could visit the garden early, before the busiest part of the day.
 
-   The same mechanism lets Sage acknowledge personal facts learned by Astra. Source
-   mentions are no longer blocked simply because a different fact was attributed in
-   the previous reply. Irrelevant memories and public itinerary notes do not justify
-   source mentions.
+User to Astra: No museums on day 2.
+Astra: We can take them out. What puts you off museums?
 
-4. Explicit recent USER disclosures from shared exchanges can supply evidence before
-   background typed-memory extraction finishes. Unaccepted assistant suggestions,
-   question-bearing raw transcripts and bare public itinerary details are excluded
-   from this immediate fallback. Shared exchanges are not available in Separate mode.
+User: I get bored indoors.
+Astra: An outdoor market and a riverside walk would keep that day mostly outside.
 
-5. The realtime instructions, browser memory context and desktop role definitions
-   use the same strengthened behavior rules. Native realtime speech does not pass
-   through the pipeline JSON renderer, so its behavior is instruction-based rather
-   than mechanically checked. Voices and personality values are unchanged.
+Deployment
 
-6. Explained choices, answers to a why question, refusals, requests to move on,
-   sensitive causes, routine logistics and completed approval should not trigger
-   another why. Companion disclosures alone do not trigger a why. Users can decline
-   explanations and continue. Neither condition requires personal disclosure.
+1. Copy the included files into their matching repository paths.
+2. From the repository root, commit and push the changes.
+3. From the worker directory, run npx wrangler deploy.
+4. Refresh the website and reconnect existing voice sessions.
 
-Forms, condition assignment, public-notepad visibility, memory storage schemas,
-cloud synchronization and survey routing are unchanged by this update.
+The text/recorded-voice pipeline checks pacing and question repetition in code.
+Native realtime speech receives the revised prompt instructions, but its spoken
+output does not pass through that renderer. Realtime compliance is model-dependent.
 
 Validation
 
-30 local automated tests passed using mocked model/API replies. Includes both agents,
-source directions, Shared/Separate modes, immediate switch openings, delayed extraction,
-why fallbacks, question limits, privacy, durable saves and existing form behavior.
-JavaScript, Python and JSON syntax checks passed. There was no live model conversation,
-browser deployment or native realtime speech test; perform those checks after deployment.
+39 local automated tests passed using mocked API/model replies. Includes natural
+wording preservation, pacing, repeat suppression, topic-specific fallbacks, direct
+questions, both source directions, both memory conditions, delayed extraction,
+existing memory persistence and survey behavior. JavaScript, JSON and Python
+syntax checks passed. No deployment or live model/voice conversation was performed.
 
-Run tests with Node 24 or compatible newer Node
+Tests, with Node 24 or a compatible newer Node
 node --experimental-vm-modules --test verification/*.test.mjs
 
-Suggested live checks
+Live checks after deployment
 
-- Tell Sage "I prefer quiet places" without explaining why. Expect one why question.
-- Give the reason, then continue. Expect the reason to shape her next idea without
-  repeating the same why question.
-- Tell Astra "No museums on day 2" without a reason. Expect one brief why question.
-- In Shared mode tell one agent "I prefer quiet cafes because crowds tire me out",
-  then ask the other for a cafe recommendation. Expect a relevant adaptation and a
-  source mention. Repeat with the agents reversed.
-- Repeat in Separate mode with a fresh assigned participant. The receiving agent
-  should not claim that personal fact or cite the other agent's private conversation.
-- Check why declines, requests to proceed, and final approval do not add another
-  personal interview. Check spoken and typed replies separately.
+Give a meaningful preference without a reason, answer the follow-up, and keep
+planning. Expect one contextual follow-up followed by practical use of the answer,
+not another why immediately. Revisit the same preference later and check that it
+does not start a second interview. Check both agents and both typed and voice modes.
+Confirm that relevant source mentions still occur in Shared mode and that private
+cross-agent facts remain unavailable in Separate mode.

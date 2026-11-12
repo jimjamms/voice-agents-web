@@ -22,7 +22,7 @@ test('Already explained choices, declined questions, sensitive needs, logistics 
 test('A missing why replaces logistics and a stacked why falls back to one question',()=>{
  const c=contract({transcript:'I prefer quiet places'});
  for(const data of [out({question:'How many days do you have?'}),out({question:'Why do you prefer quiet places and what is your budget?',ask_why:true}),'Sounds good. What is your budget?']) {
-  const reply=renderResponse(data,c);assert.match(reply,/What drew you to that choice\?/);assert.equal((reply.match(/\?/g)||[]).length,1);assert.doesNotMatch(reply,/budget|days/);
+  const reply=renderResponse(data,c);assert.match(reply,/What do you enjoy about a quieter setting\?/);assert.equal((reply.match(/\?/g)||[]).length,1);assert.doesNotMatch(reply,/budget|days/);
  }
 });
 test('A contextual single why is retained and question-like sentences are removed from statements',()=>{
@@ -69,7 +69,7 @@ test('A forged source or a nonexistent application cannot produce a verified att
  assert.doesNotMatch(renderResponse(out({memory_use:{id:'memory-1',application:'Invented decision not in reply.'}}),shared),/mentioned/);
 });
 test('Malformed JSON never leaks internal fields into speech',()=>{
- assert.equal(renderResponse('{"statements":',contract({transcript:'I prefer parks'})),'What drew you to that choice?');
+ assert.equal(renderResponse('{"statements":',contract({transcript:'I prefer parks'})),'What appeals to you about parks?');
  assert.doesNotMatch(renderResponse('[{"statements":"hello"}]',contract({})),/statements/);
 });
 test('Isolated policy does not suppress questions using the other agent private reasons',()=>{
@@ -79,4 +79,56 @@ test('Isolated policy does not suppress questions using the other agent private 
 test('Companion disclosures and already-explained dislikes do not force a why question',()=>{
  assert.equal(whyRequired('Sage',"I'm traveling with my sister"),false);
  assert.equal(whyRequired('Astra','Skip museums, I find them boring'),false);
+});
+
+test('Conversational why questions keep their wording instead of becoming the generic fallback',()=>{
+ const c=contract({transcript:'I prefer quiet cafes'});
+ for(const question of ["How come quieter cafes appeal to you?", "What's the appeal of a quieter cafe for you?", 'What are you looking for in a cafe?', 'Does a quiet cafe connect to a trip you enjoyed?']) {
+  assert.equal(renderResponse(out({statements:'A tucked-away cafe could work well.',question,ask_why:true}),c),'A tucked-away cafe could work well. '+question);
+ }
+ // Plain legacy model output can also use ordinary conversational motivation phrasing.
+ assert.equal(renderResponse('A tucked-away cafe could work well. How come you prefer quieter spots?',c),'A tucked-away cafe could work well. How come you prefer quieter spots?');
+});
+test('After a why, allow useful planning replies before another motivation question',()=>{
+ const history=[{role:'user',content:'I like gardens'},{role:'assistant',content:'What do you enjoy about gardens?'},{role:'user',content:'The greenery'},{role:'assistant',content:'The botanical garden has shaded paths.'}];
+ const c=contract({transcript:'I like food markets too',history});
+ assert.equal(c.required,false);assert.equal(c.pauseWhy,true);
+ assert.equal(renderResponse(out({statements:'We could visit the market after the garden.',question:'What do you like about food markets?',ask_why:true}),c),'We could visit the market after the garden.');
+ assert.equal(renderResponse(out({statements:'We could visit the market after the garden.',question:'Which day will you be in Kyoto?'}),c),'We could visit the market after the garden. Which day will you be in Kyoto?');
+ history.push({role:'user',content:'Sounds good'},{role:'assistant',content:'The market and garden fit into one afternoon.'});
+ assert.equal(contract({transcript:'I like boat rides',history}).required,true);
+});
+test('An earlier unexplained preference is not probed again after the pacing pause',()=>{
+ const history=[{role:'user',content:'I prefer quiet cafes'},{role:'assistant',content:'What do you enjoy about a quieter setting?'},{role:'user',content:'Just a preference'},{role:'assistant',content:'There is a cafe near your hotel.'},{role:'user',content:'Okay'},{role:'assistant',content:'It fits before your afternoon walk.'}];
+ const c=contract({transcript:'I like quiet cafes',history});
+ assert.equal(c.required,false);assert.equal(c.pauseWhy,true);
+ assert.equal(renderResponse(out({question:'How come you prefer quiet cafes?',ask_why:true}),c),'That works.');
+});
+test('Repeated questions are suppressed and fallback wording refers to the choice',()=>{
+ const c=contract({transcript:'Kyoto',history:h('Which city appeals to you?')});
+ assert.equal(renderResponse(out({question:'What is your budget?'}),c),'That works. What appeals to you about Kyoto?');
+ const repeated=contract({history:h('Which day will you arrive?')});
+ assert.equal(renderResponse(out({question:'Which day will you arrive?'}),repeated),'That works.');
+});
+test('Shared follow-up pacing crosses switches; isolated pacing uses only own history',()=>{
+ const sharedTurns=[{agent:'sage',transcript:'I prefer gardens',reply:'What do you enjoy about gardens?'}];
+ assert.equal(contract({agent:'Astra',transcript:'Skip museums',sharedTurns}).required,false);
+ assert.equal(contract({agent:'Astra',transcript:'Skip museums',mode:'isolated',sharedTurns}).required,true);
+});
+test('Direct user questions do not force a why back at the user',()=>{
+ for(const transcript of ['Why would you suggest Kyoto?','What is the best city for gardens','Can you suggest a cafe?']) assert.equal(contract({transcript,history:h('Which city would you prefer?')}).required,false);
+});
+test('A null question stays null even if statements accidentally contain a question',()=>{
+ const c=contract({});
+ assert.equal(renderResponse(out({statements:'A garden could work. Which city do you want?',question:null}),c),'A garden could work.');
+});
+test('The final contract explicitly tells the model to apply an answer rather than keep probing',()=>{
+ const c=contract({history:h('What do you enjoy about a quieter setting?'),transcript:'I find crowds tiring'});
+ assert.match(c.prompt,/PACING:/);assert.match(c.prompt,/Do NOT ask another motivation question/);
+ assert.match(c.prompt,/A useful suggestion or short observation can be the entire reply/);
+});
+
+test('A statement explaining why does not turn a logistical question into a motivation question',()=>{
+ const c=contract({transcript:'I like gardens',history:h("That is why I suggest staying near the station. Which day will you arrive?")});
+ assert.equal(c.pauseWhy,false);
 });

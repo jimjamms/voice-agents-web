@@ -215,8 +215,8 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     for(const [key,value] of Object.entries({agent,speaker:'p1',text:input,memory_mode:'shared',defer_memory:'true',reply_audio:'false'})) form.set(key,value);
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
-    assert.match(result.reply,agent==='sage'?/What drew you/:/What made you/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v8');
+    assert.match(result.reply,agent==='sage'?/What do you enjoy/:/What puts you off/);assert.doesNotMatch(result.reply,/budget/);
+    assert.equal(result.agent_version,'travel-personal-memory-v9');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });

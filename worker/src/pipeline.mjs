@@ -80,10 +80,10 @@ export async function pipelineTurn(request, env, cors) {
     }
     const recentContext = memoryMode === 'shared' ? sharedTurnContext(speaker, sharedTurns, agent.name) : '';
     const rounds = {
-      'first-choice': 'Sage helps settle the first country, city and activity. Ask why a new meaningful choice appeals when its reason is unknown before the next logistics or handoff question.',
-      'first-review': 'Astra reviews the chosen first stop against timing, budget and comfort. Ask why an unexplained rejection or change was made, then apply the answer.',
-      'second-choice': 'Sage resumes unresolved discovery or chooses remaining cities and activities using available practical constraints. A new choice can receive a why follow-up regardless of earlier question counts.',
-      'final-plan': 'Astra develops the full route, timing, transport, lodging and estimated budget and asks for explicit approval. Unexplained changes can receive one why follow-up; completed approval needs no extra interview.'
+      'first-choice': 'Sage helps settle the first country, city and activity. Ask a specific follow-up about a meaningful choice when useful and not recently explored; otherwise apply the answer and continue planning.',
+      'first-review': 'Astra reviews the chosen first stop against timing, budget and comfort. If an unexplained change needs context and a why was not asked recently, ask what was not working, then apply the answer.',
+      'second-choice': 'Sage resumes unresolved discovery or chooses remaining cities and activities using available practical constraints. A meaningful choice can receive a specific follow-up when useful, with planning replies between motivation questions.',
+      'final-plan': 'Astra develops the full route, timing, transport, lodging and estimated budget and asks for explicit approval. Unexplained changes can receive one specific follow-up when not recently explored; completed approval needs no extra interview.'
     };
     const roundKey = Object.hasOwn(rounds, form.get('planning_round')) ? form.get('planning_round') : '';
     const roundContext = roundKey ? '\n\nCurrent planning round: ' + rounds[roundKey] + ' Resolve the current stop before recommending a switch. Skip already-known or declined questions and respect requests to proceed. Saved progress may lag; newer user choices take precedence. Round guidance does not grant access to private cross-agent facts.' : '';
@@ -91,7 +91,7 @@ export async function pipelineTurn(request, env, cors) {
     const context = memoryContext(speaker, memories, agent.name, memoryMode);
     const memoryFacts = !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
     const rawDuration = Number(form.get('speech_duration_ms'));
-    const metricsContext = { agent_version: 'travel-personal-memory-v8', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
+    const metricsContext = { agent_version: 'travel-personal-memory-v9', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
