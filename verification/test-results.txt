@@ -1,28 +1,44 @@
 (node:13) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
 (Use `node --trace-warnings ...` to show where the warning was created)
-✔ Sage and Astra extraction returns typed facts, stated reasons, and server-owned source (12.683135ms)
-✔ Unknown reasons stay null; NONE, empty extraction and legacy summaries are supported (16.24289ms)
-✔ Malformed memory JSON stays retryable; unknown speakers cause no model request (6.473906ms)
-✔ Profile save preserves type/reason in all buckets and reads legacy strings (2.706691ms)
-✔ Shared memory flows in both directions, while separate buckets stay isolated (3.438058ms)
-✔ Source mentions require a real personal memory and the other agent as source (1.867629ms)
-✔ Isolated worker context filters cross-agent records; public notes do not expose reasons (6.296424ms)
-✔ Durable background queue retains structured fields, source, and legacy fallback (9.920117ms)
+✔ Sage and Astra extraction returns typed facts, stated reasons, and server-owned source (15.619652ms)
+✔ Unknown reasons stay null; NONE, empty extraction and legacy summaries are supported (18.49516ms)
+✔ Malformed memory JSON stays retryable; unknown speakers cause no model request (7.066279ms)
+✔ Profile save preserves type/reason in all buckets and reads legacy strings (2.187812ms)
+✔ Shared memory flows in both directions, while separate buckets stay isolated (2.634063ms)
+✔ Source mentions require a real personal memory and the other agent as source (1.44125ms)
+✔ Isolated worker context filters cross-agent records; public notes do not expose reasons (3.592093ms)
+✔ Durable background queue retains structured fields, source, and legacy fallback (7.391699ms)
 Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
 Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
 Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
 Sharing-awareness questions installed. Use the same wording and order on both forms. Existing answers and the Survey code item are retained.
-✔ Deleting a trip discards pending personal memories rather than restoring them (9.345777ms)
-✔ Pipeline receives current follow-up rules and returns typed memories for either agent (25.947096ms)
-✔ Pipeline still checks the saved memory assignment (6.397004ms)
-✔ Awareness installer adds identical neutral questions to both forms and is idempotent (4.808701ms)
-✔ Pipeline and realtime personas both include the same one-question and privacy rules (5.335133ms)
-✔ Cloud recovery saves metadata-only changes instead of dropping reasons (4.313951ms)
-ℹ tests 14
+✔ Deleting a trip discards pending personal memories rather than restoring them (8.151432ms)
+✔ Pipeline receives current follow-up rules and returns typed memories for either agent (23.905026ms)
+✔ Pipeline still checks the saved memory assignment (6.834358ms)
+✔ Awareness installer adds identical neutral questions to both forms and is idempotent (5.534005ms)
+✔ Pipeline and realtime personas both include the same one-question and privacy rules (1.68582ms)
+✔ Cloud recovery saves metadata-only changes instead of dropping reasons (4.7403ms)
+✔ Pipeline enforces why instead of the mocked model logistics question for both agents (25.870104ms)
+✔ Pipeline attributes relevant unextracted user disclosures in both directions, including switch openings, only in Shared mode (70.444492ms)
+✔ Voices, personality values, and completion requirements remain intact (0.479183ms)
+✔ Sage follows both explicit preferences and short country, city and activity choices (6.462911ms)
+✔ Astra asks why after a rejection or change, not every accepted detail (0.407071ms)
+✔ Already explained choices, declined questions, sensitive needs, logistics and approval do not force probing (0.665805ms)
+✔ A missing why replaces logistics and a stacked why falls back to one question (2.620499ms)
+✔ A contextual single why is retained and question-like sentences are removed from statements (0.376448ms)
+✔ Shared evidence and visible use work in both directions (1.31425ms)
+✔ Ineligible or irrelevant facts do not gain a source mention (0.755602ms)
+✔ Cross-agent user statements are immediately eligible before deferred extraction finishes (0.96074ms)
+✔ A directly repeated statement is not advertised as exclusive knowledge from the other agent (0.499157ms)
+✔ A forged source or a nonexistent application cannot produce a verified attribution (0.56788ms)
+✔ Malformed JSON never leaks internal fields into speech (0.374001ms)
+✔ Isolated policy does not suppress questions using the other agent private reasons (0.217237ms)
+✔ Companion disclosures and already-explained dislikes do not force a why question (0.244184ms)
+ℹ tests 30
 ℹ suites 0
-ℹ pass 14
+ℹ pass 30
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 274.440664
+ℹ duration_ms 404.133999

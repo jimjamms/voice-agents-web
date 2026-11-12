@@ -182,7 +182,7 @@ test('Pipeline and realtime personas both include the same one-question and priv
   for(const [name,key] of [['pipeline_agents.json','prompt'],['agents.json','instructions']]) {
     const agents=JSON.parse(text('worker/src/'+name));
     for(const agent of ['sage','astra']) {
-      assert.match(agents[agent][key],/at most ONE question/);assert.match(agents[agent][key],/never in consecutive replies/i);
+      assert.match(agents[agent][key],/at most ONE question/);assert.match(agents[agent][key],/Different relevant facts may be acknowledged on consecutive replies/i);
       assert.match(agents[agent][key],/Never ask for medical diagnoses/);
       assert.match(agents[agent][key],/Reasons are unknown unless the user supplied them/);
     }
@@ -202,4 +202,50 @@ test('Cloud recovery saves metadata-only changes instead of dropping reasons', a
   const cloud=window.createTripCloud({base:()=> 'https://worker.test',code:()=> 'test',status:{textContent:''},snapshot:()=>pending,apply:(_name,profile)=>{applied=profile;}});
   await cloud.load('p1');
   assert.equal(saved.length,1);assert.equal(saved[0].memories.shared[0].reason,record.reason);assert.equal(applied.memories.shared[0].reason,record.reason);
+});
+
+test('Pipeline enforces why instead of the mocked model logistics question for both agents', async()=>{
+  for(const [agent,input] of [['sage','I prefer quiet gardens'],['astra','No museums on day 2']]) {
+    let request;
+    const p=await worker('pipeline.mjs',async(_url,init)=>{
+      request=JSON.parse(init.body);
+      return Response.json({choices:[{message:{content:JSON.stringify({statements:'Got it.',question:'What is your budget?',ask_why:false,memory_use:null})}}]});
+    });
+    const form=new FormData();
+    for(const [key,value] of Object.entries({agent,speaker:'p1',text:input,memory_mode:'shared',defer_memory:'true',reply_audio:'false'})) form.set(key,value);
+    const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+    assert.equal(response.status,200);const result=await response.json();
+    assert.match(result.reply,agent==='sage'?/What drew you/:/What made you/);assert.doesNotMatch(result.reply,/budget/);
+    assert.equal(result.agent_version,'travel-personal-memory-v8');
+    assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
+  }
+});
+test('Pipeline attributes relevant unextracted user disclosures in both directions, including switch openings, only in Shared mode', async()=>{
+  for(const agent of ['sage','astra']) for(const mode of ['shared','isolated']) for(const greeting of [false,true]) {
+    const other=agent==='sage'?'astra':'sage';
+    const application='I would choose a quieter cafe on a side street.';
+    let modelRequest;
+    const p=await worker('pipeline.mjs',async(_url,init)=>{
+      modelRequest=JSON.parse(init.body);
+      return Response.json({choices:[{message:{content:JSON.stringify({statements:application,question:null,memory_use:{id:'memory-1',application}})}}]});
+    });
+    const form=new FormData();
+    for(const [key,value] of Object.entries({agent,speaker:'p1',memory_mode:mode,reply_audio:'false',defer_memory:'true',shared_turns:JSON.stringify([{agent:other,transcript:'I prefer quiet cafes because crowds tire me out.',reply:'Understood.'}])})) form.set(key,value);
+    if(greeting) form.set('greeting','true');else form.set('text','Can you suggest a cafe?');
+    const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+    assert.equal(response.status,200);const result=await response.json();
+    if(mode==='shared') {assert.match(result.reply,new RegExp(other==='sage'?'Sage mentioned':'Astra mentioned'));assert.match(result.reply,/side street/);}
+    else {assert.doesNotMatch(result.reply,/mentioned/);assert.doesNotMatch(modelRequest.messages.map(m=>m.content).join('\n'),/crowds tire me out/);}
+    assert.doesNotMatch(result.reply,/memory_use|memory-1|statements/);
+  }
+});
+test('Voices, personality values, and completion requirements remain intact',()=>{
+ const pipeline=JSON.parse(text('worker/src/pipeline_agents.json'));
+ const realtime=JSON.parse(text('worker/src/agents.json'));
+ for(const [name,voice,traits] of [['sage','marin',{openness:4,conscientiousness:3,extraversion:5,agreeableness:5,neuroticism:2}],['astra','cedar',{openness:3,conscientiousness:4,extraversion:2,agreeableness:3,neuroticism:1}]]) {
+  for(const agents of [pipeline,realtime]) {assert.equal(agents[name].voice,voice);assert.deepEqual(agents[name].traits,traits);}
+  assert.match(pipeline[name].prompt,/at least one country, two cities/);
+  assert.match(pipeline[name].prompt,/explicitly approve the complete itinerary/);
+  assert.doesNotMatch(pipeline[name].prompt,/Limit preference exploration to the initial question|never in consecutive replies/);
+ }
 });
