@@ -216,7 +216,7 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
     assert.match(result.reply,agent==='sage'?/(?:What do you enjoy|What makes a quiet spot|What appeals to you about spending time somewhere quiet)/:/(?:What puts you off|What isn't working for you about including museums|What would you prefer to avoid about a museum visit)/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v13');
+    assert.equal(result.agent_version,'travel-personal-memory-v14');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });
@@ -289,5 +289,17 @@ test('The reported games reply does not stall through the actual pipeline handle
   const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
   assert.equal(response.status,200);const result=await response.json();
   assert.match(result.reply,/^Games could be a fun starting point for your trip!/);assert.match(result.reply,/(?:What kinds of games do you enjoy|What games do you find yourself coming back to|Which games do you most enjoy playing|What's a game you really enjoy playing)\?$/);assert.equal((result.reply.match(/\?/g)||[]).length,1);
+ }
+});
+
+test('The real pipeline replaces redundant Japan motivation with missing hobby detail',async()=>{
+ const history=[{role:'assistant',content:'What do you most enjoy doing in your free time?'},{role:'user',content:'i like to play games'},{role:'assistant',content:'What country do you have in mind for this trip?'},{role:'user',content:'do you have any suggestions'},{role:'assistant',content:'Japan could be a fun fit for your interest in games—Tokyo’s Akihabara neighborhood has arcades and gaming shops. If you prefer tabletop games, Germany’s Berlin has board-game cafés worth exploring. Which destination catches your interest?'}];
+ for(const memory_mode of ['shared','isolated']) {
+  const p=await worker('pipeline.mjs',async()=>Response.json({choices:[{message:{content:JSON.stringify({statements:'Japan it is!',question:'What appeals to you most about visiting Japan?',ask_why:true,memory_use:null})}}]}));
+  const form=new FormData();
+  for(const [key,value] of Object.entries({agent:'sage',speaker:'testing 2',text:'japan',memory_mode,reply_audio:'false',defer_memory:'true',history:JSON.stringify(history)}))form.set(key,value);
+  const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+  assert.equal(response.status,200);const result=await response.json();
+  assert.doesNotMatch(result.reply,/appeals|Why Japan/);assert.match(result.reply,/games?|playing/i);assert.equal((result.reply.match(/\?/g)||[]).length,1);
  }
 });
