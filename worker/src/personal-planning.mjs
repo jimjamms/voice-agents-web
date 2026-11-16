@@ -1,3 +1,4 @@
+import { hasBenefitExplanation } from './response-variety.mjs';
 // Keep personalization grounded in user disclosures, separately from public itinerary data.
 const personalTypes = new Set(['preference','constraint','past_experience','travel_companion','avoidance']);
 const disclosure = /\b(?:prefer|like|love|enjoy|dislike|hate|avoid|need|can't|cannot|travel(?:ing|ling) with|last trip|tir(?:e[sd]?|ing)|exhaust(?:ed|ing)?|overwhelm(?:ed|ing)?|relax(?:ed|ing)?|crowds|my (?:partner|family|sister|brother|friend|kids|children))\b/i;
@@ -30,7 +31,7 @@ const topics = {
 };
 export function isPersonalDiscoveryQuestion(text) {
   return (String(text).match(/[^.!?]*\?/g)||[]).some(q=> /\b(?:what|how)\b/i.test(q) && !/\b(?:what(?:'s| is)? your budget|how (?:many|much)|what dates?|(?:which|what) (?:city|country|activity|destination))\b/i.test(q) &&
-    /\b(?:comfortable|comfort|feel|enjoy|like|matters|important|priorit|tiring|frustrating|work well|make room|worth|prefer|avoid)\w*\b/i.test(q));
+    /\b(?:comfortable|comfort|feel|enjoy|like|interests?|hobbies|matters|important|priorit|tiring|frustrating|work well|make room|worth|prefer|avoid)\w*\b/i.test(q));
 }
 export function openDiscoveryQuestion(question,topic) {
   return typeof question==='string' && /^(?:what|how)\b/i.test(question.trim()) && topics[topic]?.match.test(question) && isPersonalDiscoveryQuestion(question);
@@ -68,7 +69,7 @@ const benefits = {
 export function invitationBenefit(topic,history=[]) {
   // Don't turn every question into another pitch. Existing model benefit wording counts too.
   const recent=history.filter(m=>m.role==='assistant').slice(-6).map(m=>m.content).join(' ');
-  if(/\b(?:I can use|help(?:s)? me (?:choose|tailor|suggest|plan|adapt)|so I can|that (?:lets|will help) me|tailor (?:the|your)|a better fit for you)\b/i.test(recent)) return '';
+  if(hasBenefitExplanation(recent) || /\bthat (?:lets|will help) me\b/i.test(recent)) return '';
   return benefits[topic] || '';
 }
 export function sageDiscovery({agent,transcript='',history=[],facts=[],greeting=false,pause=false,why=false}) {

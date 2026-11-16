@@ -215,8 +215,8 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     for(const [key,value] of Object.entries({agent,speaker:'p1',text:input,memory_mode:'shared',defer_memory:'true',reply_audio:'false'})) form.set(key,value);
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
-    assert.match(result.reply,agent==='sage'?/What do you enjoy/:/What puts you off/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v11');
+    assert.match(result.reply,agent==='sage'?/(?:What do you enjoy|What makes a quiet spot|What appeals to you about spending time somewhere quiet)/:/(?:What puts you off|What isn't working for you about including museums|What would you prefer to avoid about a museum visit)/);assert.doesNotMatch(result.reply,/budget/);
+    assert.equal(result.agent_version,'travel-personal-memory-v13');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });
@@ -261,7 +261,7 @@ test('Astra pipeline openings ask an open-ended practical preference when a real
   for(const [key,value] of Object.entries({agent:'astra',speaker:'p1',greeting:'true',memory_mode,reply_audio:'false',trip_choices:JSON.stringify({countries:['Japan'],cities:['Kyoto'],cityActivities:{Kyoto:'Visit a garden'}})}))form.set(key,value);
   const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
   assert.equal(response.status,200);const result=await response.json();
-  assert.match(prompt,/ASTRA OPEN-ENDED PLANNING OPPORTUNITY/);assert.match(result.reply,/What does a comfortable day of sightseeing look like for you\?/);assert.doesNotMatch(result.reply,/budget/);
+  assert.match(prompt,/ASTRA OPEN-ENDED PLANNING OPPORTUNITY/);assert.match(result.reply,/(?:What does a comfortable day of sightseeing look like for you|How do you like to pace a day of sightseeing|What would make a day of sightseeing feel comfortable for you)\?/);assert.doesNotMatch(result.reply,/budget/);
  }
 });
 test('Own-source facts and reasons reach both agents final personalization instructions',async()=>{
@@ -277,5 +277,17 @@ test('Own-source facts and reasons reach both agents final personalization instr
   assert.equal(response.status,200);const result=await response.json();
   assert.match(prompt,/Prefers quiet cafes/);assert.match(prompt,/Crowds feel tiring/);assert.match(prompt,/Use personal facts to change decisions/);
   assert.match(result.reply,/quiet side street/);assert.doesNotMatch(result.reply,/Sage mentioned|Astra mentioned/);
+ }
+});
+
+test('The reported games reply does not stall through the actual pipeline handler',async()=>{
+ for(const memory_mode of ['shared','isolated']) {
+  const p=await worker('pipeline.mjs',async()=>Response.json({choices:[{message:{content:JSON.stringify({statements:'Games could be a fun starting point for your trip!',question:null,ask_why:false,memory_use:null})}}]}));
+  const form=new FormData();
+  const history=[{role:'assistant',content:'Hi, I’m Sage! Let’s find a trip you’re excited about. I can use your interests to suggest experiences that fit you. What do you enjoy doing when you have a free afternoon?'}];
+  for(const [key,value] of Object.entries({agent:'sage',speaker:'testing 2',text:'i like playing games',memory_mode,reply_audio:'false',defer_memory:'true',history:JSON.stringify(history)}))form.set(key,value);
+  const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+  assert.equal(response.status,200);const result=await response.json();
+  assert.match(result.reply,/^Games could be a fun starting point for your trip!/);assert.match(result.reply,/(?:What kinds of games do you enjoy|What games do you find yourself coming back to|Which games do you most enjoy playing|What's a game you really enjoy playing)\?$/);assert.equal((result.reply.match(/\?/g)||[]).length,1);
  }
 });
