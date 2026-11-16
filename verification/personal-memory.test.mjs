@@ -216,7 +216,7 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
     assert.match(result.reply,agent==='sage'?/What do you enjoy/:/What puts you off/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v10');
+    assert.equal(result.agent_version,'travel-personal-memory-v11');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });

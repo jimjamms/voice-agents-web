@@ -29,9 +29,9 @@ test('Astra proactively asks about comfortable pace when an actual trip is known
  const contract=c({greeting:true});
  assert.equal(contract.discovery.topic,'pace');
  const reply=renderResponse(out('What is your budget?'),contract);
- assert.equal(reply,'We can build the day around your garden visit. What does a comfortable day of sightseeing look like for you?');
+ assert.equal(reply,'We can build the day around your garden visit. I can fit the sightseeing around the pace you enjoy. What does a comfortable day of sightseeing look like for you?');
  assert.equal((reply.match(/\?/g)||[]).length,1);
- assert.equal(responseContract({agent:'Sage',mode:'shared',greeting:true,tripChoices:base.tripChoices}).discovery,null);
+ assert.equal(responseContract({agent:'Sage',mode:'shared',greeting:true,tripChoices:base.tripChoices}).discovery.topic,'interests');
 });
 test('Astra can ask about lodging, transport and spending during ordinary planning without rejection',()=>{
  for(const [transcript,topic] of [['I am thinking about hotels','lodging'],['A train between the cities sounds good','transport'],['My budget is 1000 dollars','spending']]) {
@@ -66,7 +66,7 @@ test('Natural open-ended alternatives are preserved but binary and stacked quest
  const contract=c({greeting:true});
  const question='How do you like to pace a day of sightseeing?';
  assert.equal(openDiscoveryQuestion(question,'pace'),true);
- assert.equal(renderResponse(out(question),contract),'We can build the day around your garden visit. '+question);
+ assert.equal(renderResponse(out(question),contract),'We can build the day around your garden visit. I can fit the sightseeing around the pace you enjoy. '+question);
  for(const question of ['Do you like relaxed days?','What is your budget?','How do you like to pace sightseeing and what is your budget?']) {
   const reply=renderResponse(out(question),contract);assert.match(reply,/What does a comfortable day/);assert.equal((reply.match(/\?/g)||[]).length,1);
  }
