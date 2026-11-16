@@ -81,7 +81,7 @@ export async function pipelineTurn(request, env, cors) {
     const recentContext = memoryMode === 'shared' ? sharedTurnContext(speaker, sharedTurns, agent.name) : '';
     const rounds = {
       'first-choice': 'Sage helps settle the first country, city and activity. Ask a specific follow-up about a meaningful choice when useful and not recently explored; otherwise apply the answer and continue planning.',
-      'first-review': 'Astra reviews the chosen first stop against timing, budget and comfort. If an unexplained change needs context and a why was not asked recently, ask what was not working, then apply the answer.',
+      'first-review': 'Astra reviews the chosen first stop against timing, budget and comfort. When a relevant practical preference is unknown, ask one open-ended question about the user’s priorities or comfortable pace before repeatedly collecting closed logistics; use the answer to adapt the next arrangement. If an unexplained change needs context and a why was not asked recently, ask what was not working, then apply the answer.',
       'second-choice': 'Sage resumes unresolved discovery or chooses remaining cities and activities using available practical constraints. A meaningful choice can receive a specific follow-up when useful, with planning replies between motivation questions.',
       'final-plan': 'Astra develops the full route, timing, transport, lodging and estimated budget and asks for explicit approval. Unexplained changes can receive one specific follow-up when not recently explored; completed approval needs no extra interview.'
     };
@@ -91,7 +91,7 @@ export async function pipelineTurn(request, env, cors) {
     const context = memoryContext(speaker, memories, agent.name, memoryMode);
     const memoryFacts = !context ? undefined : [...new Set((Array.isArray(memories) ? memories.slice(-20) : []).map(m => typeof m === 'string' ? m : m?.fact).filter(f => typeof f === 'string' && f.trim() && f.length <= 600))];
     const rawDuration = Number(form.get('speech_duration_ms'));
-    const metricsContext = { agent_version: 'travel-personal-memory-v9', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
+    const metricsContext = { agent_version: 'travel-personal-memory-v10', ...(greeting && { opening_kind: 'generated' }), ...(memoryFacts && { memory_facts: memoryFacts }), ...(!greeting && !hasText && rawDuration > 0 && rawDuration <= 60000 && { speech_duration_ms: Math.round(rawDuration) }) };
     let tripChoices = {};
     const rawTripChoices = form.get('trip_choices');
     if (typeof rawTripChoices === 'string' && rawTripChoices.length <= 30000) {
@@ -102,7 +102,7 @@ export async function pipelineTurn(request, env, cors) {
     const authorization = { authorization: `Bearer ${env.OPENAI_API_KEY}` };
     let transcript = '', reply;
     const history = safeHistory(form.get('history'));
-    const contractFor = (transcript, greeting) => responseContract({agent: agent.name, mode: memoryMode, transcript, greeting, history, memories, sharedTurns});
+    const contractFor = (transcript, greeting) => responseContract({agent: agent.name, mode: memoryMode, transcript, greeting, history, memories, sharedTurns, tripChoices});
     if (greeting) {
       const step = form.get('handoff_step');
       if (step) {

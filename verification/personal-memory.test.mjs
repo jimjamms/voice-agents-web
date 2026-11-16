@@ -216,7 +216,7 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
     assert.match(result.reply,agent==='sage'?/What do you enjoy/:/What puts you off/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v9');
+    assert.equal(result.agent_version,'travel-personal-memory-v10');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });
@@ -247,5 +247,35 @@ test('Voices, personality values, and completion requirements remain intact',()=
   assert.match(pipeline[name].prompt,/at least one country, two cities/);
   assert.match(pipeline[name].prompt,/explicitly approve the complete itinerary/);
   assert.doesNotMatch(pipeline[name].prompt,/Limit preference exploration to the initial question|never in consecutive replies/);
+ }
+});
+
+test('Astra pipeline openings ask an open-ended practical preference when a real trip is supplied',async()=>{
+ for(const memory_mode of ['shared','isolated']) {
+  let prompt;
+  const p=await worker('pipeline.mjs',async(_url,init)=>{
+   prompt=JSON.parse(init.body).messages.at(-1).content;
+   return Response.json({choices:[{message:{content:JSON.stringify({statements:'We can arrange your Kyoto visit.',question:'What is your budget?',ask_why:false,memory_use:null})}}]});
+  });
+  const form=new FormData();
+  for(const [key,value] of Object.entries({agent:'astra',speaker:'p1',greeting:'true',memory_mode,reply_audio:'false',trip_choices:JSON.stringify({countries:['Japan'],cities:['Kyoto'],cityActivities:{Kyoto:'Visit a garden'}})}))form.set(key,value);
+  const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+  assert.equal(response.status,200);const result=await response.json();
+  assert.match(prompt,/ASTRA OPEN-ENDED PLANNING OPPORTUNITY/);assert.match(result.reply,/What does a comfortable day of sightseeing look like for you\?/);assert.doesNotMatch(result.reply,/budget/);
+ }
+});
+test('Own-source facts and reasons reach both agents final personalization instructions',async()=>{
+ for(const agent of ['sage','astra']) {
+  let prompt;
+  const p=await worker('pipeline.mjs',async(_url,init)=>{
+   prompt=JSON.parse(init.body).messages.at(-1).content;
+   return Response.json({choices:[{message:{content:JSON.stringify({statements:"I'd put the cafe on a quiet side street to avoid crowds.",question:null,ask_why:false,memory_use:null})}}]});
+  });
+  const form=new FormData();
+  for(const [key,value] of Object.entries({agent,speaker:'p1',text:'Can you suggest a cafe?',memory_mode:'isolated',reply_audio:'false',defer_memory:'true',memories:JSON.stringify([{...record,learned_by:agent==='sage'?'Sage':'Astra'}])}))form.set(key,value);
+  const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+  assert.equal(response.status,200);const result=await response.json();
+  assert.match(prompt,/Prefers quiet cafes/);assert.match(prompt,/Crowds feel tiring/);assert.match(prompt,/Use personal facts to change decisions/);
+  assert.match(result.reply,/quiet side street/);assert.doesNotMatch(result.reply,/Sage mentioned|Astra mentioned/);
  }
 });
