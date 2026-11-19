@@ -30,7 +30,7 @@ test('Sage still names Astra when a relevant supplied fact informs an actual sug
  const contract=c('Sage',{transcript:'Can you suggest a cafe?'});
  const application="I'd choose a cafe on a quieter side street.";
  const reply=renderResponse(JSON.stringify({statements:application,question:null,memory_use:{id:contract.evidence[0].id,application}}),contract);
- assert.match(reply,/Astra mentioned that you prefer quiet cafes/);assert.match(reply,/quieter side street/);
+ assert.match(reply,/Astra mentioned you prefer quiet cafes/);assert.match(reply,/quieter side street/);
 });
 function formatter() {
  class Node {

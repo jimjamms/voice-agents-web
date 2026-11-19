@@ -53,7 +53,7 @@ test('Cross-agent user statements are immediately eligible before deferred extra
  assert.equal(c.evidence.length,1);assert.match(c.evidence[0].fact,/crowds tire/);
  const application="I'd schedule your cafe stop away from the main square.";
  const reply=renderResponse(out({statements:application,memory_use:{id:c.evidence[0].id,application}}),c);
- assert.match(reply,/Sage mentioned/);assert.match(reply,/crowds tire/);
+ assert.match(reply,/Sage mentioned you prefer quiet cafes/);assert.match(c.evidence[0].fact,/crowds tire/);
  assert.equal(contract({agent:'Astra',mode:'isolated',sharedTurns:turns}).evidence.length,0);
  assert.equal(contract({agent:'Astra',sharedTurns:[{agent:'sage',transcript:'Okay',reply:'You prefer quiet cafes.'}]}).evidence.length,0);
 });

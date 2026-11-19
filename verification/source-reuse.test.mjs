@@ -15,7 +15,7 @@ test('The reported repeated source is omitted while the actual next suggestion i
 });
 test('A first useful attribution stays visible and uses natural second-person phrasing',()=>{
  const contract=c();const reply=renderResponse(output(contract),contract);
- assert.match(reply,/Astra mentioned that you prioritize spending the trip budget on food and gifts\./);
+ assert.match(reply,/Astra mentioned you prioritize spending the trip budget on food and gifts, so/);
  assert.doesNotMatch(reply,/shared this detail|"Prioritizes/);
 });
 test('Natural attribution is also recognized on the next turn, in either source direction',()=>{
@@ -33,7 +33,7 @@ test('A recent equivalent paraphrase of the same source fact is not recited agai
 test('A distinct relevant fact can still receive its own attribution on a consecutive reply',()=>{
  const contract=c('Sage',[a('Astra mentioned you prefer short walks. Suwon is nearby.')]);
  assert.equal(alreadyAttributed(contract.evidence[0],contract.history),false);
- assert.match(renderResponse(output(contract),contract),/Astra mentioned that you prioritize/);
+ assert.match(renderResponse(output(contract),contract),/Astra mentioned you prioritize/);
 });
 test('Application without a source announcement and user messages do not falsely count as an attribution',()=>{
  for(const history of [[a('Food and gifts can fit the budget.')],[u(first)]]) {
