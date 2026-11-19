@@ -216,7 +216,7 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
     assert.match(result.reply,agent==='sage'?/(?:What do you enjoy|What makes a quiet spot|What appeals to you about spending time somewhere quiet)/:/(?:What puts you off|What isn't working for you about including museums|What would you prefer to avoid about a museum visit)/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v15');
+    assert.equal(result.agent_version,'travel-personal-memory-v16');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });
@@ -310,4 +310,33 @@ test('Pipeline source questions cannot render condition details or stack a follo
  for(const [key,value] of Object.entries({agent:'astra',speaker:'testing 2',text:'how did u know what i told sage',memory_mode:'shared',reply_audio:'false',defer_memory:'true',memories:JSON.stringify([{fact:'Prefers quiet cafes',type:'preference',learned_by:'Sage'}])}))form.set(key,value);
  const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
  assert.equal(response.status,200);assert.equal((await response.json()).reply,'Sage and I are working together to help plan your trip.');
+});
+
+test('Pipeline applies the same Sage/Astra fact twice without re-announcing its source',async()=>{
+ const fact='Prioritizes spending the trip budget on food and gifts';
+ const application='A snack stop at Jidong Market could fit well.';
+ const p=await worker('pipeline.mjs',async()=>Response.json({choices:[{message:{content:JSON.stringify({statements:application,question:'How does that sound?',memory_use:{id:'memory-1',application}})}}]}));
+ const form=new FormData();
+ const history=[{role:'assistant',content:'Astra shared this detail about you, "'+fact+'". Suwon could fit your priorities. How does Suwon sound?'},{role:'user',content:'yes'}];
+ for(const [key,value] of Object.entries({agent:'sage',speaker:'testing 2',text:'yes',memory_mode:'shared',reply_audio:'false',defer_memory:'true',memories:JSON.stringify([{fact,type:'preference',learned_by:'Astra'}]),history:JSON.stringify(history)}))form.set(key,value);
+ const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+ assert.equal(response.status,200);const reply=(await response.json()).reply;
+ assert.match(reply,/Jidong Market/);assert.doesNotMatch(reply,/Astra|Prioritizes|mentioned|shared/);
+});
+
+test('Both pipeline agents receive cross-agent facts for concrete adaptation while recent source wording is suppressed',async()=>{
+ for(const agent of ['sage','astra']) {
+  const other=agent==='sage'?'Astra':'Sage';
+  const fact=agent==='sage'?'Prioritizes spending the trip budget on food and gifts':'Enjoys playing games';
+  const application=agent==='sage'?'A snack stop at Jidong Market could fit well.':'I would leave a flexible arcade stop in the afternoon.';
+  let prompt;
+  const p=await worker('pipeline.mjs',async(_url,init)=>{prompt=JSON.parse(init.body).messages.at(-1).content;return Response.json({choices:[{message:{content:JSON.stringify({statements:application,question:null,shared_fact_check:'use_relevant_fact',memory_use:{id:'memory-1',application}})}}]});});
+  const form=new FormData();
+  const history=[{role:'assistant',content:other+' shared this detail about you, "'+fact+'". We can use it in the plan.'},{role:'user',content:'yes'}];
+  for(const [key,value] of Object.entries({agent,speaker:'testing 2',text:'Can you suggest the next activity?',memory_mode:'shared',reply_audio:'false',defer_memory:'true',memories:JSON.stringify([{fact,type:'preference',learned_by:other}]),history:JSON.stringify(history)}))form.set(key,value);
+  const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+  assert.equal(response.status,200);const reply=(await response.json()).reply;
+  assert.match(prompt,/SHARED-FACT REVIEW BEFORE WRITING/);assert.ok(prompt.includes(fact));
+  assert.equal(reply,application);assert.doesNotMatch(reply,/shared this detail|mentioned|shared_fact_check/);
+ }
 });
