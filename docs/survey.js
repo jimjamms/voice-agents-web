@@ -3,8 +3,38 @@
   const frame = document.querySelector('#google-form-embed');
   const status = document.querySelector('#survey-status');
   const retry = document.querySelector('#survey-retry');
+  const edit = document.querySelector('#survey-edit');
   const unavailable = document.querySelector('#form-coming-soon');
-  let timer, controller, activeName = '', serial = 0;
+  const debrief = document.querySelector('#study-debrief');
+  const debriefText = document.querySelector('#study-debrief-text');
+  const debriefLink = document.querySelector('#study-debrief-link');
+  function hideDebrief() {
+    debrief.hidden=true;
+    debriefText.replaceChildren();
+    debriefLink.removeAttribute('href');
+    debriefLink.hidden=true;
+  }
+  function showDebrief(value) {
+    hideDebrief();
+    if (!value || typeof value !== 'object') return;
+    if (typeof value.text === 'string' && value.text.trim()) {
+      for (const paragraph of value.text.trim().split(/\n\s*\n/)) {
+        const element=document.createElement('p');
+        element.textContent=paragraph;
+        debriefText.append(element);
+      }
+    }
+    // A normal clicked link opens outside Google Forms, without an automatic popup.
+    try {
+      const url=new URL(value.url);
+      if (url.protocol === 'https:' && !url.username && !url.password) {
+        debriefLink.href=url.href;
+        debriefLink.hidden=false;
+      }
+    } catch { /* Inline text can still be read when no valid link is provided. */ }
+    debrief.hidden=!debriefText.childNodes.length && debriefLink.hidden;
+  }
+  let timer, controller, activeName = '', serial = 0, editUrl = '', editing = false;
   const isOpen = () => document.body.dataset.stage === 'review';
   function stop() { clearTimeout(timer); controller?.abort(); serial++; }
   async function check() {
@@ -12,7 +42,7 @@
     clearTimeout(timer); controller?.abort(); controller = new AbortController();
     const current = ++serial;
     const name = document.querySelector('#speaker-name').value.trim().toLowerCase();
-    if (name !== activeName) { activeName=name; frame.removeAttribute('src'); frame.hidden=true; }
+    if (name !== activeName) { activeName=name; frame.removeAttribute('src'); frame.hidden=true; editing=false; hideDebrief(); }
     retry.hidden=true; unavailable.hidden=true;
     if (!frame.hasAttribute('src')) status.textContent='Checking your survey…';
     const timeout=setTimeout(()=>controller.abort(),15000);
@@ -25,11 +55,14 @@
       const data=await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not check survey access.');
       if (current !== serial || !isOpen()) return;
+      editUrl=data.editUrl || '';edit.hidden=!data.submitted || !editUrl;
       if (data.submitted) {
-        status.textContent='Your survey is submitted. Thank you!';
-        frame.hidden=true; frame.removeAttribute('src');
+        showDebrief(data.debrief);
+        status.textContent=editing?'Edit your existing response below.':'Your survey is submitted. Thank you!';
+        if (!editing) { frame.hidden=true; frame.removeAttribute('src'); }
       } else {
-        status.textContent='Complete the survey below. Your survey code is filled in automatically; please leave it unchanged.';
+        hideDebrief();
+        edit.hidden=true;status.textContent='Complete the survey below. Your survey code is filled in automatically; please leave it unchanged.';
         if (!frame.hasAttribute('src')) frame.src=data.url;
         frame.hidden=false;
       }
@@ -45,8 +78,9 @@
     } finally { clearTimeout(timeout); }
   }
   retry.addEventListener('click',check);
+  edit.addEventListener('click',()=>{if(editUrl){editing=true;frame.src=editUrl;frame.hidden=false;status.textContent='Edit your existing response below.';}});
   window.addEventListener('survey:open',check);
-  window.addEventListener('survey:close',()=>{stop();frame.hidden=true;frame.removeAttribute('src');});
+  window.addEventListener('survey:close',()=>{stop();editing=false;frame.hidden=true;frame.removeAttribute('src');hideDebrief();});
   document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();else if(isOpen())check();});
   if(isOpen())check();
 })();

@@ -1,3 +1,5 @@
+import { studyDebrief } from './debrief.mjs';
+
 const FORMS = Object.freeze({
   shared: 'https://docs.google.com/forms/d/e/1FAIpQLSfE3zVMUF7Vhy-ZqAA47HYjv3880pw99WswhVsZphc5hhV3Kw/viewform',
   isolated: 'https://docs.google.com/forms/d/e/1FAIpQLSeyNKhB_Dvb-udkmOxTuuhoBLXynMQgF6pqFry6x6__RzHebg/viewform',
@@ -44,7 +46,7 @@ export async function surveyAccess(request, env, cors) {
     const row = await env.LOG_DB.prepare('SELECT response_id, form_url FROM survey_receipts WHERE token = ?').bind(token).first();
     if (!row.response_id && row.form_url !== selected.url) return reply({error:'Survey configuration changed. Please contact the study host.'},409,cors);
     const url = new URL(selected.url); url.searchParams.set('embedded','true');url.searchParams.set(selected.entry,token);
-    return reply({submitted:!!row.response_id,url:row.response_id ? null : url.href},200,cors);
+    return reply({submitted:!!row.response_id,url:row.response_id ? null : url.href,debrief:studyDebrief(env,!!row.response_id)},200,cors);
   } catch { return reply({error:'Could not check survey access. Please try again.'},503,cors); }
 }
 export async function surveyReceipt(request, env) {
