@@ -115,6 +115,10 @@
   let connecting = false, recording = false, responseActive = false, sessionTimer, turnTimer;
   let manualStartedAt = 0, connectionId = 0;
   const setStatus = (message, detail) => { status.textContent = message; if (detail) hint.textContent = detail; };
+  const paintMessageBody = (body, text, role = 'assistant') => {
+    if (window.AgentMessageFormat) window.AgentMessageFormat.render(body, text, { role, agent: body.dataset.agent || agent });
+    else body.textContent = text;
+  };
   const renderMessage = (role, content, speaker, allowEmpty = false) => {
     const text = String(content || '').trim();
     if (!text && !allowEmpty) return;
@@ -122,7 +126,7 @@
     const item = document.createElement('div'); item.className = `message ${role}`;
     const label = document.createElement('span'); label.className = 'sender';
     label.textContent = role === 'user' ? (speaker?.name && speaker.name !== 'Unknown' ? speaker.name : 'You') : agent === 'sage' ? 'Sage' : 'Astra';
-    const body = document.createElement('span'); body.textContent = text;
+    const body = document.createElement('span'); body.dataset.agent = agent; paintMessageBody(body, text, role);
     item.append(label, body); messages.append(item); messages.scrollTop = messages.scrollHeight;
     return body;
   };
@@ -181,7 +185,7 @@
     playback, onStatus: setStatus, getStatus: () => status.textContent,
     onReplyStart: reply => {
       const body = addMessage('assistant', reply); body.textContent = '…';
-      return text => { body.textContent = text || '…'; messages.scrollTop = messages.scrollHeight; };
+      return text => { paintMessageBody(body, text || '…'); messages.scrollTop = messages.scrollHeight; };
     },
     onMessage: addMessage, onState: () => { syncControls(); maybeSpeakHandoff(); },
   });
@@ -495,7 +499,7 @@
         let pending = transcripts.get(id);
         if (!pending) { pending = { text: '', body: renderMessage('assistant', '', undefined, true) }; transcripts.set(id, pending); }
         pending.text += event.delta || '';
-        pending.body.textContent = pending.text.match(/[\s\S]*[\s.!?,;:]/)?.[0] || ''; messages.scrollTop = messages.scrollHeight;
+        paintMessageBody(pending.body, pending.text.match(/[\s\S]*[\s.!?,;:]/)?.[0] || ''); messages.scrollTop = messages.scrollHeight;
         break;
       }
       case 'response.output_audio_transcript.done': {
@@ -503,7 +507,7 @@
         const pending = transcripts.get(id);
         const reply = event.transcript || pending?.text;
         if (pending && reply) {
-          pending.body.textContent = reply;
+          paintMessageBody(pending.body, reply);
           history.push({ role: 'assistant', content: reply, at: new Date().toISOString() });
         } else if (reply) addMessage('assistant', reply);
         transcripts.delete(id);
