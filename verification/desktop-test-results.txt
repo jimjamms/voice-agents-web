@@ -1,0 +1,1 @@
+Desktop memory retention/context: 50 records in all three compartments passed.

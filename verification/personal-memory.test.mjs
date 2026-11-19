@@ -216,7 +216,7 @@ test('Pipeline enforces why instead of the mocked model logistics question for b
     const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
     assert.equal(response.status,200);const result=await response.json();
     assert.match(result.reply,agent==='sage'?/(?:What do you enjoy|What makes a quiet spot|What appeals to you about spending time somewhere quiet)/:/(?:What puts you off|What isn't working for you about including museums|What would you prefer to avoid about a museum visit)/);assert.doesNotMatch(result.reply,/budget/);
-    assert.equal(result.agent_version,'travel-personal-memory-v18');
+    assert.equal(result.agent_version,'travel-personal-memory-v19');
     assert.equal(request.response_format.type,'json_object');assert.match(request.messages.at(-1).content,/THIS TURN REQUIRES/);
   }
 });
@@ -339,4 +339,42 @@ test('Both pipeline agents receive cross-agent facts for concrete adaptation whi
   assert.match(prompt,/SHARED-FACT REVIEW BEFORE WRITING/);assert.ok(prompt.includes(fact));
   assert.equal(reply,application);assert.doesNotMatch(reply,/shared this detail|mentioned|shared_fact_check/);
  }
+});
+
+test('Pipeline accepts a serialized 50-record memory payload larger than the old 30000 character cap',async()=>{
+ const memories=Array.from({length:50},(_,i)=>({fact:`Record ${i}: `+'"'.repeat(575),type:'preference',reason:'"'.repeat(200),learned_by:'Sage'}));
+ assert.ok(JSON.stringify(memories).length>30000);
+ let prompt;
+ const p=await worker('pipeline.mjs',async(_url,init)=>{prompt=JSON.parse(init.body).messages.map(m=>m.content).join('\n');return Response.json({choices:[{message:{content:JSON.stringify({statements:'Here are the available trip details.',question:null,memory_use:null})}}]});});
+ const form=new FormData();for(const [key,value] of Object.entries({agent:'astra',speaker:'p1',text:'Can you summarize the plan?',memory_mode:'shared',reply_audio:'false',defer_memory:'true',memories:JSON.stringify(memories)}))form.set(key,value);
+ const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+ assert.equal(response.status,200);const result=await response.json();assert.equal(result.memory_facts.length,50);assert.match(prompt,/Record 0:/);assert.match(prompt,/Record 49:/);
+});
+test('Cloud request accepts a valid full 50-record profile above the previous body limit',async()=>{
+ const p=await worker('profiles.mjs');const list=Array.from({length:50},(_,i)=>({fact:`Record ${i}: `+'"'.repeat(575),type:'preference',reason:'"'.repeat(200),learned_by:'Sage'}));
+ const profile={notes:'',choices:{countries:[],cities:[],activities:[]},memories:{shared:list,sage:list,astra:list,recentShared:[]}};
+ const body=JSON.stringify({action:'save',name:'p1',version:0,profile});assert.ok(body.length>140000);
+ const env={LOG_DB:{prepare:()=>({bind:()=>({first:async()=>null,run:async()=>({meta:{changes:1}})})})}};
+ const response=await p.profileRequest(new Request('https://worker.test/profile',{method:'POST',headers:{'content-type':'application/json'},body}),env,{});
+ assert.equal(response.status,200);assert.equal((await response.json()).version,1);
+});
+test('Proposal extraction stores at most one tentative suggestion and preserves explicit user facts first',async()=>{
+ const m=await worker('memory.mjs',async()=>Response.json({choices:[{message:{content:JSON.stringify({memories:[{fact:'Proposed: October 2027, dates flexible',type:'planning_proposal',reason:'invented'},{fact:'Proposed: Small hotel',type:'planning_proposal'},{fact:'Budget covers flights',type:'trip_detail'}]})}}]}));
+ const result=await m.extractMemories({},'Astra','p1','Everything','I suggest October, exact dates flexible.');
+ assert.equal(result.memories.filter(m=>m.type==='planning_proposal').length,1);assert.equal(result.memories[0].type,'trip_detail');assert.equal(result.memories.at(-1).reason,null);
+});
+test('Date guard suppresses the reported exact-date re-ask through the pipeline',async()=>{
+ const history=[{role:'assistant',content:'For 2027, mid-to-late October remains my suggestion; exact dates can stay flexible for now.'},{role:'user',content:'Everything'},{role:'assistant',content:'How many days including flights?'},{role:'user',content:'a week total'}];
+ const p=await worker('pipeline.mjs',async()=>Response.json({choices:[{message:{content:JSON.stringify({statements:'The hotel allowance remains an estimate.',question:'What dates in 2027 would work for your week away?',memory_use:null})}}]}));
+ const form=new FormData();for(const [key,value] of Object.entries({agent:'astra',speaker:'p1',text:'sure',memory_mode:'shared',reply_audio:'false',defer_memory:'true',history:JSON.stringify(history)}))form.set(key,value);
+ const response=await p.pipelineTurn(new Request('https://worker.test/turn',{method:'POST',body:form}),{OPENAI_API_KEY:'test'},{});
+ assert.equal(response.status,200);const reply=(await response.json()).reply;assert.doesNotMatch(reply,/What dates/);assert.match(reply,/hotel allowance/);
+});
+test('Logging accepts fifty captured facts and a batch above the previous byte cap',async()=>{
+ const m=await worker('logs.mjs');const facts=Array.from({length:50},(_,i)=>`Record ${i}: `+'"'.repeat(575));
+ const turn={turn_id:'turn1',participant_id:'participant1',session_id:'session1',agent:'astra',engine:'pipeline',memory_sharing_mode:'shared',speaker:'p1',user_text:'Hello',agent_reply:'Hello',timestamp:new Date().toISOString(),memory_facts:facts,input_mode:'text',agent_version:'travel-personal-memory-v19'};
+ assert.equal(m.cleanTurn(turn).memory_facts.length,50);
+ const body=JSON.stringify({turns:[turn]});assert.ok(body.length>50000);
+ const env={LOG_DB:{prepare:()=>({bind:()=>({})}),batch:async()=>[{meta:{changes:1}}]}};
+ const response=await m.saveLogs(new Request('https://worker.test/logs',{method:'POST',headers:{'content-type':'application/json'},body}),env,{});assert.equal(response.status,200);
 });

@@ -6,7 +6,7 @@ export function cleanProfile(data) {
   const memories = {};
   for (const bucket of ['shared', 'sage', 'astra']) {
     const list = data.memories?.[bucket];
-    if (!Array.isArray(list) || list.length > 20) throw new Error('Invalid memories');
+    if (!Array.isArray(list) || list.length > 50) throw new Error('Invalid memories');
     memories[bucket] = list.map(entry => {
       const fact = typeof entry === 'string' ? entry : entry?.fact;
       if (typeof fact !== 'string' || !fact.trim() || fact.length > 1000) throw new Error('Invalid memory');
@@ -39,7 +39,7 @@ export async function profileRequest(request, env, cors) {
   if (!env.LOG_DB) return json({ error: 'Cloud saving is not configured. Ask the host to apply the profile migration.' }, 503);
   try {
     if (!(request.headers.get('content-type') || '').startsWith('application/json')) return json({ error: 'Expected JSON.' }, 415);
-    const raw = await request.text(); if (raw.length > 140000) return json({ error: 'Profile is too large.' }, 413);
+    const raw = await request.text(); if (raw.length > 500000) return json({ error: 'Profile is too large.' }, 413);
     const data = JSON.parse(raw);
     if (typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 40 || data.name.trim().toLowerCase() === 'unknown') return json({ error: 'Enter a name ID of 1–40 characters.' }, 400);
     const id = data.name.trim().toLowerCase();

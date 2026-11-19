@@ -69,7 +69,7 @@ export function acceptedRecommendation(transcript,history=[],memories=[]) {
   if(!sentences.length) return null;
   const personal = /\b(?:like|love|enjoy|prefer|avoid|dislike|hate|need|play|into|hobb|interest|no longer)\w*\b/i;
   const facts=[...history].reverse().filter(m=>m.role==='user' && personal.test(m.content) && !m.content.includes('?') && !/^(?:do I|would I|can I|what|why|how|is there)\b/i.test(m.content)).map(m=>m.content);
-  for(const m of (Array.isArray(memories)?memories:[]).slice(-20).reverse()) if(['preference','constraint','avoidance','past_experience','travel_companion'].includes(m?.type) && typeof m.fact==='string') facts.push(m.fact);
+  for(const m of (Array.isArray(memories)?memories:[]).slice(-50).reverse()) if(['preference','constraint','avoidance','past_experience','travel_companion'].includes(m?.type) && typeof m.fact==='string') facts.push(m.fact);
   const seen=new Set();
   for(const fact of facts) {
     const terms=[...contextWords(fact)].filter(w=>!seen.has(w));

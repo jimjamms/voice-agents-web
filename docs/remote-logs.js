@@ -43,7 +43,7 @@
       clearTimeout(this.timer);this.timer=null;this.running=true;
       const batch=[];
       for(const turn of this.queue.slice(0,25)) {
-        const next=[...batch,turn]; if(new TextEncoder().encode(JSON.stringify({turns:next})).length>48000)break;
+        const next=[...batch,turn]; if(new TextEncoder().encode(JSON.stringify({turns:next})).length>192000)break;
         batch.push(turn);
       }
       if(!batch.length){this.running=false;this.status('One chat turn is too large to upload.');return;}

@@ -16,11 +16,11 @@ export function knownPersonalFacts({agent,mode,memories=[],history=[],sharedTurn
   addDisclosure(transcript,agent);
   for(const item of history.slice(-24).reverse()) if(item?.role==='user') addDisclosure(item.content,agent);
   if(mode==='shared' && Array.isArray(sharedTurns)) for(const turn of sharedTurns.slice(-6).reverse()) if(['sage','astra'].includes(turn?.agent)) addDisclosure(turn.transcript,turn.agent==='sage'?'Sage':'Astra');
-  if(Array.isArray(memories)) for(const item of memories.slice(-20).reverse()) {
+  if(Array.isArray(memories)) for(const item of memories.slice(-50).reverse()) {
     if(mode!=='shared' && item?.learned_by && item.learned_by!==agent) continue;
     if(personalTypes.has(item?.type)) add(item.fact,item.learned_by || agent,item.reason);
   }
-  return facts.slice(0,24);
+  return facts; // Include all 50 saved facts plus bounded current/recent disclosures.
 }
 const topics = {
   interests:{question:'What do you enjoy doing when you have a free afternoon?',match:/\b(?:free afternoon|free time|spare time|enjoy|interests?|hobbies|activities|experiences)\b/i},
